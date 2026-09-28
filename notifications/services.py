@@ -6,11 +6,12 @@ from django.db import transaction
 from notifications.models import NotificationLog
 from notifications.tasks import send_templated_email
 
-
 logger = logging.getLogger(__name__)
 
 
-def _dispatch_email(*, notification_log_id: str, organization_id: str, subject: str, template_base: str) -> None:
+def _dispatch_email(
+    *, notification_log_id: str, organization_id: str, subject: str, template_base: str
+) -> None:
     try:
         send_templated_email.delay(
             notification_log_id=notification_log_id,
@@ -23,7 +24,15 @@ def _dispatch_email(*, notification_log_id: str, organization_id: str, subject: 
         logger.warning("Could not enqueue notification %s", notification_log_id, exc_info=True)
 
 
-def queue_booking_notification(*, booking, notification_type: str, subject: str, template_base: str, recipient_email: str, recipient_user=None):
+def queue_booking_notification(
+    *,
+    booking,
+    notification_type: str,
+    subject: str,
+    template_base: str,
+    recipient_email: str,
+    recipient_user=None,
+):
     log = NotificationLog.objects.create(
         organization=booking.organization,
         recipient=recipient_user,

@@ -9,86 +9,88 @@ from core.models import BaseUUIDModel
 
 
 class CustomUserManager(UserManager):
-	def _create_user(self, email, password, **extra_fields):
-		if not email:
-			raise ValueError("Email must be provided")
-		email = self.normalize_email(email)
-		username = extra_fields.get("username") or email.split("@")[0]
-		extra_fields["username"] = f"{username}-{secrets.token_hex(3)}"
-		user = self.model(email=email, **extra_fields)
-		user.set_password(password)
-		user.save(using=self._db)
-		return user
+    def _create_user(self, email, password, **extra_fields):
+        if not email:
+            raise ValueError("Email must be provided")
+        email = self.normalize_email(email)
+        username = extra_fields.get("username") or email.split("@")[0]
+        extra_fields["username"] = f"{username}-{secrets.token_hex(3)}"
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
-	def create_user(self, email, password=None, **extra_fields):
-		extra_fields.setdefault("is_staff", False)
-		extra_fields.setdefault("is_superuser", False)
-		return self._create_user(email, password, **extra_fields)
+    def create_user(self, email, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
+        return self._create_user(email, password, **extra_fields)
 
-	def create_superuser(self, email, password=None, **extra_fields):
-		extra_fields.setdefault("is_staff", True)
-		extra_fields.setdefault("is_superuser", True)
-		if extra_fields.get("is_staff") is not True:
-			raise ValueError("Superuser must have is_staff=True.")
-		if extra_fields.get("is_superuser") is not True:
-			raise ValueError("Superuser must have is_superuser=True.")
-		return self._create_user(email, password, **extra_fields)
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+        return self._create_user(email, password, **extra_fields)
 
 
 class UserRole(models.TextChoices):
-	CUSTOMER = "customer", "Customer"
-	SPECIALIST = "specialist", "Specialist"
-	ADMIN = "admin", "Admin"
-	OWNER = "owner", "Owner"
+    CUSTOMER = "customer", "Customer"
+    SPECIALIST = "specialist", "Specialist"
+    ADMIN = "admin", "Admin"
+    OWNER = "owner", "Owner"
 
 
 class User(AbstractUser):
-	email = models.EmailField(unique=True)
-	phone_number = models.CharField(max_length=20, blank=True)
-	role = models.CharField(
-		max_length=10,
-		choices=UserRole.choices,
-		default=UserRole.CUSTOMER,
-	)
-	profile_image = models.ImageField(upload_to="users/profiles/", blank=True, null=True)
-	terms_accepted_at = models.DateTimeField(null=True, blank=True)
-	privacy_accepted_at = models.DateTimeField(null=True, blank=True)
-	email_verified = models.BooleanField(default=False)
-	account_status = models.CharField(max_length=20, default="active")
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    role = models.CharField(
+        max_length=10,
+        choices=UserRole.choices,
+        default=UserRole.CUSTOMER,
+    )
+    profile_image = models.ImageField(upload_to="users/profiles/", blank=True, null=True)
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    privacy_accepted_at = models.DateTimeField(null=True, blank=True)
+    email_verified = models.BooleanField(default=False)
+    account_status = models.CharField(max_length=20, default="active")
 
-	USERNAME_FIELD = "email"
-	REQUIRED_FIELDS = []
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []
 
-	objects = CustomUserManager()
+    objects = CustomUserManager()
 
-	def __str__(self):
-		return self.email
+    def __str__(self):
+        return self.email
 
 
 class EmailVerificationToken(BaseUUIDModel):
-	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="email_verification_tokens")
-	token = models.CharField(max_length=128, unique=True, db_index=True)
-	expires_at = models.DateTimeField()
-	used_at = models.DateTimeField(null=True, blank=True)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="email_verification_tokens"
+    )
+    token = models.CharField(max_length=128, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
 
-	@staticmethod
-	def generate_token() -> str:
-		return secrets.token_urlsafe(48)
+    @staticmethod
+    def generate_token() -> str:
+        return secrets.token_urlsafe(48)
 
-	@classmethod
-	def default_expires_at(cls):
-		return timezone.now() + timedelta(hours=24)
+    @classmethod
+    def default_expires_at(cls):
+        return timezone.now() + timedelta(hours=24)
 
-	@property
-	def is_valid(self) -> bool:
-		return self.used_at is None and timezone.now() < self.expires_at
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and timezone.now() < self.expires_at
 
 
 class LoginHistory(BaseUUIDModel):
-	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_history")
-	is_successful = models.BooleanField(default=True)
-	ip_address = models.GenericIPAddressField(null=True, blank=True)
-	user_agent = models.TextField(blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_history")
+    is_successful = models.BooleanField(default=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
 
-	class Meta:
-		ordering = ["-created_at"]
+    class Meta:
+        ordering = ["-created_at"]

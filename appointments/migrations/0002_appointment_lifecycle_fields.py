@@ -7,28 +7,40 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('appointments', '0001_initial'),
+        ("appointments", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='appointment',
-            name='duration',
-            field=models.PositiveIntegerField(default=30, validators=[django.core.validators.MinValueValidator(1)]),
+            model_name="appointment",
+            name="duration",
+            field=models.PositiveIntegerField(
+                default=30, validators=[django.core.validators.MinValueValidator(1)]
+            ),
         ),
         migrations.AddField(
-            model_name='appointment',
-            name='notes',
+            model_name="appointment",
+            name="notes",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='appointment',
-            name='updated_at',
+            model_name="appointment",
+            name="updated_at",
             field=models.DateTimeField(auto_now=True),
         ),
         migrations.AlterField(
-            model_name='appointment',
-            name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('confirmed', 'Confirmed'), ('completed', 'Completed'), ('no_show', 'No Show'), ('cancelled', 'Cancelled')], default='pending', max_length=10),
+            model_name="appointment",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending"),
+                    ("confirmed", "Confirmed"),
+                    ("completed", "Completed"),
+                    ("no_show", "No Show"),
+                    ("cancelled", "Cancelled"),
+                ],
+                default="pending",
+                max_length=10,
+            ),
         ),
     ]

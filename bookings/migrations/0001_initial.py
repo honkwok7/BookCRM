@@ -11,136 +11,326 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
-        ('services', '0001_initial'),
-        ('staff', '0001_initial'),
+        ("organizations", "0001_initial"),
+        ("services", "0001_initial"),
+        ("staff", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Booking',
+            name="Booking",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('public_uuid', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('reference', models.CharField(db_index=True, max_length=20, unique=True)),
-                ('customer_name', models.CharField(max_length=255)),
-                ('customer_email', models.EmailField(max_length=254)),
-                ('customer_phone', models.CharField(blank=True, max_length=30)),
-                ('start_datetime', models.DateTimeField()),
-                ('end_datetime', models.DateTimeField()),
-                ('customer_timezone', models.CharField(default='UTC', max_length=64)),
-                ('organization_timezone', models.CharField(default='UTC', max_length=64)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('confirmed', 'Confirmed'), ('checked_in', 'Checked In'), ('in_progress', 'In Progress'), ('completed', 'Completed'), ('cancelled', 'Cancelled'), ('no_show', 'No Show'), ('rejected', 'Rejected')], default='pending', max_length=20)),
-                ('payment_status', models.CharField(choices=[('unpaid', 'Unpaid'), ('paid', 'Paid'), ('refunded', 'Refunded')], default='unpaid', max_length=20)),
-                ('price_snapshot', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('duration_snapshot_minutes', models.PositiveIntegerField()),
-                ('customer_notes', models.TextField(blank=True)),
-                ('internal_notes', models.TextField(blank=True)),
-                ('cancellation_reason', models.TextField(blank=True)),
-                ('cancelled_at', models.DateTimeField(blank=True, null=True)),
-                ('cancelled_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cancelled_bookings', to=settings.AUTH_USER_MODEL)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bookings', to='organizations.organization')),
-                ('rescheduled_from', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reschedules', to='bookings.booking')),
-                ('service', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='bookings', to='services.service')),
-                ('staff', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='bookings', to='staff.staffprofile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("public_uuid", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("reference", models.CharField(db_index=True, max_length=20, unique=True)),
+                ("customer_name", models.CharField(max_length=255)),
+                ("customer_email", models.EmailField(max_length=254)),
+                ("customer_phone", models.CharField(blank=True, max_length=30)),
+                ("start_datetime", models.DateTimeField()),
+                ("end_datetime", models.DateTimeField()),
+                ("customer_timezone", models.CharField(default="UTC", max_length=64)),
+                ("organization_timezone", models.CharField(default="UTC", max_length=64)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("confirmed", "Confirmed"),
+                            ("checked_in", "Checked In"),
+                            ("in_progress", "In Progress"),
+                            ("completed", "Completed"),
+                            ("cancelled", "Cancelled"),
+                            ("no_show", "No Show"),
+                            ("rejected", "Rejected"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "payment_status",
+                    models.CharField(
+                        choices=[("unpaid", "Unpaid"), ("paid", "Paid"), ("refunded", "Refunded")],
+                        default="unpaid",
+                        max_length=20,
+                    ),
+                ),
+                ("price_snapshot", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("duration_snapshot_minutes", models.PositiveIntegerField()),
+                ("customer_notes", models.TextField(blank=True)),
+                ("internal_notes", models.TextField(blank=True)),
+                ("cancellation_reason", models.TextField(blank=True)),
+                ("cancelled_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "cancelled_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="cancelled_bookings",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="bookings",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "rescheduled_from",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="reschedules",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "service",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="bookings",
+                        to="services.service",
+                    ),
+                ),
+                (
+                    "staff",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="bookings",
+                        to="staff.staffprofile",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='BookingActivityLog',
+            name="BookingActivityLog",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('action', models.CharField(max_length=120)),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('booking', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='activity_logs', to='bookings.booking')),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='booking_activity_logs', to='organizations.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("action", models.CharField(max_length=120)),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "booking",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="activity_logs",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="booking_activity_logs",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='BookingStatusHistory',
+            name="BookingStatusHistory",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('old_status', models.CharField(blank=True, max_length=20)),
-                ('new_status', models.CharField(max_length=20)),
-                ('note', models.TextField(blank=True)),
-                ('booking', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='status_history', to='bookings.booking')),
-                ('changed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("old_status", models.CharField(blank=True, max_length=20)),
+                ("new_status", models.CharField(max_length=20)),
+                ("note", models.TextField(blank=True)),
+                (
+                    "booking",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="status_history",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "changed_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='Customer',
+            name="Customer",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('email', models.EmailField(max_length=254)),
-                ('phone', models.CharField(blank=True, max_length=30)),
-                ('notes', models.TextField(blank=True)),
-                ('tags', models.JSONField(blank=True, default=list)),
-                ('total_bookings', models.PositiveIntegerField(default=0)),
-                ('no_show_count', models.PositiveIntegerField(default=0)),
-                ('last_appointment', models.DateTimeField(blank=True, null=True)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='customers', to='organizations.organization')),
-                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='customer_profiles', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                ("email", models.EmailField(max_length=254)),
+                ("phone", models.CharField(blank=True, max_length=30)),
+                ("notes", models.TextField(blank=True)),
+                ("tags", models.JSONField(blank=True, default=list)),
+                ("total_bookings", models.PositiveIntegerField(default=0)),
+                ("no_show_count", models.PositiveIntegerField(default=0)),
+                ("last_appointment", models.DateTimeField(blank=True, null=True)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="customers",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="customer_profiles",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
-            model_name='booking',
-            name='customer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='bookings', to='bookings.customer'),
+            model_name="booking",
+            name="customer",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="bookings",
+                to="bookings.customer",
+            ),
         ),
         migrations.CreateModel(
-            name='WaitlistEntry',
+            name="WaitlistEntry",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('preferred_start_date', models.DateField(blank=True, null=True)),
-                ('preferred_end_date', models.DateField(blank=True, null=True)),
-                ('customer_name', models.CharField(max_length=255)),
-                ('customer_email', models.EmailField(max_length=254)),
-                ('customer_phone', models.CharField(blank=True, max_length=30)),
-                ('status', models.CharField(choices=[('waiting', 'Waiting'), ('notified', 'Notified'), ('closed', 'Closed')], default='waiting', max_length=20)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='waitlist_entries', to='organizations.organization')),
-                ('preferred_staff', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='waitlist_entries', to='staff.staffprofile')),
-                ('service', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='waitlist_entries', to='services.service')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("preferred_start_date", models.DateField(blank=True, null=True)),
+                ("preferred_end_date", models.DateField(blank=True, null=True)),
+                ("customer_name", models.CharField(max_length=255)),
+                ("customer_email", models.EmailField(max_length=254)),
+                ("customer_phone", models.CharField(blank=True, max_length=30)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("waiting", "Waiting"),
+                            ("notified", "Notified"),
+                            ("closed", "Closed"),
+                        ],
+                        default="waiting",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="waitlist_entries",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "preferred_staff",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="waitlist_entries",
+                        to="staff.staffprofile",
+                    ),
+                ),
+                (
+                    "service",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="waitlist_entries",
+                        to="services.service",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.AddIndex(
-            model_name='customer',
-            index=models.Index(fields=['organization', 'email'], name='bookings_cu_organiz_06a85a_idx'),
+            model_name="customer",
+            index=models.Index(
+                fields=["organization", "email"], name="bookings_cu_organiz_06a85a_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='customer',
-            unique_together={('organization', 'email')},
+            name="customer",
+            unique_together={("organization", "email")},
         ),
         migrations.AddIndex(
-            model_name='booking',
-            index=models.Index(fields=['organization', 'start_datetime', 'status'], name='bookings_bo_organiz_1c1a8c_idx'),
+            model_name="booking",
+            index=models.Index(
+                fields=["organization", "start_datetime", "status"],
+                name="bookings_bo_organiz_1c1a8c_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='booking',
-            index=models.Index(fields=['organization', 'customer_email'], name='bookings_bo_organiz_fc3ba4_idx'),
+            model_name="booking",
+            index=models.Index(
+                fields=["organization", "customer_email"], name="bookings_bo_organiz_fc3ba4_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='booking',
-            index=models.Index(fields=['organization', 'staff', 'start_datetime'], name='bookings_bo_organiz_f3fc3c_idx'),
+            model_name="booking",
+            index=models.Index(
+                fields=["organization", "staff", "start_datetime"],
+                name="bookings_bo_organiz_f3fc3c_idx",
+            ),
         ),
     ]

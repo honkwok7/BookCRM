@@ -11,30 +11,57 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
+        ("organizations", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='StaffProfile',
+            name="StaffProfile",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('job_title', models.CharField(blank=True, max_length=120)),
-                ('bio', models.TextField(blank=True)),
-                ('profile_image', models.ImageField(blank=True, null=True, upload_to='staff/profiles/')),
-                ('phone_number', models.CharField(blank=True, max_length=30)),
-                ('is_active', models.BooleanField(default=True)),
-                ('is_accepting_bookings', models.BooleanField(default=True)),
-                ('appointment_color', models.CharField(blank=True, max_length=20)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='staff_profiles', to='organizations.organization')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='staff_profiles', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("job_title", models.CharField(blank=True, max_length=120)),
+                ("bio", models.TextField(blank=True)),
+                (
+                    "profile_image",
+                    models.ImageField(blank=True, null=True, upload_to="staff/profiles/"),
+                ),
+                ("phone_number", models.CharField(blank=True, max_length=30)),
+                ("is_active", models.BooleanField(default=True)),
+                ("is_accepting_bookings", models.BooleanField(default=True)),
+                ("appointment_color", models.CharField(blank=True, max_length=20)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="staff_profiles",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="staff_profiles",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['organization', 'is_active', 'is_accepting_bookings'], name='staff_staff_organiz_d8c74e_idx')],
-                'unique_together': {('organization', 'user')},
+                "indexes": [
+                    models.Index(
+                        fields=["organization", "is_active", "is_accepting_bookings"],
+                        name="staff_staff_organiz_d8c74e_idx",
+                    )
+                ],
+                "unique_together": {("organization", "user")},
             },
         ),
     ]

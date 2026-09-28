@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
@@ -26,19 +25,27 @@ class Command(BaseCommand):
         admin_user.set_password("Admin12345!")
         admin_user.save()
 
-        owner, _ = user_model.objects.get_or_create(email="owner@demo.local", defaults={"email_verified": True})
+        owner, _ = user_model.objects.get_or_create(
+            email="owner@demo.local", defaults={"email_verified": True}
+        )
         owner.set_password("Owner12345!")
         owner.save()
 
-        manager, _ = user_model.objects.get_or_create(email="manager@demo.local", defaults={"email_verified": True})
+        manager, _ = user_model.objects.get_or_create(
+            email="manager@demo.local", defaults={"email_verified": True}
+        )
         manager.set_password("Manager12345!")
         manager.save()
 
-        staff_user, _ = user_model.objects.get_or_create(email="staff@demo.local", defaults={"email_verified": True})
+        staff_user, _ = user_model.objects.get_or_create(
+            email="staff@demo.local", defaults={"email_verified": True}
+        )
         staff_user.set_password("Staff12345!")
         staff_user.save()
 
-        customer_user, _ = user_model.objects.get_or_create(email="customer@demo.local", defaults={"email_verified": True})
+        customer_user, _ = user_model.objects.get_or_create(
+            email="customer@demo.local", defaults={"email_verified": True}
+        )
         customer_user.set_password("Customer12345!")
         customer_user.save()
 
@@ -52,9 +59,15 @@ class Command(BaseCommand):
             },
         )
 
-        OrganizationMembership.objects.get_or_create(organization=organization, user=owner, defaults={"role": OrganizationRole.OWNER})
-        OrganizationMembership.objects.get_or_create(organization=organization, user=manager, defaults={"role": OrganizationRole.MANAGER})
-        OrganizationMembership.objects.get_or_create(organization=organization, user=staff_user, defaults={"role": OrganizationRole.STAFF})
+        OrganizationMembership.objects.get_or_create(
+            organization=organization, user=owner, defaults={"role": OrganizationRole.OWNER}
+        )
+        OrganizationMembership.objects.get_or_create(
+            organization=organization, user=manager, defaults={"role": OrganizationRole.MANAGER}
+        )
+        OrganizationMembership.objects.get_or_create(
+            organization=organization, user=staff_user, defaults={"role": OrganizationRole.STAFF}
+        )
 
         free_plan, _ = Plan.objects.get_or_create(
             slug="free",

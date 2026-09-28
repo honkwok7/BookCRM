@@ -5,24 +5,38 @@ from core.models import BaseUUIDModel
 
 
 class NotificationLog(BaseUUIDModel):
-	class Channel(models.TextChoices):
-		EMAIL = "email", "Email"
+    class Channel(models.TextChoices):
+        EMAIL = "email", "Email"
 
-	class Status(models.TextChoices):
-		PENDING = "pending", "Pending"
-		SENT = "sent", "Sent"
-		FAILED = "failed", "Failed"
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
 
-	organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="notification_logs")
-	recipient = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="notification_logs")
-	recipient_email = models.EmailField()
-	notification_type = models.CharField(max_length=120)
-	channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.EMAIL)
-	status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-	related_booking = models.ForeignKey("bookings.Booking", null=True, blank=True, on_delete=models.SET_NULL, related_name="notification_logs")
-	sent_at = models.DateTimeField(null=True, blank=True)
-	failure_reason = models.TextField(blank=True)
-	retry_count = models.PositiveIntegerField(default=0)
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="notification_logs"
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notification_logs",
+    )
+    recipient_email = models.EmailField()
+    notification_type = models.CharField(max_length=120)
+    channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.EMAIL)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    related_booking = models.ForeignKey(
+        "bookings.Booking",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notification_logs",
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.TextField(blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
 
-	class Meta:
-		indexes = [models.Index(fields=["organization", "notification_type", "status"])]
+    class Meta:
+        indexes = [models.Index(fields=["organization", "notification_type", "status"])]

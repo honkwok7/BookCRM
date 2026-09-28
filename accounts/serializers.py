@@ -6,7 +6,6 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from accounts.models import EmailVerificationToken
 
-
 User = get_user_model()
 
 

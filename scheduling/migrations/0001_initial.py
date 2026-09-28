@@ -10,79 +10,153 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
-        ('staff', '0001_initial'),
+        ("organizations", "0001_initial"),
+        ("staff", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='AvailabilityException',
+            name="AvailabilityException",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('date', models.DateField()),
-                ('unavailable_all_day', models.BooleanField(default=False)),
-                ('start_time', models.TimeField(blank=True, null=True)),
-                ('end_time', models.TimeField(blank=True, null=True)),
-                ('reason', models.CharField(blank=True, max_length=255)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='availability_exceptions', to='organizations.organization')),
-                ('staff', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='availability_exceptions', to='staff.staffprofile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("date", models.DateField()),
+                ("unavailable_all_day", models.BooleanField(default=False)),
+                ("start_time", models.TimeField(blank=True, null=True)),
+                ("end_time", models.TimeField(blank=True, null=True)),
+                ("reason", models.CharField(blank=True, max_length=255)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="availability_exceptions",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "staff",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="availability_exceptions",
+                        to="staff.staffprofile",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='TimeOff',
+            name="TimeOff",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('start_datetime', models.DateTimeField()),
-                ('end_datetime', models.DateTimeField()),
-                ('reason', models.CharField(blank=True, max_length=255)),
-                ('approval_status', models.CharField(default='approved', max_length=30)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='time_off_entries', to='organizations.organization')),
-                ('staff', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='time_off_entries', to='staff.staffprofile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("start_datetime", models.DateTimeField()),
+                ("end_datetime", models.DateTimeField()),
+                ("reason", models.CharField(blank=True, max_length=255)),
+                ("approval_status", models.CharField(default="approved", max_length=30)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="time_off_entries",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "staff",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="time_off_entries",
+                        to="staff.staffprofile",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='OrganizationHoliday',
+            name="OrganizationHoliday",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('date', models.DateField()),
-                ('name', models.CharField(max_length=120)),
-                ('full_day_closure', models.BooleanField(default=True)),
-                ('start_time', models.TimeField(blank=True, null=True)),
-                ('end_time', models.TimeField(blank=True, null=True)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='holidays', to='organizations.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("date", models.DateField()),
+                ("name", models.CharField(max_length=120)),
+                ("full_day_closure", models.BooleanField(default=True)),
+                ("start_time", models.TimeField(blank=True, null=True)),
+                ("end_time", models.TimeField(blank=True, null=True)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="holidays",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('organization', 'date', 'name')},
+                "unique_together": {("organization", "date", "name")},
             },
         ),
         migrations.CreateModel(
-            name='WeeklyAvailability',
+            name="WeeklyAvailability",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('day_of_week', models.PositiveSmallIntegerField()),
-                ('start_time', models.TimeField()),
-                ('end_time', models.TimeField()),
-                ('is_active', models.BooleanField(default=True)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='weekly_availabilities', to='organizations.organization')),
-                ('staff', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='weekly_availabilities', to='staff.staffprofile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("day_of_week", models.PositiveSmallIntegerField()),
+                ("start_time", models.TimeField()),
+                ("end_time", models.TimeField()),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="weekly_availabilities",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "staff",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="weekly_availabilities",
+                        to="staff.staffprofile",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['staff', 'day_of_week', 'start_time'],
-                'constraints': [models.CheckConstraint(condition=models.Q(('day_of_week__gte', 0), ('day_of_week__lte', 6)), name='weekly_availability_valid_day')],
+                "ordering": ["staff", "day_of_week", "start_time"],
+                "constraints": [
+                    models.CheckConstraint(
+                        condition=models.Q(("day_of_week__gte", 0), ("day_of_week__lte", 6)),
+                        name="weekly_availability_valid_day",
+                    )
+                ],
             },
         ),
     ]

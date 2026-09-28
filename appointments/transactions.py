@@ -34,11 +34,13 @@ def mutation_transaction():
         # In particular, SQLite cannot upgrade every competing read transaction.
         if not _is_concurrency_conflict(error):
             raise
-        raise ValidationError({
-            api_settings.NON_FIELD_ERRORS_KEY: [
-                "Appointment conflict. Refresh availability and retry."
-            ],
-        }) from error
+        raise ValidationError(
+            {
+                api_settings.NON_FIELD_ERRORS_KEY: [
+                    "Appointment conflict. Refresh availability and retry."
+                ],
+            }
+        ) from error
 
 
 def lock_specialist(pk):
@@ -57,8 +59,10 @@ def lock_appointment(pk, *, schedule=False):
     appointment = get_object_or_404(Appointment.objects.select_for_update(), pk=pk)
     if specialist is not None:
         if appointment.specialist_id != specialist.pk:
-            raise ValidationError({
-                api_settings.NON_FIELD_ERRORS_KEY: ["Appointment changed. Refresh and retry."],
-            })
+            raise ValidationError(
+                {
+                    api_settings.NON_FIELD_ERRORS_KEY: ["Appointment changed. Refresh and retry."],
+                }
+            )
         appointment.specialist = specialist
     return appointment

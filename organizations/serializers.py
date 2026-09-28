@@ -3,7 +3,6 @@ from rest_framework import serializers
 
 from organizations.models import Organization, OrganizationInvitation, OrganizationMembership
 
-
 User = get_user_model()
 
 
@@ -35,7 +34,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         # Activation and suspension are platform-level decisions, never tenant-editable.
-        read_only_fields = ("id", "public_uuid", "is_active", "is_suspended", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "public_uuid",
+            "is_active",
+            "is_suspended",
+            "created_at",
+            "updated_at",
+        )
 
 
 class OrganizationMembershipSerializer(serializers.ModelSerializer):
@@ -43,7 +49,16 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrganizationMembership
-        fields = ("id", "organization", "user", "user_email", "role", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "organization",
+            "user",
+            "user_email",
+            "role",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = ("id", "created_at", "updated_at")
 
 

@@ -7,18 +7,22 @@ from core.services import write_audit_log
 
 
 class RequestAuditMiddlewareTests(TestCase):
-	def test_request_is_cleared_after_response(self):
-		user = get_user_model().objects.create_user(email="audit@example.test", password="Audit12345!")
-		self.client.force_login(user)
-		self.client.get("/health/")
-		self.assertIsNone(get_current_request())
+    def test_request_is_cleared_after_response(self):
+        user = get_user_model().objects.create_user(
+            email="audit@example.test", password="Audit12345!"
+        )
+        self.client.force_login(user)
+        self.client.get("/health/")
+        self.assertIsNone(get_current_request())
 
-	def test_audit_outside_request_is_not_attributed_to_previous_requester(self):
-		user = get_user_model().objects.create_user(email="audit@example.test", password="Audit12345!")
-		self.client.force_login(user)
-		self.client.get("/health/")
+    def test_audit_outside_request_is_not_attributed_to_previous_requester(self):
+        user = get_user_model().objects.create_user(
+            email="audit@example.test", password="Audit12345!"
+        )
+        self.client.force_login(user)
+        self.client.get("/health/")
 
-		log = write_audit_log(action="system.test")
-		self.assertIsNone(log.user)
-		self.assertIsNone(log.ip_address)
-		self.assertEqual(AuditLog.objects.count(), 1)
+        log = write_audit_log(action="system.test")
+        self.assertIsNone(log.user)
+        self.assertIsNone(log.ip_address)
+        self.assertEqual(AuditLog.objects.count(), 1)

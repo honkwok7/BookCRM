@@ -1,7 +1,12 @@
 from rest_framework import serializers
 
 from organizations.selectors import get_request_organization
-from scheduling.models import AvailabilityException, OrganizationHoliday, TimeOff, WeeklyAvailability
+from scheduling.models import (
+    AvailabilityException,
+    OrganizationHoliday,
+    TimeOff,
+    WeeklyAvailability,
+)
 
 
 class WeeklyAvailabilitySerializer(serializers.ModelSerializer):

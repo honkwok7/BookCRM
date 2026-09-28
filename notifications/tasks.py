@@ -31,4 +31,4 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
         log.failure_reason = str(exc)
         log.retry_count += 1
         log.save(update_fields=["status", "failure_reason", "retry_count", "updated_at"])
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc

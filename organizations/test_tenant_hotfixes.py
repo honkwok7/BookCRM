@@ -1,4 +1,4 @@
-"""M0 regression tests for the critical tenant leaks found in docs/CURRENT_STATE_ANALYSIS.md (P1-P3, P9)."""
+"""M0 regression tests for critical tenant leaks (P1-P3, P9 in docs/CURRENT_STATE_ANALYSIS.md)."""
 
 import json
 from datetime import timedelta
@@ -17,7 +17,6 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from services.models import Service
 from staff.models import StaffProfile
 
-
 User = get_user_model()
 
 
@@ -32,16 +31,26 @@ class TenantFixtureMixin:
 
         staff_user = User.objects.create_user(email="staff@b.test", password="Staff12345!")
         self.staff_b = StaffProfile.objects.create(user=staff_user, organization=self.org_b)
-        self.service_a = Service.objects.create(organization=self.org_a, name="A", slug="a", price=10, duration_minutes=30)
-        self.service_b = Service.objects.create(organization=self.org_b, name="B", slug="b", price=10, duration_minutes=30)
+        self.service_a = Service.objects.create(
+            organization=self.org_a, name="A", slug="a", price=10, duration_minutes=30
+        )
+        self.service_b = Service.objects.create(
+            organization=self.org_b, name="B", slug="b", price=10, duration_minutes=30
+        )
 
         WaitlistEntry.objects.create(
-            organization=self.org_a, service=self.service_a,
-            customer_name="Alice", customer_email="alice@a.test", customer_phone="111",
+            organization=self.org_a,
+            service=self.service_a,
+            customer_name="Alice",
+            customer_email="alice@a.test",
+            customer_phone="111",
         )
         WaitlistEntry.objects.create(
-            organization=self.org_b, service=self.service_b,
-            customer_name="Secret", customer_email="secret@b.test", customer_phone="555",
+            organization=self.org_b,
+            service=self.service_b,
+            customer_name="Secret",
+            customer_email="secret@b.test",
+            customer_phone="555",
         )
 
     @staticmethod
@@ -95,7 +104,9 @@ class DashboardIsolationTests(TenantFixtureMixin, APITestCase):
 class OrganizationEditTests(TenantFixtureMixin, APITestCase):
     def test_customer_role_cannot_edit_organization(self):
         self.client.force_authenticate(self.customer_a)
-        response = self.client.patch("/api/organizations/current/", {"name": "pwned"}, format="json")
+        response = self.client.patch(
+            "/api/organizations/current/", {"name": "pwned"}, format="json"
+        )
         self.assertEqual(response.status_code, 403)
         self.org_a.refresh_from_db()
         self.assertEqual(self.org_a.name, "Org A")
@@ -121,7 +132,10 @@ class OrganizationEditTests(TenantFixtureMixin, APITestCase):
     def test_manager_cannot_edit_other_tenant(self):
         self.client.force_authenticate(self.manager_a)
         response = self.client.patch(
-            "/api/organizations/current/", {"name": "pwned"}, format="json", HTTP_X_ORGANIZATION_SLUG="org-b"
+            "/api/organizations/current/",
+            {"name": "pwned"},
+            format="json",
+            HTTP_X_ORGANIZATION_SLUG="org-b",
         )
         self.assertEqual(response.status_code, 403)
         self.org_b.refresh_from_db()
@@ -155,7 +169,10 @@ class BookingNotificationDispatchTests(TenantFixtureMixin, APITestCase):
         log = NotificationLog.objects.get(id=kwargs["notification_log_id"])
         self.assertEqual(log.related_booking_id, booking.id)
 
-    @mock.patch("notifications.services.send_templated_email.delay", side_effect=ConnectionError("broker down"))
+    @mock.patch(
+        "notifications.services.send_templated_email.delay",
+        side_effect=ConnectionError("broker down"),
+    )
     def test_broker_failure_leaves_log_pending_and_sends_nothing(self, delay):
         with self.captureOnCommitCallbacks(execute=True):
             booking = self._book()

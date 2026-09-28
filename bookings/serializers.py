@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from rest_framework import serializers
 
 from bookings.models import Booking, Customer, WaitlistEntry
@@ -13,7 +11,15 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = "__all__"
-        read_only_fields = ("id", "organization", "total_bookings", "no_show_count", "last_appointment", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "organization",
+            "total_bookings",
+            "no_show_count",
+            "last_appointment",
+            "created_at",
+            "updated_at",
+        )
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -48,8 +54,18 @@ class BookingCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         request = self.context["request"]
         organization = get_request_organization(request)
-        service = Service.objects.get(id=validated_data["service"], organization=organization, is_active=True, is_archived=False)
-        staff_profile = StaffProfile.objects.get(id=validated_data["staff"], organization=organization, is_active=True, is_accepting_bookings=True)
+        service = Service.objects.get(
+            id=validated_data["service"],
+            organization=organization,
+            is_active=True,
+            is_archived=False,
+        )
+        staff_profile = StaffProfile.objects.get(
+            id=validated_data["staff"],
+            organization=organization,
+            is_active=True,
+            is_accepting_bookings=True,
+        )
 
         booking = create_booking(
             organization=organization,
@@ -72,8 +88,12 @@ class BookingCancelSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         booking = self.context["booking"]
-        actor = self.context["request"].user if self.context["request"].user.is_authenticated else None
-        return cancel_booking(booking=booking, actor=actor, reason=self.validated_data.get("reason", ""))
+        actor = (
+            self.context["request"].user if self.context["request"].user.is_authenticated else None
+        )
+        return cancel_booking(
+            booking=booking, actor=actor, reason=self.validated_data.get("reason", "")
+        )
 
 
 class WaitlistEntrySerializer(serializers.ModelSerializer):

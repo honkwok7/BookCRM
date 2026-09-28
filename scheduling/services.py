@@ -4,7 +4,12 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from bookings.models import Booking
-from scheduling.models import AvailabilityException, OrganizationHoliday, TimeOff, WeeklyAvailability
+from scheduling.models import (
+    AvailabilityException,
+    OrganizationHoliday,
+    TimeOff,
+    WeeklyAvailability,
+)
 
 
 def generate_slots(*, organization, service, staff_profile, date, step_minutes=15):
@@ -21,11 +26,15 @@ def generate_slots(*, organization, service, staff_profile, date, step_minutes=1
     if not availabilities.exists():
         return []
 
-    holiday = OrganizationHoliday.objects.filter(organization=organization, date=date, full_day_closure=True).exists()
+    holiday = OrganizationHoliday.objects.filter(
+        organization=organization, date=date, full_day_closure=True
+    ).exists()
     if holiday:
         return []
 
-    exception = AvailabilityException.objects.filter(organization=organization, staff=staff_profile, date=date).first()
+    exception = AvailabilityException.objects.filter(
+        organization=organization, staff=staff_profile, date=date
+    ).first()
     if exception and exception.unavailable_all_day:
         return []
 
@@ -33,7 +42,12 @@ def generate_slots(*, organization, service, staff_profile, date, step_minutes=1
         organization=organization,
         staff=staff_profile,
         start_datetime__date=date,
-        status__in=[Booking.Status.PENDING, Booking.Status.CONFIRMED, Booking.Status.CHECKED_IN, Booking.Status.IN_PROGRESS],
+        status__in=[
+            Booking.Status.PENDING,
+            Booking.Status.CONFIRMED,
+            Booking.Status.CHECKED_IN,
+            Booking.Status.IN_PROGRESS,
+        ],
     )
 
     slots = []
@@ -70,7 +84,9 @@ def generate_slots(*, organization, service, staff_profile, date, step_minutes=1
                 cursor += timedelta(minutes=step_minutes)
                 continue
 
-            overlap = existing.filter(start_datetime__lt=slot_end, end_datetime__gt=slot_start).exists()
+            overlap = existing.filter(
+                start_datetime__lt=slot_end, end_datetime__gt=slot_start
+            ).exists()
             if overlap:
                 cursor += timedelta(minutes=step_minutes)
                 continue

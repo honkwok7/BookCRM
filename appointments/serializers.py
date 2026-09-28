@@ -40,8 +40,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
         working, occupied = scheduling_context(specialist, date)
         error = scheduling_error(
-            date, time, attrs.get("duration", specialist.slot_duration),
-            specialist.slot_duration, working, occupied,
+            date,
+            time,
+            attrs.get("duration", specialist.slot_duration),
+            specialist.slot_duration,
+            working,
+            occupied,
         )
         if error:
             raise serializers.ValidationError(error)
@@ -106,11 +110,17 @@ class AppointmentRescheduleSerializer(serializers.Serializer):
             raise serializers.ValidationError("Cannot reschedule to a past time today.")
 
         working, occupied = scheduling_context(
-            specialist, new_date, exclude_pk=appointment.pk,
+            specialist,
+            new_date,
+            exclude_pk=appointment.pk,
         )
         error = scheduling_error(
-            new_date, new_time, appointment.duration,
-            specialist.slot_duration, working, occupied,
+            new_date,
+            new_time,
+            appointment.duration,
+            specialist.slot_duration,
+            working,
+            occupied,
         )
         if error:
             raise serializers.ValidationError(error)

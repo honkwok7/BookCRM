@@ -16,68 +16,156 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Organization',
+            name="Organization",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('public_uuid', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('name', models.CharField(max_length=255)),
-                ('slug', models.SlugField(max_length=255, unique=True)),
-                ('logo', models.ImageField(blank=True, null=True, upload_to='organizations/logos/')),
-                ('description', models.TextField(blank=True)),
-                ('email', models.EmailField(blank=True, max_length=254)),
-                ('phone', models.CharField(blank=True, max_length=30)),
-                ('website', models.URLField(blank=True)),
-                ('address', models.TextField(blank=True)),
-                ('timezone', models.CharField(default='UTC', max_length=64)),
-                ('currency', models.CharField(default='USD', max_length=10)),
-                ('booking_page_enabled', models.BooleanField(default=True)),
-                ('booking_page_theme', models.JSONField(blank=True, default=dict)),
-                ('default_appointment_rules', models.JSONField(blank=True, default=dict)),
-                ('allow_guest_booking', models.BooleanField(default=True)),
-                ('reminder_hours_before', models.PositiveIntegerField(default=24)),
-                ('second_reminder_hours_before', models.PositiveIntegerField(default=2)),
-                ('is_active', models.BooleanField(default=True)),
-                ('is_suspended', models.BooleanField(default=False)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("public_uuid", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("name", models.CharField(max_length=255)),
+                ("slug", models.SlugField(max_length=255, unique=True)),
+                (
+                    "logo",
+                    models.ImageField(blank=True, null=True, upload_to="organizations/logos/"),
+                ),
+                ("description", models.TextField(blank=True)),
+                ("email", models.EmailField(blank=True, max_length=254)),
+                ("phone", models.CharField(blank=True, max_length=30)),
+                ("website", models.URLField(blank=True)),
+                ("address", models.TextField(blank=True)),
+                ("timezone", models.CharField(default="UTC", max_length=64)),
+                ("currency", models.CharField(default="USD", max_length=10)),
+                ("booking_page_enabled", models.BooleanField(default=True)),
+                ("booking_page_theme", models.JSONField(blank=True, default=dict)),
+                ("default_appointment_rules", models.JSONField(blank=True, default=dict)),
+                ("allow_guest_booking", models.BooleanField(default=True)),
+                ("reminder_hours_before", models.PositiveIntegerField(default=24)),
+                ("second_reminder_hours_before", models.PositiveIntegerField(default=2)),
+                ("is_active", models.BooleanField(default=True)),
+                ("is_suspended", models.BooleanField(default=False)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.CreateModel(
-            name='OrganizationInvitation',
+            name="OrganizationInvitation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('email', models.EmailField(max_length=254)),
-                ('role', models.CharField(choices=[('owner', 'Owner'), ('manager', 'Manager'), ('staff', 'Staff'), ('customer', 'Customer')], max_length=20)),
-                ('token', models.CharField(db_index=True, max_length=64, unique=True)),
-                ('expires_at', models.DateTimeField()),
-                ('accepted_at', models.DateTimeField(blank=True, null=True)),
-                ('accepted_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='accepted_org_invitations', to=settings.AUTH_USER_MODEL)),
-                ('inviter', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='sent_org_invitations', to=settings.AUTH_USER_MODEL)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='invitations', to='organizations.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("email", models.EmailField(max_length=254)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[
+                            ("owner", "Owner"),
+                            ("manager", "Manager"),
+                            ("staff", "Staff"),
+                            ("customer", "Customer"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("token", models.CharField(db_index=True, max_length=64, unique=True)),
+                ("expires_at", models.DateTimeField()),
+                ("accepted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "accepted_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="accepted_org_invitations",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "inviter",
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="sent_org_invitations",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="invitations",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['organization', 'email', 'expires_at'], name='organizatio_organiz_af89be_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["organization", "email", "expires_at"],
+                        name="organizatio_organiz_af89be_idx",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='OrganizationMembership',
+            name="OrganizationMembership",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('role', models.CharField(choices=[('owner', 'Owner'), ('manager', 'Manager'), ('staff', 'Staff'), ('customer', 'Customer')], max_length=20)),
-                ('is_active', models.BooleanField(default=True)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='organizations.organization')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='organization_memberships', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[
+                            ("owner", "Owner"),
+                            ("manager", "Manager"),
+                            ("staff", "Staff"),
+                            ("customer", "Customer"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="memberships",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="organization_memberships",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['organization', 'role', 'is_active'], name='organizatio_organiz_b3d0b8_idx')],
-                'unique_together': {('organization', 'user')},
+                "indexes": [
+                    models.Index(
+                        fields=["organization", "role", "is_active"],
+                        name="organizatio_organiz_b3d0b8_idx",
+                    )
+                ],
+                "unique_together": {("organization", "user")},
             },
         ),
     ]

@@ -7,11 +7,11 @@ from staff.serializers import StaffProfileSerializer
 
 
 class StaffProfileViewSet(viewsets.ModelViewSet):
-	serializer_class = StaffProfileSerializer
-	permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
-	filterset_fields = ("is_active", "is_accepting_bookings")
-	search_fields = ("user__email", "job_title", "bio")
+    serializer_class = StaffProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    filterset_fields = ("is_active", "is_accepting_bookings")
+    search_fields = ("user__email", "job_title", "bio")
 
-	def get_queryset(self):
-		queryset = StaffProfile.objects.select_related("user", "organization")
-		return scope_queryset_by_organization(queryset, self.request)
+    def get_queryset(self):
+        queryset = StaffProfile.objects.select_related("user", "organization")
+        return scope_queryset_by_organization(queryset, self.request)

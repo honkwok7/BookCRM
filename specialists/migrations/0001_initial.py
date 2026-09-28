@@ -8,36 +8,70 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Specialist',
+            name="Specialist",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=120)),
-                ('profession', models.CharField(max_length=120)),
-                ('description', models.TextField(blank=True)),
-                ('image', models.ImageField(blank=True, null=True, upload_to='specialists/')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("name", models.CharField(max_length=120)),
+                ("profession", models.CharField(max_length=120)),
+                ("description", models.TextField(blank=True)),
+                ("image", models.ImageField(blank=True, null=True, upload_to="specialists/")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.CreateModel(
-            name='WorkingHour',
+            name="WorkingHour",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('day', models.IntegerField(choices=[(0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday')])),
-                ('start_time', models.TimeField()),
-                ('end_time', models.TimeField()),
-                ('specialist', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='working_hours', to='specialists.specialist')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "day",
+                    models.IntegerField(
+                        choices=[
+                            (0, "Monday"),
+                            (1, "Tuesday"),
+                            (2, "Wednesday"),
+                            (3, "Thursday"),
+                            (4, "Friday"),
+                            (5, "Saturday"),
+                            (6, "Sunday"),
+                        ]
+                    ),
+                ),
+                ("start_time", models.TimeField()),
+                ("end_time", models.TimeField()),
+                (
+                    "specialist",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="working_hours",
+                        to="specialists.specialist",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['specialist', 'day', 'start_time'],
-                'constraints': [models.UniqueConstraint(fields=('specialist', 'day', 'start_time', 'end_time'), name='unique_working_interval_per_specialist')],
+                "ordering": ["specialist", "day", "start_time"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("specialist", "day", "start_time", "end_time"),
+                        name="unique_working_interval_per_specialist",
+                    )
+                ],
             },
         ),
     ]

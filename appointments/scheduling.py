@@ -50,15 +50,14 @@ def scheduling_error(date, time, duration, slot_duration, working, occupied):
     except OverflowError:
         return "Appointment duration exceeds the supported date range."
 
-    fitting = [
-        wh_start for wh_start, wh_end in working
-        if wh_start <= start < end <= wh_end
-    ]
+    fitting = [wh_start for wh_start, wh_end in working if wh_start <= start < end <= wh_end]
     if not fitting:
         return "Selected time is outside specialist working hours."
 
     if (
-        time.second or time.microsecond or slot_duration <= 0
+        time.second
+        or time.microsecond
+        or slot_duration <= 0
         or not any(
             (start - wh_start) % timedelta(minutes=slot_duration) == timedelta(0)
             for wh_start in fitting

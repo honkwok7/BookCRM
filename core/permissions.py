@@ -21,4 +21,6 @@ class IsOrganizationManagerOrOwner(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         organization = get_request_organization(request)
-        return organization is not None and user_has_org_role(request.user, organization, ["owner", "manager"])
+        return organization is not None and user_has_org_role(
+            request.user, organization, ["owner", "manager"]
+        )

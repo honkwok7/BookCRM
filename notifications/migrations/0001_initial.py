@@ -11,31 +11,76 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('bookings', '0001_initial'),
-        ('organizations', '0001_initial'),
+        ("bookings", "0001_initial"),
+        ("organizations", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='NotificationLog',
+            name="NotificationLog",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('recipient_email', models.EmailField(max_length=254)),
-                ('notification_type', models.CharField(max_length=120)),
-                ('channel', models.CharField(choices=[('email', 'Email')], default='email', max_length=20)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('sent', 'Sent'), ('failed', 'Failed')], default='pending', max_length=20)),
-                ('sent_at', models.DateTimeField(blank=True, null=True)),
-                ('failure_reason', models.TextField(blank=True)),
-                ('retry_count', models.PositiveIntegerField(default=0)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notification_logs', to='organizations.organization')),
-                ('recipient', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notification_logs', to=settings.AUTH_USER_MODEL)),
-                ('related_booking', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notification_logs', to='bookings.booking')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("recipient_email", models.EmailField(max_length=254)),
+                ("notification_type", models.CharField(max_length=120)),
+                (
+                    "channel",
+                    models.CharField(choices=[("email", "Email")], default="email", max_length=20),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("pending", "Pending"), ("sent", "Sent"), ("failed", "Failed")],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("sent_at", models.DateTimeField(blank=True, null=True)),
+                ("failure_reason", models.TextField(blank=True)),
+                ("retry_count", models.PositiveIntegerField(default=0)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="notification_logs",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "recipient",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="notification_logs",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "related_booking",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="notification_logs",
+                        to="bookings.booking",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['organization', 'notification_type', 'status'], name='notificatio_organiz_eb31a6_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["organization", "notification_type", "status"],
+                        name="notificatio_organiz_eb31a6_idx",
+                    )
+                ],
             },
         ),
     ]

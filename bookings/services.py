@@ -10,7 +10,6 @@ from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, C
 from core.services import write_audit_log
 from notifications.services import queue_booking_notification
 
-
 ACTIVE_BOOKING_STATUSES = [
     Booking.Status.PENDING,
     Booking.Status.CONFIRMED,
@@ -29,7 +28,20 @@ def _ensure_customer(*, organization, name, email, phone="", user=None):
 
 
 @transaction.atomic
-def create_booking(*, organization, service, staff_profile, customer_name, customer_email, customer_phone, start_datetime, customer_timezone="UTC", customer_notes="", actor=None, customer_user=None):
+def create_booking(
+    *,
+    organization,
+    service,
+    staff_profile,
+    customer_name,
+    customer_email,
+    customer_phone,
+    start_datetime,
+    customer_timezone="UTC",
+    customer_notes="",
+    actor=None,
+    customer_user=None,
+):
     if start_datetime <= timezone.now():
         raise ValueError("Cannot book in the past")
 
@@ -61,7 +73,9 @@ def create_booking(*, organization, service, staff_profile, customer_name, custo
     tzname = organization.timezone
     reference = Booking.generate_reference(year=start_datetime.astimezone(ZoneInfo(tzname)).year)
     while Booking.objects.filter(reference=reference).exists():
-        reference = Booking.generate_reference(year=start_datetime.astimezone(ZoneInfo(tzname)).year)
+        reference = Booking.generate_reference(
+            year=start_datetime.astimezone(ZoneInfo(tzname)).year
+        )
 
     booking = Booking.objects.create(
         reference=reference,
@@ -82,7 +96,9 @@ def create_booking(*, organization, service, staff_profile, customer_name, custo
         status=Booking.Status.CONFIRMED,
     )
 
-    BookingStatusHistory.objects.create(booking=booking, old_status="", new_status=booking.status, changed_by=actor)
+    BookingStatusHistory.objects.create(
+        booking=booking, old_status="", new_status=booking.status, changed_by=actor
+    )
     BookingActivityLog.objects.create(
         booking=booking,
         organization=organization,
@@ -118,9 +134,29 @@ def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
     booking.cancellation_reason = reason
     booking.cancelled_by = actor
     booking.cancelled_at = timezone.now()
-    booking.save(update_fields=["status", "cancellation_reason", "cancelled_by", "cancelled_at", "updated_at"])
-    BookingStatusHistory.objects.create(booking=booking, old_status=old_status, new_status=booking.status, changed_by=actor, note=reason)
-    BookingActivityLog.objects.create(booking=booking, organization=booking.organization, actor=actor, action="booking.cancelled", metadata={"reason": reason})
+    booking.save(
+        update_fields=[
+            "status",
+            "cancellation_reason",
+            "cancelled_by",
+            "cancelled_at",
+            "updated_at",
+        ]
+    )
+    BookingStatusHistory.objects.create(
+        booking=booking,
+        old_status=old_status,
+        new_status=booking.status,
+        changed_by=actor,
+        note=reason,
+    )
+    BookingActivityLog.objects.create(
+        booking=booking,
+        organization=booking.organization,
+        actor=actor,
+        action="booking.cancelled",
+        metadata={"reason": reason},
+    )
     queue_booking_notification(
         booking=booking,
         notification_type="booking_cancellation",

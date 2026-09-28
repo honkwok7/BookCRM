@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from threading import local
 
-
 _request_local = local()
 
 

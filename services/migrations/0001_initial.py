@@ -10,58 +10,105 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
-        ('staff', '0001_initial'),
+        ("organizations", "0001_initial"),
+        ("staff", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ServiceCategory',
+            name="ServiceCategory",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=120)),
-                ('slug', models.SlugField(max_length=150)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='service_categories', to='organizations.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=120)),
+                ("slug", models.SlugField(max_length=150)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="service_categories",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
-                'unique_together': {('organization', 'slug')},
+                "ordering": ["name"],
+                "unique_together": {("organization", "slug")},
             },
         ),
         migrations.CreateModel(
-            name='Service',
+            name="Service",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('slug', models.SlugField(max_length=255)),
-                ('description', models.TextField(blank=True)),
-                ('price', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('currency', models.CharField(default='USD', max_length=10)),
-                ('duration_minutes', models.PositiveIntegerField()),
-                ('buffer_before_minutes', models.PositiveIntegerField(default=0)),
-                ('buffer_after_minutes', models.PositiveIntegerField(default=0)),
-                ('is_active', models.BooleanField(default=True)),
-                ('is_public', models.BooleanField(default=True)),
-                ('is_archived', models.BooleanField(default=False)),
-                ('image', models.ImageField(blank=True, null=True, upload_to='services/images/')),
-                ('color', models.CharField(blank=True, max_length=20)),
-                ('max_advance_days', models.PositiveIntegerField(default=30)),
-                ('min_notice_minutes', models.PositiveIntegerField(default=60)),
-                ('cancellation_deadline_hours', models.PositiveIntegerField(default=24)),
-                ('rescheduling_deadline_hours', models.PositiveIntegerField(default=24)),
-                ('capacity', models.PositiveIntegerField(default=1)),
-                ('assigned_staff_members', models.ManyToManyField(blank=True, related_name='assigned_services', to='staff.staffprofile')),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='services', to='organizations.organization')),
-                ('category', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='services', to='services.servicecategory')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                ("slug", models.SlugField(max_length=255)),
+                ("description", models.TextField(blank=True)),
+                ("price", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("currency", models.CharField(default="USD", max_length=10)),
+                ("duration_minutes", models.PositiveIntegerField()),
+                ("buffer_before_minutes", models.PositiveIntegerField(default=0)),
+                ("buffer_after_minutes", models.PositiveIntegerField(default=0)),
+                ("is_active", models.BooleanField(default=True)),
+                ("is_public", models.BooleanField(default=True)),
+                ("is_archived", models.BooleanField(default=False)),
+                ("image", models.ImageField(blank=True, null=True, upload_to="services/images/")),
+                ("color", models.CharField(blank=True, max_length=20)),
+                ("max_advance_days", models.PositiveIntegerField(default=30)),
+                ("min_notice_minutes", models.PositiveIntegerField(default=60)),
+                ("cancellation_deadline_hours", models.PositiveIntegerField(default=24)),
+                ("rescheduling_deadline_hours", models.PositiveIntegerField(default=24)),
+                ("capacity", models.PositiveIntegerField(default=1)),
+                (
+                    "assigned_staff_members",
+                    models.ManyToManyField(
+                        blank=True, related_name="assigned_services", to="staff.staffprofile"
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="services",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "category",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="services",
+                        to="services.servicecategory",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
-                'indexes': [models.Index(fields=['organization', 'is_active', 'is_public'], name='services_se_organiz_9777d9_idx'), models.Index(fields=['organization', 'is_archived'], name='services_se_organiz_65d9c0_idx')],
-                'unique_together': {('organization', 'slug')},
+                "ordering": ["name"],
+                "indexes": [
+                    models.Index(
+                        fields=["organization", "is_active", "is_public"],
+                        name="services_se_organiz_9777d9_idx",
+                    ),
+                    models.Index(
+                        fields=["organization", "is_archived"],
+                        name="services_se_organiz_65d9c0_idx",
+                    ),
+                ],
+                "unique_together": {("organization", "slug")},
             },
         ),
     ]

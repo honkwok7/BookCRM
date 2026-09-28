@@ -10,51 +10,95 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
+        ("organizations", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Plan',
+            name="Plan",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=120)),
-                ('slug', models.SlugField(max_length=120, unique=True)),
-                ('monthly_price', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('yearly_price', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('maximum_staff', models.PositiveIntegerField(default=1)),
-                ('maximum_services', models.PositiveIntegerField(default=3)),
-                ('maximum_monthly_bookings', models.PositiveIntegerField(default=100)),
-                ('analytics_enabled', models.BooleanField(default=False)),
-                ('api_access_enabled', models.BooleanField(default=True)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=120)),
+                ("slug", models.SlugField(max_length=120, unique=True)),
+                ("monthly_price", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("yearly_price", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("maximum_staff", models.PositiveIntegerField(default=1)),
+                ("maximum_services", models.PositiveIntegerField(default=3)),
+                ("maximum_monthly_bookings", models.PositiveIntegerField(default=100)),
+                ("analytics_enabled", models.BooleanField(default=False)),
+                ("api_access_enabled", models.BooleanField(default=True)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['monthly_price'],
+                "ordering": ["monthly_price"],
             },
         ),
         migrations.CreateModel(
-            name='Subscription',
+            name="Subscription",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('status', models.CharField(choices=[('trialing', 'Trialing'), ('active', 'Active'), ('past_due', 'Past Due'), ('cancelled', 'Cancelled'), ('expired', 'Expired')], default='trialing', max_length=20)),
-                ('billing_cycle', models.CharField(choices=[('monthly', 'Monthly'), ('yearly', 'Yearly')], default='monthly', max_length=20)),
-                ('trial_start', models.DateTimeField(blank=True, null=True)),
-                ('trial_end', models.DateTimeField(blank=True, null=True)),
-                ('current_period_start', models.DateTimeField(blank=True, null=True)),
-                ('current_period_end', models.DateTimeField(blank=True, null=True)),
-                ('cancel_at_period_end', models.BooleanField(default=False)),
-                ('external_customer_id', models.CharField(blank=True, max_length=255)),
-                ('external_subscription_id', models.CharField(blank=True, max_length=255)),
-                ('organization', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='subscription', to='organizations.organization')),
-                ('plan', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='subscriptions', to='subscriptions.plan')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("trialing", "Trialing"),
+                            ("active", "Active"),
+                            ("past_due", "Past Due"),
+                            ("cancelled", "Cancelled"),
+                            ("expired", "Expired"),
+                        ],
+                        default="trialing",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "billing_cycle",
+                    models.CharField(
+                        choices=[("monthly", "Monthly"), ("yearly", "Yearly")],
+                        default="monthly",
+                        max_length=20,
+                    ),
+                ),
+                ("trial_start", models.DateTimeField(blank=True, null=True)),
+                ("trial_end", models.DateTimeField(blank=True, null=True)),
+                ("current_period_start", models.DateTimeField(blank=True, null=True)),
+                ("current_period_end", models.DateTimeField(blank=True, null=True)),
+                ("cancel_at_period_end", models.BooleanField(default=False)),
+                ("external_customer_id", models.CharField(blank=True, max_length=255)),
+                ("external_subscription_id", models.CharField(blank=True, max_length=255)),
+                (
+                    "organization",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="subscription",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "plan",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="subscriptions",
+                        to="subscriptions.plan",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
     ]
