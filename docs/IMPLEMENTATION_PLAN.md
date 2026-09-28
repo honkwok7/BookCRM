@@ -371,6 +371,23 @@ None.
 
 ### M1.6: Legacy removal and single role system
 
+> **Status: done (2026-09-28, branch `m1.6-legacy-removal`). Phase 1 is complete.**
+> - Ported the parent-row lock: every create and reschedule locks the provider's
+>   `StaffProfile` first (`lock_staff`), closing the empty-slot race. This part of M4.1/M4.2 was
+>   pulled forward because the legacy race tests needed a lock to prove.
+> - `tests/test_booking_engine.py`: interval rules, the full transition table, lock order, and
+>   8 PostgreSQL race tests. They were confirmed to fail without the lock.
+> - The working-hours and slot-grid cases from `appointments/test_scheduling.py` were **not**
+>   ported, because `create_booking` doesn't validate availability yet. They are the
+>   reference list for M4.1's `validate_slot` and can be found in git history before commit
+>   `2476181`.
+> - The legacy role tests were restated for memberships in
+>   `accounts/test_privilege_escalation.py`.
+> - Three commits: port; unroute plus `DeleteModel` (apps kept for one commit); remove apps
+>   plus `RemoveField User.role`. A database created before M1.6 that skips the middle
+>   commit keeps orphan `specialists_*`/`appointments_*` tables, which are safe to drop by
+>   hand.
+
 Approved 2026-09-27. There is no production data, so no export step is needed.
 
 #### Objective

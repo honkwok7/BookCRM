@@ -34,21 +34,9 @@ class CustomUserManager(UserManager):
         return self._create_user(email, password, **extra_fields)
 
 
-class UserRole(models.TextChoices):
-    CUSTOMER = "customer", "Customer"
-    SPECIALIST = "specialist", "Specialist"
-    ADMIN = "admin", "Admin"
-    OWNER = "owner", "Owner"
-
-
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20, blank=True)
-    role = models.CharField(
-        max_length=10,
-        choices=UserRole.choices,
-        default=UserRole.CUSTOMER,
-    )
     profile_image = models.ImageField(upload_to="users/profiles/", blank=True, null=True)
     terms_accepted_at = models.DateTimeField(null=True, blank=True)
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
