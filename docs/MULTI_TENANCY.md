@@ -44,11 +44,21 @@ with `booking_page_enabled=True`. It never creates a tenant context.
 set `is_suspended`, `suspended_at` and `suspension_reason`, and write an audit log entry.
 Tenant users can't change `is_active` or `is_suspended` through the API.
 
+## Writing relations safely
+
+Serializers for tenant data extend `core.api.TenantScopedModelSerializer`:
+- `organization` is set from the tenant on create.
+- Every auto-generated relation field is a `TenantPrimaryKeyRelatedField`, limited to the
+  tenant's rows.
+- Relations to users use `TenantMemberUserField`, which only accepts members of the
+  organization.
+- `core/test_api_contract.py` fails if a serializer uses `fields = "__all__"`, or has a
+  writable relation that isn't tenant-limited.
+
 ## Known gaps (tracked in IMPLEMENTATION_PLAN.md)
 
-- **Cross-tenant references (M1.3):** writable relation fields such as `staff`, `service` and
-  `assigned_staff_members` are not yet limited to the tenant's own objects.
-- **Generic update/delete on bookings (M1.3):** customers can still bypass the booking
-  engine through these endpoints.
 - **Web session tenant switching (M2.5):** the `/app/switch/<slug>/` view arrives with the web
   app shell. `set_active_organization` is already in place.
+- **Filter id checks:** `django-filter` filters on relation ids (`?service=`, `?staff=`) validate
+  ids against all organizations. The results are still tenant-scoped; only the "invalid choice"
+  message differs. This is revisited with the API consolidation in M10.1.
