@@ -159,11 +159,11 @@ class RolePolicyAPITests(APITestCase):
                 self.authenticate(actor)
                 response = self.client.get("/api/appointments/")
                 self.assertEqual(response.status_code, 200, response.data)
-                self.assertEqual({row["id"] for row in response.data}, {first.pk, second.pk})
+                self.assertEqual({row["id"] for row in response.data["results"]}, {first.pk, second.pk})
                 for specialist, appointment in ((self.specialist, first), (self.other_specialist, second)):
                     response = self.client.get(f"/api/specialists/{specialist.pk}/appointments/")
                     self.assertEqual(response.status_code, 200, response.data)
-                    self.assertEqual([row["id"] for row in response.data], [appointment.pk])
+                    self.assertEqual([row["id"] for row in response.data["results"]], [appointment.pk])
 
     def test_owner_admin_and_specialists_cannot_book_with_or_without_profiles(self):
         for actor in (self.owner, self.admin):
@@ -224,7 +224,7 @@ class RolePolicyAPITests(APITestCase):
         self.authenticate(self.specialist_user)
         response = self.client.get(f"/api/specialists/{self.specialist.pk}/appointments/")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual([row["id"] for row in response.data], [own.pk])
+        self.assertEqual([row["id"] for row in response.data["results"]], [own.pk])
         response = self.client.get(f"/api/specialists/{self.other_specialist.pk}/appointments/")
         self.assertEqual(response.status_code, 403, response.data)
 
@@ -320,7 +320,7 @@ class RolePolicyAPITests(APITestCase):
                 self.authenticate(actor)
                 response = self.client.get("/api/my-appointments/")
                 self.assertEqual(response.status_code, 200, response.data)
-                self.assertEqual([row["id"] for row in response.data], [own.pk])
+                self.assertEqual([row["id"] for row in response.data["results"]], [own.pk])
                 own.delete()
                 other.delete()
 
@@ -357,7 +357,7 @@ class RolePolicyAPITests(APITestCase):
     def test_role_change_is_enforced_with_existing_jwt(self):
         self.authenticate(None)
         response = self.client.post("/api/login/", {
-            "username": self.customer.username, "password": "StrongRolePass123",
+            "email": self.customer.email, "password": "StrongRolePass123",
         }, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
@@ -371,11 +371,11 @@ class RolePolicyAPITests(APITestCase):
     def assert_registration_cannot_elevate(self, role):
         self.authenticate(None)
         response = self.client.post("/api/register/", {
-            "username": "new-user", "password": "StrongNewPass123", "role": role,
-            "is_staff": True, "is_superuser": True,
+            "email": "new-user@example.test", "password": "StrongNewPass123", "role": role,
+            "is_staff": True, "is_superuser": True, "accept_terms": True, "accept_privacy": True,
         }, format="json")
         self.assertEqual(response.status_code, 201, response.data)
-        user = User.objects.get(username="new-user")
+        user = User.objects.get(email="new-user@example.test")
         self.assertEqual(user.role, UserRole.CUSTOMER)
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)

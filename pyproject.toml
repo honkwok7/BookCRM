@@ -13,5 +13,5 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
-addopts = "-q --maxfail=1 --disable-warnings"
+addopts = "-q --disable-warnings"
 norecursedirs = ["django-appointment-system", ".venv", "build", "dist"]

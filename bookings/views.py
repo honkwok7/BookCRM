@@ -103,7 +103,8 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
 class WaitlistViewSet(viewsets.ModelViewSet):
 	serializer_class = WaitlistEntrySerializer
-	permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+	# Waitlist entries hold customer PII. Public/portal joining arrives with the waitlist service (M4.7).
+	permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
 
 	def get_queryset(self):
 		queryset = WaitlistEntry.objects.select_related("organization", "service", "preferred_staff")

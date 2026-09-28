@@ -45,13 +45,11 @@ class UserRole(models.TextChoices):
 class User(AbstractUser):
 	email = models.EmailField(unique=True)
 	phone_number = models.CharField(max_length=20, blank=True)
-<<<<<<< Updated upstream
 	role = models.CharField(
 		max_length=10,
 		choices=UserRole.choices,
 		default=UserRole.CUSTOMER,
 	)
-=======
 	profile_image = models.ImageField(upload_to="users/profiles/", blank=True, null=True)
 	terms_accepted_at = models.DateTimeField(null=True, blank=True)
 	privacy_accepted_at = models.DateTimeField(null=True, blank=True)
@@ -62,7 +60,6 @@ class User(AbstractUser):
 	REQUIRED_FIELDS = []
 
 	objects = CustomUserManager()
->>>>>>> Stashed changes
 
 	def __str__(self):
 		return self.email

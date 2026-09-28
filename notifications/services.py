@@ -1,12 +1,26 @@
 import logging
+from functools import partial
 
-from django.conf import settings
+from django.db import transaction
 
 from notifications.models import NotificationLog
 from notifications.tasks import send_templated_email
 
 
 logger = logging.getLogger(__name__)
+
+
+def _dispatch_email(*, notification_log_id: str, organization_id: str, subject: str, template_base: str) -> None:
+    try:
+        send_templated_email.delay(
+            notification_log_id=notification_log_id,
+            organization_id=organization_id,
+            subject=subject,
+            template_base=template_base,
+        )
+    except Exception:
+        # Broker unavailable: leave the log PENDING instead of sending synchronously.
+        logger.warning("Could not enqueue notification %s", notification_log_id, exc_info=True)
 
 
 def queue_booking_notification(*, booking, notification_type: str, subject: str, template_base: str, recipient_email: str, recipient_user=None):
@@ -18,18 +32,14 @@ def queue_booking_notification(*, booking, notification_type: str, subject: str,
         related_booking=booking,
         status=NotificationLog.Status.PENDING,
     )
-    payload = {
-        "notification_log_id": str(log.id),
-        "subject": subject,
-        "template_base": template_base,
-        "context": {"booking": booking},
-    }
-    try:
-        if settings.DEBUG:
-            send_templated_email.apply(kwargs=payload)
-        else:
-            send_templated_email.delay(**payload)
-    except Exception:  # pragma: no cover
-        logger.warning("Falling back to sync email task execution", exc_info=True)
-        send_templated_email.apply(kwargs=payload)
+    # Only ids cross the Celery boundary, and only once the booking transaction has committed.
+    transaction.on_commit(
+        partial(
+            _dispatch_email,
+            notification_log_id=str(log.id),
+            organization_id=str(booking.organization_id),
+            subject=subject,
+            template_base=template_base,
+        )
+    )
     return log

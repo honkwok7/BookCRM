@@ -7,8 +7,15 @@ from notifications.models import NotificationLog
 
 
 @app.task(bind=True, max_retries=3)
-def send_templated_email(self, *, notification_log_id, subject, template_base, context):
-    log = NotificationLog.objects.get(id=notification_log_id)
+def send_templated_email(self, *, notification_log_id, organization_id, subject, template_base):
+    # Tenant context is explicit: the log must belong to the organization the caller named.
+    log = NotificationLog.objects.select_related("related_booking__service").get(
+        id=notification_log_id,
+        organization_id=organization_id,
+    )
+    if log.status == NotificationLog.Status.SENT:
+        return
+    context = {"booking": log.related_booking}
     try:
         text_body = render_to_string(f"emails/{template_base}.txt", context)
         html_body = render_to_string(f"emails/{template_base}.html", context)

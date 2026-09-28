@@ -25,6 +25,11 @@ class CurrentOrganizationView(generics.RetrieveUpdateAPIView):
 	serializer_class = OrganizationSerializer
 	permission_classes = [permissions.IsAuthenticated]
 
+	def get_permissions(self):
+		if self.request.method in permissions.SAFE_METHODS:
+			return super().get_permissions()
+		return [permissions.IsAuthenticated(), IsOrganizationManagerOrOwner()]
+
 	def get_object(self):
 		organization = get_request_organization(self.request)
 		if organization is None:

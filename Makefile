@@ -1,4 +1,4 @@
-PYTHON := c:/Users/Erexzen/Documents/GitHub/django-appointment-system/.venv/Scripts/python.exe
+PYTHON ?= python
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt

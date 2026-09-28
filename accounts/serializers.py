@@ -67,10 +67,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-<<<<<<< Updated upstream
-        fields = ("id", "username", "email", "phone_number", "first_name", "last_name")
-        read_only_fields = ("id", "username")
-=======
         fields = (
             "id",
             "email",
@@ -82,8 +78,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "account_status",
             "last_login",
         )
-        read_only_fields = fields
->>>>>>> Stashed changes
+        read_only_fields = ("id", "email", "email_verified", "account_status", "last_login")
 
 
 class LogoutSerializer(serializers.Serializer):

@@ -34,7 +34,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "public_uuid", "created_at", "updated_at")
+        # Activation and suspension are platform-level decisions, never tenant-editable.
+        read_only_fields = ("id", "public_uuid", "is_active", "is_suspended", "created_at", "updated_at")
 
 
 class OrganizationMembershipSerializer(serializers.ModelSerializer):
