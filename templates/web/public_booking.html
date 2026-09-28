@@ -2,30 +2,23 @@
 {% block title %}Book with {{ organization.name }}{% endblock %}
 {% block content %}
 <h1 class="text-3xl font-bold mb-4">Book an appointment with {{ organization.name }}</h1>
-<form method="post" class="bg-white border rounded p-4 grid gap-3 max-w-xl">
+{% if sign_in_required %}
+<p class="mb-4 p-3 border rounded bg-amber-50">Please sign in to book with {{ organization.name }}.</p>
+{% endif %}
+<form method="post" class="bg-white border rounded p-4 grid gap-3 max-w-xl" novalidate>
   {% csrf_token %}
-  <label class="grid gap-1">Service
-    <select name="service" class="border rounded p-2" required>
-      {% for item in services %}<option value="{{ item.id }}">{{ item.name }}</option>{% endfor %}
-    </select>
+  {% if form.non_field_errors %}
+  <div class="p-3 border border-red-300 rounded bg-red-50 text-red-800" role="alert">
+    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+  {% endif %}
+  {% for field in form %}
+  <label class="grid gap-1">
+    {{ field.label }}{% if field.name == "start_datetime" %} ({{ organization.timezone }}){% endif %}
+    {{ field }}
+    {% for error in field.errors %}<span class="text-sm text-red-700">{{ error }}</span>{% endfor %}
   </label>
-  <label class="grid gap-1">Staff
-    <select name="staff" class="border rounded p-2" required>
-      {% for member in staff %}<option value="{{ member.id }}">{{ member.user.email }}</option>{% endfor %}
-    </select>
-  </label>
-  <label class="grid gap-1">Start datetime (ISO)
-    <input name="start_datetime" class="border rounded p-2" placeholder="2026-08-01T10:00:00+00:00" required>
-  </label>
-  <label class="grid gap-1">Full name
-    <input name="customer_name" class="border rounded p-2" required>
-  </label>
-  <label class="grid gap-1">Email
-    <input name="customer_email" type="email" class="border rounded p-2" required>
-  </label>
-  <label class="grid gap-1">Phone
-    <input name="customer_phone" class="border rounded p-2">
-  </label>
+  {% endfor %}
   <button class="px-4 py-2 rounded bg-slate-900 text-white">Confirm booking</button>
 </form>
 {% endblock %}

@@ -192,6 +192,9 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@schedula.local")
+# Base URL for links in emails. Never derived from the request's Host header, which a client
+# controls (password-reset poisoning).
+SITE_URL = env("SITE_URL", default="http://localhost:8000").rstrip("/")
 
 APP_BASE_URL = env("APP_BASE_URL", default="http://localhost:8000")
 
@@ -214,10 +217,12 @@ CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
 SESSION_COOKIE_SECURE = env("SESSION_COOKIE_SECURE")
 CSRF_COOKIE_SECURE = env("CSRF_COOKIE_SECURE")
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-# Number of reverse proxies that append to X-Forwarded-For. 0 = ignore the header and use
-# REMOTE_ADDR (audit log client IP). Set to the real proxy count in production.
+# Number of reverse proxies in front of Django. 0 = none: X-Forwarded-For and
+# X-Forwarded-Proto are ignored (a client could forge them). Set to the real proxy count in
+# production; the proxy must overwrite, not append to, X-Forwarded-Proto.
 TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
+if TRUSTED_PROXY_COUNT:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"

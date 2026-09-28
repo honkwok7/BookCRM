@@ -32,5 +32,9 @@ Set `RUN_MIGRATIONS=1` on exactly one service (the web container in `docker-comp
 
 ## HTTPS and domain
 - Enable TLS termination at proxy/load balancer.
+- Set `TRUSTED_PROXY_COUNT` to the number of reverse proxies (usually `1`). Only then does
+  Django trust `X-Forwarded-Proto` (HTTPS detection) and `X-Forwarded-For` (client IP).
+  Leaving it at `0` behind a TLS-terminating proxy makes `DJANGO_SECURE_SSL_REDIRECT` loop.
+- Set `SITE_URL` to the public `https://` address; emailed links are built from it.
 - Set `DJANGO_SECURE_SSL_REDIRECT=True`.
 - Set secure cookie flags and trusted CSRF origins.

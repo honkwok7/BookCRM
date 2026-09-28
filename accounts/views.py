@@ -1,10 +1,10 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -20,9 +20,18 @@ from accounts.serializers import (
     ResendVerificationSerializer,
     UserProfileSerializer,
 )
-from core.audit import AuditAction, record_audit
+from accounts.services import (
+    queue_password_reset_email,
+    queue_verification_email,
+    revoke_refresh_tokens,
+)
+from core.audit import AuditAction, client_ip, record_audit
 
 User = get_user_model()
+
+# Brute-force and email-flood protection: the scoped rate ("login" / "password_reset" in
+# DEFAULT_THROTTLE_RATES) applies on top of the global anonymous/user rates.
+THROTTLES = [AnonRateThrottle, UserRateThrottle, ScopedRateThrottle]
 
 
 class RegisterView(generics.CreateAPIView):
@@ -33,17 +42,19 @@ class RegisterView(generics.CreateAPIView):
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = THROTTLES
+    throttle_scope = "login"
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         email = request.data.get("email")
         if response.status_code == status.HTTP_200_OK and email:
-            user = User.objects.filter(email=email).first()
+            user = User.objects.filter(email__iexact=email).first()
             if user:
                 LoginHistory.objects.create(
                     user=user,
                     is_successful=True,
-                    ip_address=request.META.get("REMOTE_ADDR"),
+                    ip_address=client_ip(request),
                     user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 )
         return response
@@ -73,6 +84,8 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = THROTTLES
+    throttle_scope = "password_reset"
 
     def post(self, request, *args, **kwargs):
         serializer = EmailVerificationSerializer(data=request.data)
@@ -94,49 +107,33 @@ class VerifyEmailView(APIView):
 
 class ResendVerificationView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = THROTTLES
+    throttle_scope = "password_reset"
 
     def post(self, request, *args, **kwargs):
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if not user or user.email_verified:
             return Response({"detail": "If account exists, verification email has been sent."})
 
-        token = EmailVerificationToken.objects.create(
-            user=user,
-            token=EmailVerificationToken.generate_token(),
-            expires_at=EmailVerificationToken.default_expires_at(),
-        )
-        verification_url = f"{request.build_absolute_uri('/')}verify-email/?token={token.token}"
-        send_mail(
-            subject="Verify your Schedula account",
-            message=f"Use this link to verify your email: {verification_url}",
-            from_email=None,
-            recipient_list=[user.email],
-        )
+        queue_verification_email(user)
         return Response({"detail": "If account exists, verification email has been sent."})
 
 
 class ForgotPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = THROTTLES
+    throttle_scope = "password_reset"
 
     def post(self, request, *args, **kwargs):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if user:
-            token = default_token_generator.make_token(user)
-            reset_url = (
-                f"{request.build_absolute_uri('/')}reset-password/?uid={user.pk}&token={token}"
-            )
-            send_mail(
-                subject="Reset your Schedula password",
-                message=f"Use this link to reset your password: {reset_url}",
-                from_email=None,
-                recipient_list=[user.email],
-            )
+            queue_password_reset_email(user)
         return Response(
             {"detail": "If account exists, password reset instructions have been sent."}
         )
@@ -144,12 +141,22 @@ class ForgotPasswordView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = THROTTLES
+    throttle_scope = "password_reset"
 
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
-        user.set_password(serializer.validated_data["new_password"])
-        user.save(update_fields=["password"])
-        record_audit(AuditAction.ACCOUNT_PASSWORD_RESET, actor=user, target=user)
+        with transaction.atomic():
+            user.set_password(serializer.validated_data["new_password"])
+            user.save(update_fields=["password"])
+            # Sign out everywhere: whoever held the old password may hold a refresh token.
+            revoked = revoke_refresh_tokens(user)
+            record_audit(
+                AuditAction.ACCOUNT_PASSWORD_RESET,
+                actor=user,
+                target=user,
+                metadata={"refresh_tokens_revoked": revoked},
+            )
         return Response({"detail": "Password changed successfully"})

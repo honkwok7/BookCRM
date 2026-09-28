@@ -1,6 +1,10 @@
+from zoneinfo import available_timezones
+
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from bookings.models import Booking, Customer, WaitlistEntry
+from bookings.selectors import bookable_services, bookable_staff
 from bookings.services import cancel_booking, create_booking
 from core.api import TenantScopedModelSerializer
 from crm.selectors import customer_stats
@@ -12,8 +16,6 @@ from organizations.tenancy import (
     requested_organization_slug,
     resolve_tenant,
 )
-from services.models import Service
-from staff.models import StaffProfile
 
 
 class CustomerSerializer(TenantScopedModelSerializer):
@@ -120,6 +122,7 @@ class CustomerDetailSerializer(CustomerSerializer):
     class Meta(CustomerSerializer.Meta):
         fields = (*CustomerSerializer.Meta.fields, "stats")
 
+    @extend_schema_field(serializers.DictField())
     def get_stats(self, customer):
         return customer_stats(customer)
 
@@ -188,10 +191,16 @@ class BookingCreateSerializer(serializers.Serializer):
     customer_timezone = serializers.CharField(max_length=64, required=False, default="UTC")
     customer_notes = serializers.CharField(required=False, allow_blank=True)
 
+    def validate_customer_timezone(self, value):
+        if value not in available_timezones():
+            raise serializers.ValidationError("Unknown time zone.")
+        return value
+
     def create(self, validated_data):
         request = self.context["request"]
         tenant = resolve_tenant(request)
-        if tenant is not None and tenant.has(Capability.APPOINTMENTS_MANAGE):
+        is_team = tenant is not None and tenant.has(Capability.APPOINTMENTS_MANAGE)
+        if is_team:
             # Team member booking on behalf of a customer in their own organization.
             organization = tenant.organization
             customer_user = None
@@ -205,18 +214,13 @@ class BookingCreateSerializer(serializers.Serializer):
         if organization is None:
             raise serializers.ValidationError({"organization": "Organization not found."})
 
-        service = Service.objects.filter(
-            id=validated_data["service"],
-            organization=organization,
-            is_active=True,
-            is_archived=False,
-        ).first()
-        staff_profile = StaffProfile.objects.filter(
-            id=validated_data["staff"],
-            organization=organization,
-            is_active=True,
-            is_accepting_bookings=True,
-        ).first()
+        # Self-service bookings may only use services published on the booking page.
+        service = (
+            bookable_services(organization, public=not is_team)
+            .filter(id=validated_data["service"])
+            .first()
+        )
+        staff_profile = bookable_staff(organization).filter(id=validated_data["staff"]).first()
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
 

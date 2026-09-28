@@ -10,6 +10,20 @@ from organizations.tenancy import (
     requested_organization_slug,
     resolve_tenant,
 )
+from services.models import Service
+from staff.models import StaffProfile
+
+
+def bookable_services(organization, *, public: bool):
+    """Services that can be booked now; the public only sees those marked public."""
+    services = Service.objects.filter(organization=organization, is_active=True, is_archived=False)
+    return services.filter(is_public=True) if public else services
+
+
+def bookable_staff(organization):
+    return StaffProfile.objects.filter(
+        organization=organization, is_active=True, is_accepting_bookings=True
+    ).select_related("user")
 
 
 def _own_customer_filter(user) -> Q:
