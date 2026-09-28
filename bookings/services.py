@@ -10,6 +10,7 @@ from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, C
 from core.audit import AuditAction, record_audit
 from core.exceptions import ConflictError, DomainError
 from notifications.services import queue_booking_notification
+from staff.models import StaffProfile
 
 ACTIVE_BOOKING_STATUSES = [
     Booking.Status.PENDING,
@@ -47,7 +48,17 @@ def _ensure_customer(*, organization, name, email, phone="", user=None):
     return customer
 
 
-def _lock(booking: Booking) -> Booking:
+def lock_staff(staff_id) -> StaffProfile:
+    """Lock the staff member's calendar for the rest of the transaction.
+
+    The staff row is the lock resource for every create and reschedule, because it exists even
+    when the destination time has no bookings to lock. Concurrent writers to one calendar
+    therefore queue here, and each re-checks overlaps against committed data.
+    """
+    return StaffProfile.objects.select_for_update().get(pk=staff_id)
+
+
+def lock_booking(booking: Booking) -> Booking:
     """Re-read ``booking`` under a row lock so decisions use its committed state.
 
     Only the booking row is locked (``of=("self",)``): PostgreSQL refuses FOR UPDATE on the
@@ -58,6 +69,9 @@ def _lock(booking: Booking) -> Booking:
         .select_related("organization", "customer")
         .get(pk=booking.pk)
     )
+
+
+# Lock order, to rule out deadlocks: staff calendar first, then the booking row.
 
 
 @transaction.atomic
@@ -82,18 +96,16 @@ def create_booking(
     duration = timedelta(minutes=service.duration_minutes)
     end_datetime = start_datetime + duration
 
-    # Note: the database-level guarantee against concurrent double booking arrives in M4.2.
-    conflict_exists = (
-        Booking.objects.select_for_update()
-        .filter(
-            organization=organization,
-            staff=staff_profile,
-            status__in=ACTIVE_BOOKING_STATUSES,
-            start_datetime__lt=end_datetime,
-            end_datetime__gt=start_datetime,
-        )
-        .exists()
-    )
+    # Serialize writers to this calendar, then check overlaps (half-open [start, end)).
+    # A database-level exclusion constraint adds a second guarantee in M4.2.
+    lock_staff(staff_profile.pk)
+    conflict_exists = Booking.objects.filter(
+        organization=organization,
+        staff=staff_profile,
+        status__in=ACTIVE_BOOKING_STATUSES,
+        start_datetime__lt=end_datetime,
+        end_datetime__gt=start_datetime,
+    ).exists()
     if conflict_exists:
         raise ConflictError("Selected slot is no longer available", code="slot_unavailable")
 
@@ -163,7 +175,7 @@ def create_booking(
 
 @transaction.atomic
 def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
-    booking = _lock(booking)
+    booking = lock_booking(booking)
     if booking.status == Booking.Status.CANCELLED:
         return booking
     if Booking.Status.CANCELLED not in ALLOWED_TRANSITIONS[booking.status]:
@@ -225,7 +237,7 @@ def change_booking_status(*, booking: Booking, new_status: str, actor=None, note
     if new_status == Booking.Status.CANCELLED:
         return cancel_booking(booking=booking, actor=actor, reason=note)
 
-    booking = _lock(booking)
+    booking = lock_booking(booking)
     if new_status not in ALLOWED_TRANSITIONS[booking.status]:
         raise ConflictError(
             f"Cannot change status from {booking.status} to {new_status}",
@@ -255,7 +267,8 @@ def reschedule_booking(*, booking: Booking, new_start, actor=None) -> Booking:
     The old appointment is closed as cancelled ("Rescheduled") and a new one is created and
     linked via ``rescheduled_from``. If the new time is rejected, nothing changes.
     """
-    booking = _lock(booking)
+    lock_staff(booking.staff_id)
+    booking = lock_booking(booking)
     if booking.status not in RESCHEDULABLE_STATUSES:
         raise ConflictError(
             f"A {booking.get_status_display().lower()} appointment cannot be rescheduled",

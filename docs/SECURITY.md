@@ -11,6 +11,7 @@ claimed; that would need a separate formal review.
 | JWT rotation + blacklist | ✅ | `SIMPLE_JWT` |
 | Tenant isolation: membership-backed tenant resolution, no superuser bypass | ✅ | `organizations/tenancy.py`, [MULTI_TENANCY.md](MULTI_TENANCY.md) |
 | Capability-based authorization on every tenant endpoint | ✅ | `organizations/permissions.py`, [PERMISSIONS.md](PERMISSIONS.md) |
+| One authorization model (memberships + capabilities); the legacy global `User.role` is removed | ✅ | M1.6 |
 | Relation fields limited to the tenant's own rows; no `fields="__all__"` | ✅ | `core/api.py`, `core/test_api_contract.py` |
 | Appointment changes only through the booking service | ✅ | `bookings/services.py` |
 | Audit logging of important actions (append-only, scrubbed) | ✅ | `core/audit.py`, see below |
@@ -19,7 +20,8 @@ claimed; that would need a separate formal review.
 | `manage.py check --deploy` in CI | ❌ | Planned for M11.1 |
 | HSTS, secure cookies and SSL redirect enforced in production | ❌ | Configurable through env vars today; enforced in M11.1 |
 | Login and password-reset rate limiting / lockout | ❌ | Throttle scopes exist but aren't applied yet (M2.5) |
-| Double-booking guarantee under concurrency | ❌ | M4.2 (see [BOOKING_ENGINE.md](BOOKING_ENGINE.md)) |
+| Double-booking prevention under concurrency (staff-calendar lock, PostgreSQL race tests) | ✅ | `bookings/services.py`, `tests/test_booking_engine.py` |
+| Database-level exclusion constraint as a second guarantee | ❌ | M4.2 (see [BOOKING_ENGINE.md](BOOKING_ENGINE.md)) |
 | Upload validation (size, type) | ❌ | M11.1 |
 | Customer data export / anonymization | ❌ | M11.1 |
 

@@ -44,13 +44,21 @@ returns them as `{"detail": "...", "code": "..."}`.
 
 ## Concurrency: current state and plan
 
-Creation re-checks for overlaps inside a transaction with `select_for_update()`. **This does not
-yet guarantee that two simultaneous requests can't both book an empty slot.** When nothing
-overlaps, no row is locked. Planned (M4.1/M4.2):
+Every create and reschedule first locks the provider's `StaffProfile` row
+(`bookings.services.lock_staff`), then re-checks overlaps against committed data. The staff
+row exists even when the requested time is empty, so two simultaneous requests for the same
+provider queue on it: exactly one wins, and the other gets 409 `slot_unavailable`. Status
+changes and cancellations lock only the booking row. The lock order is always staff, then
+booking, so these paths can't deadlock.
 
-1. Lock the provider's `StaffProfile` row before checking, the parent-row pattern already
-   proven in the legacy `appointments/transactions.py`.
-2. A PostgreSQL exclusion constraint on (provider, time range including buffers) for active
-   statuses, as the final guarantee. A violation maps to 409 `slot_unavailable`.
-3. Validation against availability, notice and advance limits, and buffers. Today the engine
-   doesn't check the provider's working hours.
+`tests/test_booking_engine.py` proves this on PostgreSQL with two real connections and an
+observed `pg_blocking_pids` wait (same slot, overlapping slots, reschedule against create,
+competing status changes). With the staff lock removed, the double-booking races fail.
+
+Still planned:
+
+1. **M4.2:** a PostgreSQL exclusion constraint on (provider, time range including buffers) for
+   active statuses, as a database-level guarantee that also covers writes outside the
+   service. A violation maps to 409 `slot_unavailable`.
+2. **M4.1:** validation against availability, notice and advance limits, and buffers. Today
+   the engine doesn't check the provider's working hours.

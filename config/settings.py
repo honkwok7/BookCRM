@@ -50,8 +50,6 @@ INSTALLED_APPS = [
     "subscriptions",
     "dashboard",
     "api",
-    "specialists",
-    "appointments",
 ]
 
 MIDDLEWARE = [
