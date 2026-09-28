@@ -48,6 +48,9 @@ Lifecycle rules and error codes are in [BOOKING_ENGINE.md](BOOKING_ENGINE.md).
 - **Business-rule errors:** `{"detail": "...", "code": "..."}` with 400 or 409. Validation errors use DRF's
   usual field-keyed format.
 
+## Audit log
+- `GET /api/v1/audit-logs/` is read-only and needs `audit.view` (owners by default). Filters: `action`, `object_type`, `object_identifier`, `actor_type`. See [SECURITY.md](SECURITY.md#audit-logging).
+
 ## Documentation
 - Schema: `/api/schema/`
 - Swagger UI: `/api/docs/`

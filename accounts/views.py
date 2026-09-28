@@ -20,7 +20,7 @@ from accounts.serializers import (
     ResendVerificationSerializer,
     UserProfileSerializer,
 )
-from core.services import write_audit_log
+from core.audit import AuditAction, record_audit
 
 User = get_user_model()
 
@@ -88,12 +88,7 @@ class VerifyEmailView(APIView):
         token.save(update_fields=["used_at", "updated_at"])
         token.user.email_verified = True
         token.user.save(update_fields=["email_verified"])
-        write_audit_log(
-            action="account.email_verified",
-            user=token.user,
-            object_type="User",
-            object_identifier=str(token.user.id),
-        )
+        record_audit(AuditAction.ACCOUNT_EMAIL_VERIFIED, actor=token.user, target=token.user)
         return Response({"detail": "Email verified"})
 
 
@@ -156,4 +151,5 @@ class PasswordResetConfirmView(APIView):
         user = serializer.validated_data["user"]
         user.set_password(serializer.validated_data["new_password"])
         user.save(update_fields=["password"])
+        record_audit(AuditAction.ACCOUNT_PASSWORD_RESET, actor=user, target=user)
         return Response({"detail": "Password changed successfully"})

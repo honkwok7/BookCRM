@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from core.audit import AuditAction, record_audit
 from core.middleware import get_current_request
 from core.models import AuditLog
-from core.services import write_audit_log
 
 
 class RequestAuditMiddlewareTests(TestCase):
@@ -22,7 +22,7 @@ class RequestAuditMiddlewareTests(TestCase):
         self.client.force_login(user)
         self.client.get("/health/")
 
-        log = write_audit_log(action="system.test")
+        log = record_audit(AuditAction.SYSTEM_TEST)
         self.assertIsNone(log.user)
         self.assertIsNone(log.ip_address)
         self.assertEqual(AuditLog.objects.count(), 1)

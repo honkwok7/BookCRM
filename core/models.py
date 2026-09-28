@@ -13,7 +13,20 @@ class BaseUUIDModel(models.Model):
         abstract = True
 
 
+class AuditLogImmutableError(Exception):
+    """Audit rows are append-only."""
+
+
 class AuditLog(BaseUUIDModel):
+    """Append-only record of an important action. Write through ``core.audit.record_audit``."""
+
+    class ActorType(models.TextChoices):
+        USER = "user", "User"
+        SYSTEM = "system", "System"
+        PLATFORM_ADMIN = "platform_admin", "Platform admin"
+        API_KEY = "api_key", "API key"
+        AI_AGENT = "ai_agent", "AI agent"
+
     organization = models.ForeignKey(
         "organizations.Organization",
         null=True,
@@ -28,6 +41,17 @@ class AuditLog(BaseUUIDModel):
         on_delete=models.SET_NULL,
         related_name="audit_logs",
     )
+    actor_type = models.CharField(
+        max_length=20, choices=ActorType.choices, default=ActorType.SYSTEM
+    )
+    # Set when a platform admin acts while impersonating ``user`` (M5.5).
+    impersonator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="impersonated_audit_logs",
+    )
     action = models.CharField(max_length=120)
     object_type = models.CharField(max_length=120, blank=True)
     object_identifier = models.CharField(max_length=120, blank=True)
@@ -40,7 +64,16 @@ class AuditLog(BaseUUIDModel):
         indexes = [
             models.Index(fields=["action"]),
             models.Index(fields=["object_type", "object_identifier"]),
+            models.Index(fields=["organization", "-created_at"]),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise AuditLogImmutableError("Audit log entries cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise AuditLogImmutableError("Audit log entries cannot be deleted.")
 
     def __str__(self) -> str:
         return f"{self.action} ({self.object_type}:{self.object_identifier})"

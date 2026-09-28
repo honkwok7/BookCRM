@@ -1,12 +1,19 @@
 from rest_framework import permissions, viewsets
 
+from core.api import AuditedModelViewSetMixin
+from core.audit import AuditAction
 from core.permissions import HasCapability
 from organizations.selectors import scope_queryset_by_organization
 from services.models import Service, ServiceCategory
 from services.serializers import ServiceCategorySerializer, ServiceSerializer
 
 
-class ServiceCategoryViewSet(viewsets.ModelViewSet):
+class ServiceCategoryViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.SERVICE_CATEGORY_CREATED,
+        "update": AuditAction.SERVICE_CATEGORY_UPDATED,
+        "delete": AuditAction.SERVICE_CATEGORY_DELETED,
+    }
     serializer_class = ServiceCategorySerializer
     permission_classes = [
         permissions.IsAuthenticated,
@@ -18,7 +25,12 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class ServiceViewSet(viewsets.ModelViewSet):
+class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.SERVICE_CREATED,
+        "update": AuditAction.SERVICE_UPDATED,
+        "delete": AuditAction.SERVICE_DELETED,
+    }
     serializer_class = ServiceSerializer
     permission_classes = [
         permissions.IsAuthenticated,

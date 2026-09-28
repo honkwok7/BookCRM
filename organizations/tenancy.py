@@ -124,7 +124,7 @@ def get_public_organization(slug: str | None) -> Organization | None:
 
 
 def suspend_organization(*, organization: Organization, reason: str, actor=None) -> None:
-    from core.services import write_audit_log
+    from core.audit import AuditAction, record_audit
 
     organization.is_suspended = True
     organization.suspended_at = timezone.now()
@@ -132,10 +132,10 @@ def suspend_organization(*, organization: Organization, reason: str, actor=None)
     organization.save(
         update_fields=["is_suspended", "suspended_at", "suspension_reason", "updated_at"]
     )
-    write_audit_log(
-        action="organization.suspended",
+    record_audit(
+        AuditAction.ORGANIZATION_SUSPENDED,
         organization=organization,
-        user=actor,
+        actor=actor,
         object_type="Organization",
         object_identifier=str(organization.pk),
         metadata={"reason": reason},
@@ -143,7 +143,7 @@ def suspend_organization(*, organization: Organization, reason: str, actor=None)
 
 
 def reactivate_organization(*, organization: Organization, actor=None) -> None:
-    from core.services import write_audit_log
+    from core.audit import AuditAction, record_audit
 
     organization.is_suspended = False
     organization.suspended_at = None
@@ -151,10 +151,10 @@ def reactivate_organization(*, organization: Organization, actor=None) -> None:
     organization.save(
         update_fields=["is_suspended", "suspended_at", "suspension_reason", "updated_at"]
     )
-    write_audit_log(
-        action="organization.reactivated",
+    record_audit(
+        AuditAction.ORGANIZATION_REACTIVATED,
         organization=organization,
-        user=actor,
+        actor=actor,
         object_type="Organization",
         object_identifier=str(organization.pk),
     )

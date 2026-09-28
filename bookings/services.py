@@ -7,8 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, Customer
+from core.audit import AuditAction, record_audit
 from core.exceptions import ConflictError, DomainError
-from core.services import write_audit_log
 from notifications.services import queue_booking_notification
 
 ACTIVE_BOOKING_STATUSES = [
@@ -140,10 +140,10 @@ def create_booking(
         action="booking.created",
         metadata={"service": str(service.id), "staff": str(staff_profile.id)},
     )
-    write_audit_log(
-        action="booking.created",
+    record_audit(
+        AuditAction.BOOKING_CREATED,
         organization=organization,
-        user=actor,
+        actor=actor,
         object_type="Booking",
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
@@ -197,10 +197,10 @@ def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
         action="booking.cancelled",
         metadata={"reason": reason},
     )
-    write_audit_log(
-        action="booking.cancelled",
+    record_audit(
+        AuditAction.BOOKING_CANCELLED,
         organization=booking.organization,
-        user=actor,
+        actor=actor,
         object_type="Booking",
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
@@ -235,10 +235,10 @@ def change_booking_status(*, booking: Booking, new_status: str, actor=None, note
     BookingStatusHistory.objects.create(
         booking=booking, old_status=old_status, new_status=new_status, changed_by=actor, note=note
     )
-    write_audit_log(
-        action="booking.status_changed",
+    record_audit(
+        AuditAction.BOOKING_STATUS_CHANGED,
         organization=booking.organization,
-        user=actor,
+        actor=actor,
         object_type="Booking",
         object_identifier=str(booking.id),
         metadata={"from": old_status, "to": new_status},
@@ -297,10 +297,10 @@ def reschedule_booking(*, booking: Booking, new_start, actor=None) -> Booking:
     )
     new_booking.rescheduled_from = booking
     new_booking.save(update_fields=["rescheduled_from", "updated_at"])
-    write_audit_log(
-        action="booking.rescheduled",
+    record_audit(
+        AuditAction.BOOKING_RESCHEDULED,
         organization=booking.organization,
-        user=actor,
+        actor=actor,
         object_type="Booking",
         object_identifier=str(new_booking.id),
         metadata={"from_booking": str(booking.id)},

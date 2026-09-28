@@ -15,6 +15,8 @@ from bookings.serializers import (
     WaitlistEntrySerializer,
 )
 from bookings.services import change_booking_status, reschedule_booking
+from core.api import AuditedModelViewSetMixin
+from core.audit import AuditAction
 from core.permissions import HasCapability
 from organizations.models import OrganizationRole
 from organizations.selectors import scope_queryset_by_organization
@@ -90,7 +92,19 @@ class BookingViewSet(
         return self._respond(booking)
 
 
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.CUSTOMER_CREATED,
+        "update": AuditAction.CUSTOMER_UPDATED,
+        "delete": AuditAction.CUSTOMER_DELETED,
+    }
+    audit_redact_fields = (
+        "name",
+        "email",
+        "phone",
+        "notes",
+        "tags",
+    )
     serializer_class = CustomerSerializer
     permission_classes = [
         permissions.IsAuthenticated,
@@ -103,7 +117,17 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class WaitlistViewSet(viewsets.ModelViewSet):
+class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.WAITLIST_ENTRY_CREATED,
+        "update": AuditAction.WAITLIST_ENTRY_UPDATED,
+        "delete": AuditAction.WAITLIST_ENTRY_DELETED,
+    }
+    audit_redact_fields = (
+        "customer_name",
+        "customer_email",
+        "customer_phone",
+    )
     serializer_class = WaitlistEntrySerializer
     # Waitlist entries hold customer PII.
     # Public/portal joining arrives with the waitlist service (M4.7).
