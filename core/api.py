@@ -72,6 +72,8 @@ class AuditedModelViewSetMixin:
 
     audit_actions: dict = {}
     audit_redact_fields: tuple[str, ...] = ()
+    # Writes ("create"/"update") audited by the service the serializer calls instead.
+    audited_by_service: tuple[str, ...] = ()
 
     def _audit(self, kind, instance, changes=None):
         from core.audit import record_audit

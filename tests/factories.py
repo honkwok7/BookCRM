@@ -110,7 +110,8 @@ class CustomerFactory(factory.django.DjangoModelFactory):
         model = Customer
 
     organization = factory.SubFactory(OrganizationFactory)
-    name = factory.Faker("name")
+    first_name = factory.Faker("first_name")
+    last_name = factory.Faker("last_name")
     email = factory.Sequence(lambda n: f"customer{n}@example.test")
     phone = factory.Sequence(lambda n: f"+1555000{n:04d}")
 

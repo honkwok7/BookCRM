@@ -437,6 +437,22 @@ Closes T12. Leaves one authorization model: memberships plus capabilities.
 
 ### M2.1: Customer model expansion
 
+> **Status: done (2026-09-28, branch `m2.1-customer-model`).** See [CRM.md](CRM.md).
+> Deviations from the plan below:
+> - The service uses module functions (`create_customer`, `update_customer`,
+>   `find_or_create_customer`, `merge_customers`, `anonymize_customer`), matching
+>   `bookings.services`, instead of a `CustomerService` class.
+> - The never-maintained counters (`total_bookings`, `no_show_count`, `last_appointment`)
+>   are dropped. `customer_stats` computes them instead.
+> - Added `anonymized_at`. Email uniqueness ignores case (`lower(email)`).
+> - The booking engine now creates customers through `find_or_create_customer`, which
+>   applies the same checks and audit, never links an account to an existing record, and
+>   records the source.
+> - `/api/v1/customers/` exposes the new fields, routes writes through the service (audited
+>   once), and includes `stats` on retrieve. Merge and anonymize endpoints are M2.4.
+> - Booking creation still requires an email. Phone-only booking belongs to the reception
+>   flow (M4.5).
+
 #### Objective
 A full CRM customer entity.
 

@@ -9,6 +9,7 @@ from django.utils import timezone
 from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, Customer
 from core.audit import AuditAction, record_audit
 from core.exceptions import ConflictError, DomainError
+from crm.services import find_or_create_customer
 from notifications.services import queue_booking_notification
 from staff.models import StaffProfile
 
@@ -37,15 +38,6 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     Booking.Status.REJECTED: frozenset(),
 }
 RESCHEDULABLE_STATUSES = frozenset({Booking.Status.PENDING, Booking.Status.CONFIRMED})
-
-
-def _ensure_customer(*, organization, name, email, phone="", user=None):
-    customer, _ = Customer.objects.get_or_create(
-        organization=organization,
-        email=email,
-        defaults={"name": name, "phone": phone, "user": user},
-    )
-    return customer
 
 
 def lock_staff(staff_id) -> StaffProfile:
@@ -109,12 +101,14 @@ def create_booking(
     if conflict_exists:
         raise ConflictError("Selected slot is no longer available", code="slot_unavailable")
 
-    customer = _ensure_customer(
+    customer = find_or_create_customer(
         organization=organization,
         name=customer_name,
         email=customer_email,
         phone=customer_phone,
         user=customer_user,
+        source=Customer.Source.PUBLIC_BOOKING if customer_user else Customer.Source.RECEPTION,
+        actor=actor,
     )
 
     tzname = organization.timezone

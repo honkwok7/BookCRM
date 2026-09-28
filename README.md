@@ -39,6 +39,7 @@ See `docs/SCREENSHOTS.md`.
 See:
 - `docs/ARCHITECTURE.md`
 - `docs/BOOKING_ENGINE.md`
+- `docs/CRM.md`
 - `docs/API.md`
 
 ## Multi-tenant architecture
