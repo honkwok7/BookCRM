@@ -35,7 +35,8 @@ def queue_password_reset_email(user) -> None:
 def revoke_refresh_tokens(user) -> int:
     """Blacklist every outstanding refresh token, e.g. after a password reset.
 
-    Access tokens stay valid until they expire (``JWT_ACCESS_MINUTES``).
+    Access tokens are invalidated by the password change itself (SIMPLE_JWT
+    ``CHECK_REVOKE_TOKEN``): they carry a fingerprint of the old password hash.
     """
     revoked = 0
     for token in OutstandingToken.objects.filter(user=user):

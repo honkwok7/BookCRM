@@ -74,7 +74,6 @@ class InvitationCreateView(generics.CreateAPIView):
             email=serializer.validated_data["email"],
             role=serializer.validated_data["role"],
             expires_at=serializer.validated_data.get("expires_at"),
-            accept_base_url=request.build_absolute_uri("/"),
         )
         return Response(self.get_serializer(invitation).data, status=status.HTTP_201_CREATED)
 

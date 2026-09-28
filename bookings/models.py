@@ -103,6 +103,8 @@ class Customer(BaseUUIDModel):
     # Internal
     source = models.CharField(max_length=20, choices=Source.choices, blank=True)
     alerts = models.CharField(max_length=255, blank=True)  # short internal alert text
+    # Legacy free text: moved into crm.CustomerNote (internal) by crm/0005, not exposed by
+    # the API any more (it bypassed customers.notes.private). Removed in M11.3.
     notes = models.TextField(blank=True)
     # Legacy free-text labels: frozen since M2.2 (copied into crm.Tag), removed in M11.3.
     tags = models.JSONField(default=list, blank=True)

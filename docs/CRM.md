@@ -84,6 +84,10 @@ API:
   the content changed, never the text itself.
 - **Anonymized and merged customers:** anonymization deletes a customer's notes, and merging
   moves the duplicate's notes to the kept record.
+- **The old `Customer.notes` text** was readable by anyone who could see the customer.
+  Migration `crm/0005` moved it into internal notes, and the API no longer exposes or
+  accepts it (the column is removed in M11.3). `alerts`, the short front-desk warning such
+  as "uses a wheelchair", stays visible to everyone who can see the customer, on purpose.
 
 API: `/api/v1/customer-notes/`, filterable with `?customer=`, `?visibility=`,
 `?note_type=` and `?pinned=`.

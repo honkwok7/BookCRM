@@ -174,6 +174,9 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": True,
+    # Tokens carry a fingerprint of the password hash; changing or resetting the password
+    # invalidates every access token already issued (refresh tokens are also blacklisted).
+    "CHECK_REVOKE_TOKEN": True,
 }
 
 SPECTACULAR_SETTINGS = {

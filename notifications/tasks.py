@@ -16,7 +16,14 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
         id=notification_log_id,
         organization_id=organization_id,
     )
-    if log.status == NotificationLog.Status.SENT:
+    # Claim the log atomically (PENDING/FAILED -> SENDING): a redelivered or concurrent copy
+    # of this task finds nothing to claim and sends nothing. A worker crash mid-send leaves
+    # the row SENDING; stale-row recovery belongs to the notification pipeline (M7.1).
+    claimed = NotificationLog.objects.filter(
+        pk=log.pk,
+        status__in=[NotificationLog.Status.PENDING, NotificationLog.Status.FAILED],
+    ).update(status=NotificationLog.Status.SENDING)
+    if not claimed:
         return
     context = {"booking": log.related_booking}
     try:

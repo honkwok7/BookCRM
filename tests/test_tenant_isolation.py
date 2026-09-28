@@ -153,17 +153,34 @@ class TenantIsolationSuite(TestCase):
             self.assert_unchanged(obj, before)
 
     def test_custom_actions_on_other_tenant_object_fail(self):
+        """Every extra action, with every HTTP method it actually declares, is exercised."""
+        exercised = 0
         for prefix, viewset, basename in api_resources():
             obj = self.b_objects[basename]
             before = self.db_state(obj)
             for extra in viewset.get_extra_actions():
-                if not extra.detail:
-                    continue
-                url = f"/api/v1/{prefix}/{obj.pk}/{extra.url_path}/"
-                with self.subTest(resource=basename, action=extra.url_path):
-                    response = self.client.post(url, {"status": "completed"}, format="json")
-                    self.assertIn(response.status_code, NOT_ALLOWED)
+                for method in extra.mapping:
+                    if extra.detail:
+                        # B's object through A's session: must look like it doesn't exist.
+                        url = f"/api/v1/{prefix}/{obj.pk}/{extra.url_path}/"
+                        # No payload on GET: it would become (validated) filter parameters.
+                        payload = (
+                            None if method == "get" else {"status": "completed", "confirm": True}
+                        )
+                        with self.subTest(resource=basename, action=extra.url_path, m=method):
+                            response = getattr(self.client, method)(url, payload, format="json")
+                            self.assertIn(response.status_code, {403, 404})
+                    else:
+                        # Collection actions (e.g. search): never any of B's data.
+                        url = f"/api/v1/{prefix}/{extra.url_path}/"
+                        with self.subTest(resource=basename, action=extra.url_path, m=method):
+                            response = getattr(self.client, method)(
+                                url, {"q": SECRET, "search": SECRET}
+                            )
+                            self.assertNotIn(SECRET, response.content.decode())
+                    exercised += 1
             self.assert_unchanged(obj, before)
+        self.assertGreater(exercised, 0)
 
     def test_other_tenant_objects_survive_the_attack(self):
         self.test_update_and_delete_other_tenant_object_fail()

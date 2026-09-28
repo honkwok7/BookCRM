@@ -67,7 +67,6 @@ class CustomerSerializer(TenantScopedModelSerializer):
             "consent_updated_at",
             "source",
             "alerts",
-            "notes",
             "tags",
             "tag_ids",
             "created_by",
