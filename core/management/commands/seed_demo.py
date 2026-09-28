@@ -18,7 +18,8 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer
 from bookings.services import create_booking
-from crm.services import create_customer
+from crm.models import Tag
+from crm.services import add_customer_tag, create_customer, create_tag
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
@@ -63,6 +64,11 @@ ORGANIZATIONS = [
             ("Hannah Kim", "hannah@example.test", "+14165550106"),
             ("Leo Martin", "", "+14165550107"),  # phone-only walk-in client
         ],
+        "tags": {
+            ("VIP", "#f59e0b"): ["alex@example.test", "grace@example.test"],
+            ("New client", "#10b981"): ["+14165550107"],
+            ("Prefers mornings", "#6366f1"): ["priya@example.test"],
+        },
     },
     {
         "slug": "serenity-spa",
@@ -84,6 +90,7 @@ ORGANIZATIONS = [
             ("Alex Morgan", "alex@example.test", "+16045550101"),
             ("Nora White", "nora@example.test", "+16045550102"),
         ],
+        "tags": {("Member", "#ec4899"): ["nora@example.test"]},
     },
 ]
 
@@ -228,6 +235,14 @@ class Command(BaseCommand):
                     sms_consent=True,
                 )
             customers.append(customer)
+
+        for (tag_name, color), contacts in spec["tags"].items():
+            tag = Tag.objects.filter(organization=organization, name=tag_name).first()
+            if tag is None:
+                tag = create_tag(organization=organization, name=tag_name, color=color)
+            for customer in customers:
+                if customer.email in contacts or customer.phone in contacts:
+                    add_customer_tag(customer=customer, tag=tag)  # no-op if already tagged
 
         if not Booking.objects.filter(organization=organization).exists():
             self._appointments(organization, services, customers)

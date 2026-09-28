@@ -21,6 +21,7 @@ from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
+from crm.models import Tag
 from organizations.models import OrganizationRole
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
@@ -108,6 +109,15 @@ class BookingViewSet(
         return self._respond(booking)
 
 
+class CustomerFilter(django_filters.FilterSet):
+    # ?tag=<id> must be one of the caller's own tags (tenant-safe, like every relation filter).
+    tag = TenantModelChoiceFilter(Tag, field_name="customer_tags__tag")
+
+    class Meta:
+        model = Customer
+        fields = ("status", "tag")
+
+
 class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     audit_actions = {"delete": AuditAction.CUSTOMER_DELETED}
     # crm.services audits create/update (field-level, personal values redacted).
@@ -117,12 +127,14 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         permissions.IsAuthenticated,
         HasCapability(read="customers.view", write="customers.manage"),
     ]
-    filterset_fields = ("status",)
+    filterset_class = CustomerFilter
     search_fields = ("first_name", "last_name", "preferred_name", "email", "phone")
     ordering_fields = ("last_name", "first_name", "created_at")
 
     def get_queryset(self):
-        queryset = Customer.objects.select_related("organization", "user")
+        queryset = Customer.objects.select_related("organization", "user").prefetch_related(
+            "tag_set"
+        )
         return scope_queryset_by_organization(queryset, self.request)
 
     def get_serializer_class(self):

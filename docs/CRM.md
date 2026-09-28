@@ -42,10 +42,33 @@ customers are hidden from `list_customers` by default.
 Not yet covered: free text that staff typed about the customer somewhere else (for example
 another customer's notes). CRM notes (M2.3) will be included when they exist.
 
+## Tags
+
+Each organization defines its own tags (`crm.Tag`: name, slug, color). Customers carry them
+through `crm.CustomerTag`, which records who tagged them.
+
+| Rule | Where |
+|---|---|
+| Slugs are unique per organization, so "VIP" and "vip" are the same tag. Renaming a tag changes its slug. | `create_tag` / `update_tag` (`duplicate_tag`, 409) and a database constraint |
+| A tag from another organization is refused exactly like a tag that doesn't exist. | Service (`not_found`), the API's tenant-scoped `tag_ids`, and the `?tag=` filter |
+| Tagging and untagging are audited as `customer.tag_added` / `customer.tag_removed`, recording the **tag id only**. A label like "diabetic" is personal data once it is attached to a person. | `add_customer_tag` / `remove_customer_tag` |
+| Anonymized customers can't be tagged, and anonymization removes their tags. Merging combines both customers' tags. | Service |
+| Deleting a tag removes it from every customer, and the audit entry records how many customers had it. | `delete_tag` |
+
+The old free-text `Customer.tags` JSON was copied into tags by migration `crm/0002` (one tag
+per distinct slug per organization). The JSON is now read-only and is removed in M11.3.
+
+API:
+- `/api/v1/tags/` returns each tag with `customer_count` (anonymized customers not counted).
+  Reading needs `customers.view`; creating, renaming and deleting need `customers.manage`.
+- On `/api/v1/customers/`, `tags` lists the customer's tags. Sending `tag_ids` replaces them,
+  and `?tag=<id>` filters the list.
+
 ## Reads (`crm/selectors.py`)
 
 - `get_customer_for_org(organization, id)`
-- `list_customers(organization, search=, status=, include_anonymized=)`: every search word
+- `list_tags(organization)`: tags with their customer counts.
+- `list_customers(organization, search=, status=, tag=, include_anonymized=)`: every search word
   must match a first name, last name, preferred name, email or phone.
 - `customer_stats(customer)`: computed from appointments on every call, not stored as
   counters. It returns total appointments, completed, cancelled, no-shows, upcoming, last

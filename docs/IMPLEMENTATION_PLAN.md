@@ -500,6 +500,18 @@ Existing customers are preserved, and all bookings still link to them.
 
 ### M2.2: Tags
 
+> **Status: done (2026-09-28, branch `m2.2-tags`).** See [CRM.md](CRM.md#tags).
+> - `crm.Tag`, `crm.CustomerTag` (with `organization` and `tagged_by`) and `Customer.tag_set`.
+>   Migration `crm/0002` backfills tags from the JSON.
+> - Services: `create_tag` / `update_tag` / `delete_tag`, `add_customer_tag` /
+>   `remove_customer_tag` / `set_customer_tags`. They re-read the customer under a lock, so a
+>   stale copy can't tag an anonymized customer.
+> - Tagging events are **audited** now. **Activity**-timeline entries arrive with the activity
+>   model in M2.3.
+> - API: `/api/v1/tags/`, `tags` and `tag_ids` on customers, and the `?tag=` filter. The UI
+>   filter is M2.6.
+> - `seed_demo` adds VIP, New client, Prefers mornings and Member tags.
+
 #### Objective
 Organization-defined tags.
 

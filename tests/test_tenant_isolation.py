@@ -44,7 +44,8 @@ B_OBJECT_FACTORIES = {
         organization=org, name=mark
     ),
     "booking": lambda org, mark: f.BookingFactory(organization=org, customer_name=mark),
-    "customer": lambda org, mark: f.CustomerFactory(organization=org, name=mark),
+    "customer": lambda org, mark: f.CustomerFactory(organization=org, first_name=mark),
+    "tag": lambda org, mark: f.CustomerTagFactory(organization=org, tag__name=mark).tag,
     "waitlist": lambda org, mark: f.WaitlistEntryFactory(organization=org, customer_name=mark),
     "audit-log": lambda org, mark: f.AuditLogFactory(organization=org, metadata={"note": mark}),
 }
@@ -177,6 +178,7 @@ class TenantIsolationSuite(TestCase):
             ("bookings", "service", self.b_objects["booking"].service_id),
             ("bookings", "staff", self.b_objects["booking"].staff_id),
             ("services", "category", self.b_objects["service"].category_id),
+            ("customers", "tag", self.b_objects["tag"].pk),
         ]
         for prefix, param, b_id in cases:
             missing = uuid.uuid4()
@@ -204,6 +206,19 @@ class TenantIsolationSuite(TestCase):
             with_b.json()["staff"][0].replace(str(b_staff.pk), "ID"),
             with_missing.json()["staff"][0].replace(str(missing), "ID"),
         )
+
+    def test_tagging_with_other_tenant_tag_looks_like_a_missing_tag(self):
+        customer = f.CustomerFactory(organization=self.org_a)
+        b_tag, missing = self.b_objects["tag"], uuid.uuid4()
+        url = f"/api/v1/customers/{customer.pk}/"
+        with_b = self.client.patch(url, {"tag_ids": [str(b_tag.pk)]}, format="json")
+        with_missing = self.client.patch(url, {"tag_ids": [str(missing)]}, format="json")
+        self.assertEqual(with_b.status_code, 400)
+        self.assertEqual(
+            str(with_b.json()).replace(str(b_tag.pk), "ID"),
+            str(with_missing.json()).replace(str(missing), "ID"),
+        )
+        self.assertFalse(customer.tag_set.exists())
 
     # -- non-router tenant endpoints ---------------------------------------------------------
 

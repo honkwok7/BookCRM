@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer, WaitlistEntry
 from core.models import AuditLog
+from crm.models import CustomerTag, Tag
 from notifications.models import NotificationLog
 from organizations.models import (
     Organization,
@@ -114,6 +115,25 @@ class CustomerFactory(factory.django.DjangoModelFactory):
     last_name = factory.Faker("last_name")
     email = factory.Sequence(lambda n: f"customer{n}@example.test")
     phone = factory.Sequence(lambda n: f"+1555000{n:04d}")
+
+
+class TagFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Tag
+
+    organization = factory.SubFactory(OrganizationFactory)
+    name = factory.Sequence(lambda n: f"Tag {n}")
+    slug = factory.Sequence(lambda n: f"tag-{n}")
+    color = "#3b82f6"
+
+
+class CustomerTagFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CustomerTag
+
+    organization = factory.SubFactory(OrganizationFactory)
+    customer = factory.SubFactory(CustomerFactory, organization=SAME_ORG)
+    tag = factory.SubFactory(TagFactory, organization=SAME_ORG)
 
 
 class BookingFactory(factory.django.DjangoModelFactory):

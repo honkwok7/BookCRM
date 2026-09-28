@@ -1,14 +1,17 @@
 from zoneinfo import available_timezones
 
+from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from bookings.models import Booking, Customer, WaitlistEntry
 from bookings.selectors import bookable_services, bookable_staff
 from bookings.services import cancel_booking, create_booking
-from core.api import TenantScopedModelSerializer
+from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
+from crm.models import Tag
 from crm.selectors import customer_stats
-from crm.services import create_customer, update_customer
+from crm.serializers import TagSummarySerializer
+from crm.services import create_customer, set_customer_tags, update_customer
 from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import (
@@ -22,6 +25,11 @@ class CustomerSerializer(TenantScopedModelSerializer):
     """Team view of a CRM customer. Writes go through ``crm.services`` (checks + audit)."""
 
     display_name = serializers.CharField(read_only=True)
+    tags = TagSummarySerializer(source="tag_set", many=True, read_only=True)
+    # Setting tag_ids replaces the customer's tags (each change audited); tenant-scoped ids.
+    tag_ids = TenantPrimaryKeyRelatedField(
+        many=True, queryset=Tag.objects.all(), write_only=True, required=False
+    )
 
     class Meta:
         model = Customer
@@ -59,6 +67,7 @@ class CustomerSerializer(TenantScopedModelSerializer):
             "alerts",
             "notes",
             "tags",
+            "tag_ids",
             "created_by",
             "anonymized_at",
             "created_at",
@@ -100,20 +109,31 @@ class CustomerSerializer(TenantScopedModelSerializer):
             validated_data["first_name"], validated_data["last_name"] = Customer.split_name(name)
         return validated_data
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context["request"]
-        return create_customer(
+        tags = validated_data.pop("tag_ids", None)
+        customer = create_customer(
             organization=get_request_organization(request),
             actor=request.user,
             **self._split_full_name(validated_data),
         )
+        if tags:
+            set_customer_tags(customer=customer, tags=tags, actor=request.user)
+        return customer
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        return update_customer(
-            customer=instance,
-            actor=self.context["request"].user,
-            **self._split_full_name(validated_data),
-        )
+        actor = self.context["request"].user
+        tags = validated_data.pop("tag_ids", None)
+        customer = instance
+        if validated_data:
+            customer = update_customer(
+                customer=instance, actor=actor, **self._split_full_name(validated_data)
+            )
+        if tags is not None:
+            set_customer_tags(customer=customer, tags=tags, actor=actor)
+        return customer
 
 
 class CustomerDetailSerializer(CustomerSerializer):
