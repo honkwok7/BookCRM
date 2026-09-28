@@ -12,6 +12,7 @@ from bookings.serializers import (
     BookingRescheduleSerializer,
     BookingSerializer,
     BookingStatusSerializer,
+    CustomerDetailSerializer,
     CustomerSerializer,
     WaitlistEntrySerializer,
 )
@@ -108,28 +109,30 @@ class BookingViewSet(
 
 
 class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
-    audit_actions = {
-        "create": AuditAction.CUSTOMER_CREATED,
-        "update": AuditAction.CUSTOMER_UPDATED,
-        "delete": AuditAction.CUSTOMER_DELETED,
-    }
-    audit_redact_fields = (
-        "name",
-        "email",
-        "phone",
-        "notes",
-        "tags",
-    )
+    audit_actions = {"delete": AuditAction.CUSTOMER_DELETED}
+    # crm.services audits create/update (field-level, personal values redacted).
+    audited_by_service = ("create", "update")
     serializer_class = CustomerSerializer
     permission_classes = [
         permissions.IsAuthenticated,
         HasCapability(read="customers.view", write="customers.manage"),
     ]
-    search_fields = ("name", "email", "phone")
+    filterset_fields = ("status",)
+    search_fields = ("first_name", "last_name", "preferred_name", "email", "phone")
+    ordering_fields = ("last_name", "first_name", "created_at")
 
     def get_queryset(self):
         queryset = Customer.objects.select_related("organization", "user")
         return scope_queryset_by_organization(queryset, self.request)
+
+    def get_serializer_class(self):
+        return CustomerDetailSerializer if self.action == "retrieve" else CustomerSerializer
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        serializer.save()
 
 
 class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):

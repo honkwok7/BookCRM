@@ -115,7 +115,10 @@ class ViewsetCoverageTests(SimpleTestCase):
                 continue
             with self.subTest(viewset=viewset.__name__):
                 self.assertTrue(issubclass(viewset, AuditedModelViewSetMixin))
-                self.assertEqual(set(viewset.audit_actions), {"create", "update", "delete"})
+                # Writes may instead be audited by the service the serializer calls (declared
+                # in ``audited_by_service`` and tested with that service).
+                audited = set(viewset.audit_actions) | set(viewset.audited_by_service)
+                self.assertEqual(audited, {"create", "update", "delete"})
 
 
 class AuditedEndpointTests(APITestCase):
@@ -257,10 +260,12 @@ class BookingServiceAuditTests(TestCase):
         self.assertEqual(
             self.actions(),
             [
+                "customer.created",  # the setUp booking's new CRM customer
                 "booking.created",
                 "booking.created",  # new appointment created by the reschedule
                 "booking.rescheduled",
                 "booking.status_changed",
+                "customer.created",  # "D" is a new customer too
                 "booking.created",
                 "booking.cancelled",
             ],

@@ -3,6 +3,8 @@ from rest_framework import serializers
 from bookings.models import Booking, Customer, WaitlistEntry
 from bookings.services import cancel_booking, create_booking
 from core.api import TenantScopedModelSerializer
+from crm.selectors import customer_stats
+from crm.services import create_customer, update_customer
 from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import (
@@ -15,20 +17,48 @@ from staff.models import StaffProfile
 
 
 class CustomerSerializer(TenantScopedModelSerializer):
+    """Team view of a CRM customer. Writes go through ``crm.services`` (checks + audit)."""
+
+    display_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = Customer
         fields = (
             "id",
             "organization",
             "user",
+            "status",
+            "display_name",
             "name",
+            "first_name",
+            "last_name",
+            "preferred_name",
+            "birthday",
+            "gender",
+            "pronouns",
             "email",
             "phone",
+            "secondary_phone",
+            "address_line1",
+            "address_line2",
+            "city",
+            "region",
+            "postal_code",
+            "country",
+            "preferred_language",
+            "preferred_contact_method",
+            "assigned_staff",
+            "preferred_staff",
+            "marketing_consent",
+            "email_consent",
+            "sms_consent",
+            "consent_updated_at",
+            "source",
+            "alerts",
             "notes",
             "tags",
-            "total_bookings",
-            "no_show_count",
-            "last_appointment",
+            "created_by",
+            "anonymized_at",
             "created_at",
             "updated_at",
         )
@@ -37,21 +67,61 @@ class CustomerSerializer(TenantScopedModelSerializer):
             "id",
             "organization",
             "user",
-            "total_bookings",
-            "no_show_count",
-            "last_appointment",
+            "consent_updated_at",
+            "created_by",
+            "anonymized_at",
             "created_at",
             "updated_at",
         )
+        # ``name`` may be sent instead of first/last name; it is always returned as "First Last".
+        extra_kwargs = {"name": {"required": False}}
 
     def validate_email(self, email):
         organization = get_request_organization(self.context["request"])
         duplicates = Customer.objects.filter(organization=organization, email__iexact=email)
         if self.instance is not None:
             duplicates = duplicates.exclude(pk=self.instance.pk)
-        if duplicates.exists():
+        if email and duplicates.exists():
             raise serializers.ValidationError("A customer with this email already exists.")
         return email
+
+    def validate_status(self, value):
+        if value == Customer.Status.ANONYMIZED:
+            raise serializers.ValidationError("Customers are anonymized with a separate action.")
+        return value
+
+    @staticmethod
+    def _split_full_name(validated_data):
+        """``name`` is accepted as a shortcut: split into first/last unless those are given."""
+        name = validated_data.pop("name", None)
+        if name and not ({"first_name", "last_name"} & set(validated_data)):
+            validated_data["first_name"], validated_data["last_name"] = Customer.split_name(name)
+        return validated_data
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        return create_customer(
+            organization=get_request_organization(request),
+            actor=request.user,
+            **self._split_full_name(validated_data),
+        )
+
+    def update(self, instance, validated_data):
+        return update_customer(
+            customer=instance,
+            actor=self.context["request"].user,
+            **self._split_full_name(validated_data),
+        )
+
+
+class CustomerDetailSerializer(CustomerSerializer):
+    stats = serializers.SerializerMethodField()
+
+    class Meta(CustomerSerializer.Meta):
+        fields = (*CustomerSerializer.Meta.fields, "stats")
+
+    def get_stats(self, customer):
+        return customer_stats(customer)
 
 
 BOOKING_CUSTOMER_FIELDS = (

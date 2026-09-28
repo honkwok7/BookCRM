@@ -11,9 +11,9 @@ from bookings.models import (
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ("name", "email", "organization", "total_bookings", "last_appointment")
-    list_filter = ("organization",)
-    search_fields = ("name", "email", "phone")
+    list_display = ("name", "email", "phone", "organization", "status")
+    list_filter = ("organization", "status")
+    search_fields = ("name", "preferred_name", "email", "phone")
 
 
 @admin.register(Booking)

@@ -32,7 +32,9 @@ def organization_dashboard_summary(organization):
             .get("total")
             or 0
         ),
-        "active_customers": Customer.objects.filter(organization=organization).count(),
+        "active_customers": Customer.objects.filter(
+            organization=organization, status=Customer.Status.ACTIVE
+        ).count(),
         "active_staff": StaffProfile.objects.filter(
             organization=organization, is_active=True
         ).count(),

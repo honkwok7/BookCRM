@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "staff",
     "scheduling",
     "bookings",
+    "crm",
     "notifications",
     "subscriptions",
     "dashboard",

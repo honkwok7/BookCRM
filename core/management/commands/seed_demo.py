@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer
 from bookings.services import create_booking
+from crm.services import create_customer
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
@@ -60,6 +61,7 @@ ORGANIZATIONS = [
             ("Grace Liu", "grace@example.test", "+14165550104"),
             ("Samuel Ortiz", "samuel@example.test", "+14165550105"),
             ("Hannah Kim", "hannah@example.test", "+14165550106"),
+            ("Leo Martin", "", "+14165550107"),  # phone-only walk-in client
         ],
     },
     {
@@ -209,9 +211,22 @@ class Command(BaseCommand):
 
         customers = []
         for name, email, phone in spec["customers"]:
-            customer, _ = Customer.objects.get_or_create(
-                organization=organization, email=email, defaults={"name": name, "phone": phone}
-            )
+            existing = Customer.objects.filter(organization=organization)
+            customer = (
+                existing.filter(email=email) if email else existing.filter(phone=phone)
+            ).first()
+            if customer is None:
+                first_name, last_name = Customer.split_name(name)
+                customer = create_customer(
+                    organization=organization,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    phone=phone,
+                    source=Customer.Source.WALK_IN if not email else Customer.Source.REFERRAL,
+                    email_consent=bool(email),
+                    sms_consent=True,
+                )
             customers.append(customer)
 
         if not Booking.objects.filter(organization=organization).exists():
