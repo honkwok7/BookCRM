@@ -10,6 +10,10 @@ class ServiceCategorySerializer(serializers.ModelSerializer):
         fields = ("id", "organization", "name", "slug", "created_at", "updated_at")
         read_only_fields = ("id", "organization", "created_at", "updated_at")
 
+    def create(self, validated_data):
+        validated_data["organization"] = get_request_organization(self.context["request"])
+        return super().create(validated_data)
+
 
 class ServiceSerializer(serializers.ModelSerializer):
     class Meta:

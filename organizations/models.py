@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils import timezone
@@ -30,6 +31,8 @@ class Organization(BaseUUIDModel):
     second_reminder_hours_before = models.PositiveIntegerField(default=2)
     is_active = models.BooleanField(default=True)
     is_suspended = models.BooleanField(default=False)
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["name"]
@@ -46,6 +49,7 @@ class Organization(BaseUUIDModel):
 class OrganizationRole(models.TextChoices):
     OWNER = "owner", "Owner"
     MANAGER = "manager", "Manager"
+    RECEPTIONIST = "receptionist", "Receptionist"
     STAFF = "staff", "Staff"
     CUSTOMER = "customer", "Customer"
 
@@ -62,11 +66,31 @@ class OrganizationMembership(BaseUUIDModel):
         related_name="organization_memberships",
     )
     role = models.CharField(max_length=20, choices=OrganizationRole.choices)
+    title = models.CharField(max_length=120, blank=True)
+    # Per-membership overrides on top of the role's default capabilities
+    # (codes from organizations.permissions.Capability).
+    granted_permissions = models.JSONField(default=list, blank=True)
+    revoked_permissions = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ("organization", "user")
         indexes = [models.Index(fields=["organization", "role", "is_active"])]
+
+    def clean(self):
+        from organizations.permissions import validate_capability_codes
+
+        unknown = validate_capability_codes(self.granted_permissions) + validate_capability_codes(
+            self.revoked_permissions
+        )
+        if unknown:
+            raise ValidationError({"granted_permissions": f"Unknown capabilities: {unknown}"})
+
+    @property
+    def capabilities(self):
+        from organizations.permissions import capabilities_for
+
+        return capabilities_for(self.role, self.granted_permissions, self.revoked_permissions)
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.organization} ({self.role})"

@@ -1,45 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
-from organizations.models import Organization, OrganizationMembership
+from organizations.models import Organization
+from organizations.tenancy import resolve_tenant
 
 
 def get_request_organization(request) -> Organization | None:
-    slug = request.headers.get("X-Organization-Slug") or request.query_params.get("organization")
-    if slug:
-        try:
-            return Organization.objects.get(slug=slug, is_active=True)
-        except Organization.DoesNotExist:
-            return None
-
-    if request.user.is_authenticated:
-        membership = (
-            OrganizationMembership.objects.select_related("organization")
-            .filter(user=request.user, is_active=True, organization__is_active=True)
-            .first()
-        )
-        if membership:
-            return membership.organization
-    return None
-
-
-def user_has_org_role(user, organization: Organization, roles: Iterable[str] | None = None) -> bool:
-    if user.is_superuser:
-        return True
-    queryset = OrganizationMembership.objects.filter(
-        user=user,
-        organization=organization,
-        is_active=True,
-    )
-    if roles:
-        queryset = queryset.filter(role__in=roles)
-    return queryset.exists()
+    """The organization of the request's tenant context (membership-backed), or None."""
+    context = resolve_tenant(request)
+    return context.organization if context else None
 
 
 def scope_queryset_by_organization(queryset, request):
-    if request.user.is_superuser:
-        return queryset
+    """Filter ``queryset`` to the request's tenant. No tenant context means no rows."""
     organization = get_request_organization(request)
     if organization is None:
         return queryset.none()

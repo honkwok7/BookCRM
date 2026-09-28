@@ -116,8 +116,15 @@ class OrganizationEditTests(TenantFixtureMixin, APITestCase):
         response = self.client.get("/api/organizations/current/")
         self.assertEqual(response.status_code, 200)
 
-    def test_manager_cannot_suspend_or_deactivate_organization(self):
+    def test_manager_cannot_edit_organization_profile_by_default(self):
+        # organization.manage is owner-only unless granted (M1.2 capability matrix).
         self.client.force_authenticate(self.manager_a)
+        response = self.client.patch("/api/organizations/current/", {"name": "x"}, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_owner_cannot_suspend_or_deactivate_organization(self):
+        owner = self._member(self.org_a, "owner@a.test", OrganizationRole.OWNER)
+        self.client.force_authenticate(owner)
         response = self.client.patch(
             "/api/organizations/current/",
             {"name": "Org A Renamed", "is_suspended": True, "is_active": False},

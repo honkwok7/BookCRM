@@ -143,6 +143,13 @@ One merge migration. No schema change.
 
 ### M1.1: Tenant context resolution
 
+> **Status: done (2026-09-28, branch `m1-tenant-foundation`).** Deviations from the plan below:
+> - No separate `Organization.status` field. The existing `is_active`/`is_suspended` flags are
+>   kept, and `suspended_at` and `suspension_reason` are added.
+> - The web `TenantMiddleware` and `/app/switch/<slug>/` move to M2.5, the first web UI.
+>   Resolution already honours the session key, and `set_active_organization()` exists.
+> - Details are in `docs/MULTI_TENANCY.md`.
+
 #### Objective
 Make tenant resolution safe by construction.
 
@@ -184,6 +191,13 @@ Additive fields plus a backfill of `status` from `is_suspended`/`is_active`.
 No view in the codebase calls `Organization.objects.get(slug=…)` from request input except the public booking resolver. A grep check runs in CI.
 
 ### M1.2: Roles and capability registry
+
+> **Status: done (2026-09-28, branch `m1-tenant-foundation`).**
+> - Views use `HasCapability(read=, write=)`.
+> - `docs/PERMISSIONS.md` is generated with `manage.py generate_permissions_doc`, and a test
+>   keeps it in sync.
+> - Behaviour change: managers no longer edit the organization profile by default
+>   (`organization.manage` is owner-only unless granted).
 
 #### Objective
 Permission-based authorization.

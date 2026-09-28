@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from bookings.models import Booking, Customer, WaitlistEntry
+from bookings.selectors import bookings_visible_to
 from bookings.serializers import (
     BookingCancelSerializer,
     BookingCreateSerializer,
@@ -12,29 +13,18 @@ from bookings.serializers import (
     WaitlistEntrySerializer,
 )
 from bookings.services import create_booking
-from core.permissions import IsOrganizationManagerOrOwner
-from organizations.selectors import (
-    get_request_organization,
-    scope_queryset_by_organization,
-    user_has_org_role,
-)
+from core.permissions import HasCapability
+from organizations.selectors import scope_queryset_by_organization
 
 
 class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ("status", "service", "staff")
     ordering_fields = ("start_datetime", "created_at")
 
     def get_queryset(self):
-        queryset = Booking.objects.select_related("organization", "service", "staff", "customer")
-        queryset = scope_queryset_by_organization(queryset, self.request)
-        if self.request.user.is_superuser:
-            return queryset
-        organization = get_request_organization(self.request)
-        if user_has_org_role(self.request.user, organization, ["owner", "manager", "staff"]):
-            return queryset
-        return queryset.filter(customer_email=self.request.user.email)
+        return bookings_visible_to(self.request)
 
     def create(self, request, *args, **kwargs):
         serializer = BookingCreateSerializer(data=request.data, context={"request": request})
@@ -86,7 +76,10 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated, IsOrganizationManagerOrOwner],
+        permission_classes=[
+            permissions.IsAuthenticated,
+            HasCapability(write="appointments.manage"),
+        ],
     )
     def update_status(self, request, pk=None):
         booking = self.get_object()
@@ -100,7 +93,10 @@ class BookingViewSet(viewsets.ModelViewSet):
 
 class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCapability(read="customers.view", write="customers.manage"),
+    ]
     search_fields = ("name", "email", "phone")
 
     def get_queryset(self):
@@ -112,7 +108,7 @@ class WaitlistViewSet(viewsets.ModelViewSet):
     serializer_class = WaitlistEntrySerializer
     # Waitlist entries hold customer PII.
     # Public/portal joining arrives with the waitlist service (M4.7).
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, HasCapability(read="waitlist.manage")]
 
     def get_queryset(self):
         queryset = WaitlistEntry.objects.select_related(

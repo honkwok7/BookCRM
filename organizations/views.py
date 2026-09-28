@@ -5,10 +5,10 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.permissions import IsOrganizationManagerOrOwner
+from core.permissions import HasCapability
 from core.services import write_audit_log
 from organizations.models import OrganizationInvitation, OrganizationMembership
-from organizations.selectors import get_request_organization, scope_queryset_by_organization
+from organizations.selectors import scope_queryset_by_organization
 from organizations.serializers import (
     InvitationAcceptSerializer,
     InvitationCreateSerializer,
@@ -16,35 +16,26 @@ from organizations.serializers import (
     OrganizationSerializer,
 )
 from organizations.services import accept_invitation
+from organizations.tenancy import resolve_tenant
 
 User = get_user_model()
 
 
 class CurrentOrganizationView(generics.RetrieveUpdateAPIView):
     serializer_class = OrganizationSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return super().get_permissions()
-        return [permissions.IsAuthenticated(), IsOrganizationManagerOrOwner()]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCapability(read="organization.view", write="organization.manage"),
+    ]
 
     def get_object(self):
-        organization = get_request_organization(self.request)
-        if organization is None:
-            raise permissions.PermissionDenied("Organization not found in request context")
-        if self.request.user.is_superuser:
-            return organization
-        if not OrganizationMembership.objects.filter(
-            user=self.request.user, organization=organization, is_active=True
-        ).exists():
-            raise permissions.PermissionDenied("You do not belong to this organization")
-        return organization
+        # The permission class guarantees a membership-backed tenant context.
+        return resolve_tenant(self.request).organization
 
 
 class OrganizationMembershipListView(generics.ListAPIView):
     serializer_class = OrganizationMembershipSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, HasCapability(read="members.view")]
 
     def get_queryset(self):
         return scope_queryset_by_organization(
@@ -54,18 +45,20 @@ class OrganizationMembershipListView(generics.ListAPIView):
 
 class InvitationCreateView(generics.CreateAPIView):
     serializer_class = InvitationCreateSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, HasCapability(write="members.invite")]
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "tenant": resolve_tenant(self.request)}
 
     def perform_create(self, serializer):
-        organization = get_request_organization(self.request)
+        organization = resolve_tenant(self.request).organization
         invitation = serializer.save(
             organization=organization,
             inviter=self.request.user,
             token=OrganizationInvitation.generate_token(),
+            expires_at=serializer.validated_data.get("expires_at")
+            or OrganizationInvitation.default_expiry(),
         )
-        if not invitation.expires_at:
-            invitation.expires_at = OrganizationInvitation.default_expiry()
-            invitation.save(update_fields=["expires_at", "updated_at"])
 
         invite_url = (
             f"{self.request.build_absolute_uri('/')}accept-invitation/?token={invitation.token}"

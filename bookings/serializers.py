@@ -2,7 +2,13 @@ from rest_framework import serializers
 
 from bookings.models import Booking, Customer, WaitlistEntry
 from bookings.services import cancel_booking, create_booking
+from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
+from organizations.tenancy import (
+    get_public_organization,
+    requested_organization_slug,
+    resolve_tenant,
+)
 from services.models import Service
 from staff.models import StaffProfile
 
@@ -53,34 +59,52 @@ class BookingCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         request = self.context["request"]
-        organization = get_request_organization(request)
-        service = Service.objects.get(
+        tenant = resolve_tenant(request)
+        if tenant is not None and tenant.has(Capability.APPOINTMENTS_MANAGE):
+            # Team member booking on behalf of a customer in their own organization.
+            organization = tenant.organization
+            customer_user = None
+        else:
+            # Self-service booking: only organizations with a public booking page.
+            slug = requested_organization_slug(request) or (
+                tenant.organization.slug if tenant else None
+            )
+            organization = get_public_organization(slug)
+            customer_user = request.user
+        if organization is None:
+            raise serializers.ValidationError({"organization": "Organization not found."})
+
+        service = Service.objects.filter(
             id=validated_data["service"],
             organization=organization,
             is_active=True,
             is_archived=False,
-        )
-        staff_profile = StaffProfile.objects.get(
+        ).first()
+        staff_profile = StaffProfile.objects.filter(
             id=validated_data["staff"],
             organization=organization,
             is_active=True,
             is_accepting_bookings=True,
-        )
+        ).first()
+        if service is None or staff_profile is None:
+            raise serializers.ValidationError({"detail": "Service or staff not found."})
 
-        booking = create_booking(
-            organization=organization,
-            service=service,
-            staff_profile=staff_profile,
-            customer_name=validated_data["customer_name"],
-            customer_email=validated_data["customer_email"],
-            customer_phone=validated_data.get("customer_phone", ""),
-            start_datetime=validated_data["start_datetime"],
-            customer_timezone=validated_data.get("customer_timezone", "UTC"),
-            customer_notes=validated_data.get("customer_notes", ""),
-            actor=request.user if request.user.is_authenticated else None,
-            customer_user=request.user if request.user.is_authenticated else None,
-        )
-        return booking
+        try:
+            return create_booking(
+                organization=organization,
+                service=service,
+                staff_profile=staff_profile,
+                customer_name=validated_data["customer_name"],
+                customer_email=validated_data["customer_email"],
+                customer_phone=validated_data.get("customer_phone", ""),
+                start_datetime=validated_data["start_datetime"],
+                customer_timezone=validated_data.get("customer_timezone", "UTC"),
+                customer_notes=validated_data.get("customer_notes", ""),
+                actor=request.user,
+                customer_user=customer_user,
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
 
 
 class BookingCancelSerializer(serializers.Serializer):

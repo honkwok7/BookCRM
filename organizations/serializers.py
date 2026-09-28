@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from organizations.models import Organization, OrganizationInvitation, OrganizationMembership
+from organizations.permissions import can_grant_role
 
 User = get_user_model()
 
@@ -55,11 +56,18 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
             "user",
             "user_email",
             "role",
+            "title",
+            "capabilities",
             "is_active",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = fields
+
+    capabilities = serializers.SerializerMethodField()
+
+    def get_capabilities(self, obj) -> list[str]:
+        return sorted(obj.capabilities)
 
 
 class InvitationCreateSerializer(serializers.ModelSerializer):
@@ -67,6 +75,15 @@ class InvitationCreateSerializer(serializers.ModelSerializer):
         model = OrganizationInvitation
         fields = ("id", "email", "role", "expires_at")
         read_only_fields = ("id",)
+        extra_kwargs = {"expires_at": {"required": False}}
+
+    def validate_role(self, role):
+        tenant = self.context.get("tenant")
+        if tenant is None or not can_grant_role(tenant.role, role):
+            raise serializers.ValidationError(
+                "You cannot invite someone with a role above your own."
+            )
+        return role
 
 
 class InvitationAcceptSerializer(serializers.Serializer):
