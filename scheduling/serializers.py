@@ -1,6 +1,4 @@
-from rest_framework import serializers
-
-from organizations.selectors import get_request_organization
+from core.api import TenantScopedModelSerializer
 from scheduling.models import (
     AvailabilityException,
     OrganizationHoliday,
@@ -8,46 +6,47 @@ from scheduling.models import (
     WeeklyAvailability,
 )
 
+READ_ONLY = ("id", "organization", "created_at", "updated_at")
 
-class WeeklyAvailabilitySerializer(serializers.ModelSerializer):
+
+class WeeklyAvailabilitySerializer(TenantScopedModelSerializer):
     class Meta:
         model = WeeklyAvailability
-        fields = "__all__"
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
-
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
+        fields = (*READ_ONLY, "staff", "day_of_week", "start_time", "end_time", "is_active")
+        read_only_fields = READ_ONLY
 
 
-class AvailabilityExceptionSerializer(serializers.ModelSerializer):
+class AvailabilityExceptionSerializer(TenantScopedModelSerializer):
     class Meta:
         model = AvailabilityException
-        fields = "__all__"
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
+        fields = (
+            *READ_ONLY,
+            "staff",
+            "date",
+            "unavailable_all_day",
+            "start_time",
+            "end_time",
+            "reason",
+        )
+        read_only_fields = READ_ONLY
 
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
 
-
-class TimeOffSerializer(serializers.ModelSerializer):
+class TimeOffSerializer(TenantScopedModelSerializer):
     class Meta:
         model = TimeOff
-        fields = "__all__"
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
+        fields = (
+            *READ_ONLY,
+            "staff",
+            "start_datetime",
+            "end_datetime",
+            "reason",
+            "approval_status",
+        )
+        read_only_fields = READ_ONLY
 
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
 
-
-class OrganizationHolidaySerializer(serializers.ModelSerializer):
+class OrganizationHolidaySerializer(TenantScopedModelSerializer):
     class Meta:
         model = OrganizationHoliday
-        fields = "__all__"
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
-
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
+        fields = (*READ_ONLY, "date", "name", "full_day_closure", "start_time", "end_time")
+        read_only_fields = READ_ONLY

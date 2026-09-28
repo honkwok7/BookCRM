@@ -1,10 +1,12 @@
 from rest_framework import serializers
 
-from organizations.selectors import get_request_organization
+from core.api import TenantMemberUserField, TenantScopedModelSerializer
 from staff.models import StaffProfile
 
 
-class StaffProfileSerializer(serializers.ModelSerializer):
+class StaffProfileSerializer(TenantScopedModelSerializer):
+    # A staff profile can only be created for someone who already belongs to the organization.
+    user = TenantMemberUserField()
     user_email = serializers.EmailField(source="user.email", read_only=True)
 
     class Meta:
@@ -26,6 +28,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "organization", "created_at", "updated_at")
 
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
+    def validate_user(self, user):
+        if self.instance is not None and user != self.instance.user:
+            raise serializers.ValidationError("The user of a staff profile cannot be changed.")
+        return user

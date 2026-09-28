@@ -1,12 +1,12 @@
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.audit import AuditAction, diff_snapshots, record_audit, snapshot
 from core.permissions import HasCapability
-from core.services import write_audit_log
 from organizations.models import OrganizationInvitation, OrganizationMembership
 from organizations.selectors import scope_queryset_by_organization
 from organizations.serializers import (
@@ -15,7 +15,7 @@ from organizations.serializers import (
     OrganizationMembershipSerializer,
     OrganizationSerializer,
 )
-from organizations.services import accept_invitation
+from organizations.services import accept_invitation, create_invitation
 from organizations.tenancy import resolve_tenant
 
 User = get_user_model()
@@ -31,6 +31,21 @@ class CurrentOrganizationView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         # The permission class guarantees a membership-backed tenant context.
         return resolve_tenant(self.request).organization
+
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            before = snapshot(serializer.instance)
+            organization = serializer.save()
+            changes = diff_snapshots(before, snapshot(organization))
+            if changes:
+                record_audit(
+                    AuditAction.ORGANIZATION_UPDATED,
+                    organization=organization,
+                    actor=self.request.user,
+                    target=organization,
+                    changes=changes,
+                    request=self.request,
+                )
 
 
 class OrganizationMembershipListView(generics.ListAPIView):
@@ -50,35 +65,18 @@ class InvitationCreateView(generics.CreateAPIView):
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "tenant": resolve_tenant(self.request)}
 
-    def perform_create(self, serializer):
-        organization = resolve_tenant(self.request).organization
-        invitation = serializer.save(
-            organization=organization,
-            inviter=self.request.user,
-            token=OrganizationInvitation.generate_token(),
-            expires_at=serializer.validated_data.get("expires_at")
-            or OrganizationInvitation.default_expiry(),
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invitation = create_invitation(
+            organization=resolve_tenant(request).organization,
+            inviter=request.user,
+            email=serializer.validated_data["email"],
+            role=serializer.validated_data["role"],
+            expires_at=serializer.validated_data.get("expires_at"),
+            accept_base_url=request.build_absolute_uri("/"),
         )
-
-        invite_url = (
-            f"{self.request.build_absolute_uri('/')}accept-invitation/?token={invitation.token}"
-        )
-        send_mail(
-            subject=f"Invitation to join {organization.name}",
-            message=(
-                f"You were invited to join {organization.name}. " f"Accept invitation: {invite_url}"
-            ),
-            from_email=None,
-            recipient_list=[invitation.email],
-        )
-        write_audit_log(
-            action="organization.invitation.created",
-            organization=organization,
-            user=self.request.user,
-            object_type="OrganizationInvitation",
-            object_identifier=str(invitation.id),
-            metadata={"email": invitation.email, "role": invitation.role},
-        )
+        return Response(self.get_serializer(invitation).data, status=status.HTTP_201_CREATED)
 
 
 class InvitationAcceptView(APIView):

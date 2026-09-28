@@ -1,24 +1,37 @@
-from django.utils.dateparse import parse_datetime
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from bookings.models import Booking, Customer, WaitlistEntry
+from bookings.models import Customer, WaitlistEntry
 from bookings.selectors import bookings_visible_to
 from bookings.serializers import (
     BookingCancelSerializer,
     BookingCreateSerializer,
+    BookingCustomerSerializer,
+    BookingRescheduleSerializer,
     BookingSerializer,
+    BookingStatusSerializer,
     CustomerSerializer,
     WaitlistEntrySerializer,
 )
-from bookings.services import create_booking
+from bookings.services import change_booking_status, reschedule_booking
+from core.api import AuditedModelViewSetMixin
+from core.audit import AuditAction
 from core.permissions import HasCapability
+from organizations.models import OrganizationRole
 from organizations.selectors import scope_queryset_by_organization
+from organizations.tenancy import resolve_tenant
 
 
-class BookingViewSet(viewsets.ModelViewSet):
-    serializer_class = BookingSerializer
+class BookingViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Appointments. There is no generic update/delete: every change goes through the
+    booking service (cancel, reschedule, update_status) so the same rules apply everywhere."""
+
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ("status", "service", "staff")
     ordering_fields = ("start_datetime", "created_at")
@@ -26,52 +39,38 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return bookings_visible_to(self.request)
 
+    def get_serializer_class(self):
+        tenant = resolve_tenant(self.request)
+        if tenant is not None and tenant.role != OrganizationRole.CUSTOMER:
+            return BookingSerializer
+        return BookingCustomerSerializer
+
+    def _respond(self, booking, status_code=status.HTTP_200_OK):
+        return Response(self.get_serializer(booking).data, status=status_code)
+
     def create(self, request, *args, **kwargs):
         serializer = BookingCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        booking = serializer.save()
-        return Response(BookingSerializer(booking).data, status=status.HTTP_201_CREATED)
+        return self._respond(serializer.save(), status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        booking = self.get_object()
         serializer = BookingCancelSerializer(
-            data=request.data, context={"booking": booking, "request": request}
+            data=request.data, context={"booking": self.get_object(), "request": request}
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(BookingSerializer(booking).data)
+        return self._respond(serializer.save())
 
     @action(detail=True, methods=["post"])
     def reschedule(self, request, pk=None):
-        booking = self.get_object()
-        new_start_raw = request.data.get("start_datetime")
-        new_start = (
-            parse_datetime(new_start_raw) if isinstance(new_start_raw, str) else new_start_raw
+        serializer = BookingRescheduleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_booking = reschedule_booking(
+            booking=self.get_object(),
+            new_start=serializer.validated_data["start_datetime"],
+            actor=request.user,
         )
-        if not new_start:
-            return Response({"detail": "start_datetime is required"}, status=400)
-        service = booking.service
-        old_booking = booking
-        old_booking.status = Booking.Status.CANCELLED
-        old_booking.save(update_fields=["status", "updated_at"])
-
-        new_booking = create_booking(
-            organization=booking.organization,
-            service=service,
-            staff_profile=booking.staff,
-            customer_name=booking.customer_name,
-            customer_email=booking.customer_email,
-            customer_phone=booking.customer_phone,
-            start_datetime=new_start,
-            customer_timezone=booking.customer_timezone,
-            customer_notes=booking.customer_notes,
-            actor=request.user if request.user.is_authenticated else None,
-            customer_user=request.user if request.user.is_authenticated else None,
-        )
-        new_booking.rescheduled_from = old_booking
-        new_booking.save(update_fields=["rescheduled_from", "updated_at"])
-        return Response(BookingSerializer(new_booking).data)
+        return self._respond(new_booking)
 
     @action(
         detail=True,
@@ -82,16 +81,30 @@ class BookingViewSet(viewsets.ModelViewSet):
         ],
     )
     def update_status(self, request, pk=None):
-        booking = self.get_object()
-        status_value = request.data.get("status")
-        if status_value not in Booking.Status.values:
-            return Response({"detail": "Invalid status"}, status=400)
-        booking.status = status_value
-        booking.save(update_fields=["status", "updated_at"])
-        return Response(BookingSerializer(booking).data)
+        serializer = BookingStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        booking = change_booking_status(
+            booking=self.get_object(),
+            new_status=serializer.validated_data["status"],
+            note=serializer.validated_data["note"],
+            actor=request.user,
+        )
+        return self._respond(booking)
 
 
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.CUSTOMER_CREATED,
+        "update": AuditAction.CUSTOMER_UPDATED,
+        "delete": AuditAction.CUSTOMER_DELETED,
+    }
+    audit_redact_fields = (
+        "name",
+        "email",
+        "phone",
+        "notes",
+        "tags",
+    )
     serializer_class = CustomerSerializer
     permission_classes = [
         permissions.IsAuthenticated,
@@ -104,7 +117,17 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class WaitlistViewSet(viewsets.ModelViewSet):
+class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.WAITLIST_ENTRY_CREATED,
+        "update": AuditAction.WAITLIST_ENTRY_UPDATED,
+        "delete": AuditAction.WAITLIST_ENTRY_DELETED,
+    }
+    audit_redact_fields = (
+        "customer_name",
+        "customer_email",
+        "customer_phone",
+    )
     serializer_class = WaitlistEntrySerializer
     # Waitlist entries hold customer PII.
     # Public/portal joining arrives with the waitlist service (M4.7).

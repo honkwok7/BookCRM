@@ -1,21 +1,15 @@
-from rest_framework import serializers
-
-from organizations.selectors import get_request_organization
+from core.api import TenantScopedModelSerializer
 from services.models import Service, ServiceCategory
 
 
-class ServiceCategorySerializer(serializers.ModelSerializer):
+class ServiceCategorySerializer(TenantScopedModelSerializer):
     class Meta:
         model = ServiceCategory
         fields = ("id", "organization", "name", "slug", "created_at", "updated_at")
         read_only_fields = ("id", "organization", "created_at", "updated_at")
 
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)
 
-
-class ServiceSerializer(serializers.ModelSerializer):
+class ServiceSerializer(TenantScopedModelSerializer):
     class Meta:
         model = Service
         fields = (
@@ -45,8 +39,3 @@ class ServiceSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "organization", "created_at", "updated_at")
-
-    def create(self, validated_data):
-        organization = get_request_organization(self.context["request"])
-        validated_data["organization"] = organization
-        return super().create(validated_data)

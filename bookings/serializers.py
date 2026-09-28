@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from bookings.models import Booking, Customer, WaitlistEntry
 from bookings.services import cancel_booking, create_booking
+from core.api import TenantScopedModelSerializer
 from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import (
@@ -13,13 +14,29 @@ from services.models import Service
 from staff.models import StaffProfile
 
 
-class CustomerSerializer(serializers.ModelSerializer):
+class CustomerSerializer(TenantScopedModelSerializer):
     class Meta:
         model = Customer
-        fields = "__all__"
+        fields = (
+            "id",
+            "organization",
+            "user",
+            "name",
+            "email",
+            "phone",
+            "notes",
+            "tags",
+            "total_bookings",
+            "no_show_count",
+            "last_appointment",
+            "created_at",
+            "updated_at",
+        )
+        # Linking a customer record to a user account is not an API operation.
         read_only_fields = (
             "id",
             "organization",
+            "user",
             "total_bookings",
             "no_show_count",
             "last_appointment",
@@ -27,24 +44,68 @@ class CustomerSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def validate_email(self, email):
+        organization = get_request_organization(self.context["request"])
+        duplicates = Customer.objects.filter(organization=organization, email__iexact=email)
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError("A customer with this email already exists.")
+        return email
 
-class BookingSerializer(serializers.ModelSerializer):
+
+BOOKING_CUSTOMER_FIELDS = (
+    "id",
+    "public_uuid",
+    "reference",
+    "organization",
+    "service",
+    "staff",
+    "start_datetime",
+    "end_datetime",
+    "customer_name",
+    "customer_email",
+    "customer_phone",
+    "customer_timezone",
+    "organization_timezone",
+    "status",
+    "payment_status",
+    "price_snapshot",
+    "duration_snapshot_minutes",
+    "customer_notes",
+    "cancellation_reason",
+    "cancelled_at",
+    "rescheduled_from",
+    "created_at",
+    "updated_at",
+)
+
+
+class BookingCustomerSerializer(serializers.ModelSerializer):
+    """What a customer may see about their own appointment (no internal notes)."""
+
     class Meta:
         model = Booking
-        fields = "__all__"
-        read_only_fields = (
-            "id",
-            "public_uuid",
-            "reference",
-            "organization",
-            "customer",
-            "price_snapshot",
-            "duration_snapshot_minutes",
-            "cancelled_by",
-            "cancelled_at",
-            "created_at",
-            "updated_at",
-        )
+        fields = BOOKING_CUSTOMER_FIELDS
+        read_only_fields = fields
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    """Team view. Appointments change only through the booking service actions."""
+
+    class Meta:
+        model = Booking
+        fields = (*BOOKING_CUSTOMER_FIELDS, "customer", "internal_notes", "cancelled_by")
+        read_only_fields = fields
+
+
+class BookingStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=Booking.Status.choices)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class BookingRescheduleSerializer(serializers.Serializer):
+    start_datetime = serializers.DateTimeField()
 
 
 class BookingCreateSerializer(serializers.Serializer):
@@ -89,22 +150,19 @@ class BookingCreateSerializer(serializers.Serializer):
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
 
-        try:
-            return create_booking(
-                organization=organization,
-                service=service,
-                staff_profile=staff_profile,
-                customer_name=validated_data["customer_name"],
-                customer_email=validated_data["customer_email"],
-                customer_phone=validated_data.get("customer_phone", ""),
-                start_datetime=validated_data["start_datetime"],
-                customer_timezone=validated_data.get("customer_timezone", "UTC"),
-                customer_notes=validated_data.get("customer_notes", ""),
-                actor=request.user,
-                customer_user=customer_user,
-            )
-        except ValueError as exc:
-            raise serializers.ValidationError({"detail": str(exc)}) from exc
+        return create_booking(
+            organization=organization,
+            service=service,
+            staff_profile=staff_profile,
+            customer_name=validated_data["customer_name"],
+            customer_email=validated_data["customer_email"],
+            customer_phone=validated_data.get("customer_phone", ""),
+            start_datetime=validated_data["start_datetime"],
+            customer_timezone=validated_data.get("customer_timezone", "UTC"),
+            customer_notes=validated_data.get("customer_notes", ""),
+            actor=request.user,
+            customer_user=customer_user,
+        )
 
 
 class BookingCancelSerializer(serializers.Serializer):
@@ -120,12 +178,21 @@ class BookingCancelSerializer(serializers.Serializer):
         )
 
 
-class WaitlistEntrySerializer(serializers.ModelSerializer):
+class WaitlistEntrySerializer(TenantScopedModelSerializer):
     class Meta:
         model = WaitlistEntry
-        fields = "__all__"
+        fields = (
+            "id",
+            "organization",
+            "service",
+            "preferred_staff",
+            "preferred_start_date",
+            "preferred_end_date",
+            "customer_name",
+            "customer_email",
+            "customer_phone",
+            "status",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = ("id", "organization", "created_at", "updated_at")
-
-    def create(self, validated_data):
-        validated_data["organization"] = get_request_organization(self.context["request"])
-        return super().create(validated_data)

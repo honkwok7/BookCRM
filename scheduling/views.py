@@ -5,6 +5,8 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.api import AuditedModelViewSetMixin
+from core.audit import AuditAction
 from core.permissions import HasCapability
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import get_public_organization, requested_organization_slug
@@ -27,7 +29,12 @@ from staff.models import StaffProfile
 SCHEDULE_PERMISSION = HasCapability(read="staff.view", write="staff.manage")
 
 
-class WeeklyAvailabilityViewSet(viewsets.ModelViewSet):
+class WeeklyAvailabilityViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.AVAILABILITY_CREATED,
+        "update": AuditAction.AVAILABILITY_UPDATED,
+        "delete": AuditAction.AVAILABILITY_DELETED,
+    }
     serializer_class = WeeklyAvailabilitySerializer
     permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
@@ -36,7 +43,12 @@ class WeeklyAvailabilityViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class AvailabilityExceptionViewSet(viewsets.ModelViewSet):
+class AvailabilityExceptionViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.AVAILABILITY_EXCEPTION_CREATED,
+        "update": AuditAction.AVAILABILITY_EXCEPTION_UPDATED,
+        "delete": AuditAction.AVAILABILITY_EXCEPTION_DELETED,
+    }
     serializer_class = AvailabilityExceptionSerializer
     permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
@@ -45,7 +57,12 @@ class AvailabilityExceptionViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class TimeOffViewSet(viewsets.ModelViewSet):
+class TimeOffViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.TIME_OFF_CREATED,
+        "update": AuditAction.TIME_OFF_UPDATED,
+        "delete": AuditAction.TIME_OFF_DELETED,
+    }
     serializer_class = TimeOffSerializer
     permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
@@ -54,7 +71,12 @@ class TimeOffViewSet(viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
-class OrganizationHolidayViewSet(viewsets.ModelViewSet):
+class OrganizationHolidayViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    audit_actions = {
+        "create": AuditAction.HOLIDAY_CREATED,
+        "update": AuditAction.HOLIDAY_UPDATED,
+        "delete": AuditAction.HOLIDAY_DELETED,
+    }
     serializer_class = OrganizationHolidaySerializer
     permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 

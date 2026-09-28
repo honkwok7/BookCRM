@@ -7,7 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, Customer
-from core.services import write_audit_log
+from core.audit import AuditAction, record_audit
+from core.exceptions import ConflictError, DomainError
 from notifications.services import queue_booking_notification
 
 ACTIVE_BOOKING_STATUSES = [
@@ -17,6 +18,25 @@ ACTIVE_BOOKING_STATUSES = [
     Booking.Status.IN_PROGRESS,
 ]
 
+# Lifecycle rules (docs/BOOKING_ENGINE.md). Terminal statuses have no outgoing transitions.
+ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
+    Booking.Status.PENDING: frozenset(
+        {Booking.Status.CONFIRMED, Booking.Status.CANCELLED, Booking.Status.REJECTED}
+    ),
+    Booking.Status.CONFIRMED: frozenset(
+        {Booking.Status.CHECKED_IN, Booking.Status.CANCELLED, Booking.Status.NO_SHOW}
+    ),
+    Booking.Status.CHECKED_IN: frozenset(
+        {Booking.Status.IN_PROGRESS, Booking.Status.COMPLETED, Booking.Status.NO_SHOW}
+    ),
+    Booking.Status.IN_PROGRESS: frozenset({Booking.Status.COMPLETED}),
+    Booking.Status.COMPLETED: frozenset(),
+    Booking.Status.CANCELLED: frozenset(),
+    Booking.Status.NO_SHOW: frozenset(),
+    Booking.Status.REJECTED: frozenset(),
+}
+RESCHEDULABLE_STATUSES = frozenset({Booking.Status.PENDING, Booking.Status.CONFIRMED})
+
 
 def _ensure_customer(*, organization, name, email, phone="", user=None):
     customer, _ = Customer.objects.get_or_create(
@@ -25,6 +45,19 @@ def _ensure_customer(*, organization, name, email, phone="", user=None):
         defaults={"name": name, "phone": phone, "user": user},
     )
     return customer
+
+
+def _lock(booking: Booking) -> Booking:
+    """Re-read ``booking`` under a row lock so decisions use its committed state.
+
+    Only the booking row is locked (``of=("self",)``): PostgreSQL refuses FOR UPDATE on the
+    nullable side of the outer join that ``select_related("customer")`` produces.
+    """
+    return (
+        Booking.objects.select_for_update(of=("self",))
+        .select_related("organization", "customer")
+        .get(pk=booking.pk)
+    )
 
 
 @transaction.atomic
@@ -43,11 +76,12 @@ def create_booking(
     customer_user=None,
 ):
     if start_datetime <= timezone.now():
-        raise ValueError("Cannot book in the past")
+        raise DomainError("Cannot book in the past", code="in_past")
 
     duration = timedelta(minutes=service.duration_minutes)
     end_datetime = start_datetime + duration
 
+    # Note: the database-level guarantee against concurrent double booking arrives in M4.2.
     conflict_exists = (
         Booking.objects.select_for_update()
         .filter(
@@ -60,7 +94,7 @@ def create_booking(
         .exists()
     )
     if conflict_exists:
-        raise ValueError("Selected slot is no longer available")
+        raise ConflictError("Selected slot is no longer available", code="slot_unavailable")
 
     customer = _ensure_customer(
         organization=organization,
@@ -106,10 +140,10 @@ def create_booking(
         action="booking.created",
         metadata={"service": str(service.id), "staff": str(staff_profile.id)},
     )
-    write_audit_log(
-        action="booking.created",
+    record_audit(
+        AuditAction.BOOKING_CREATED,
         organization=organization,
-        user=actor,
+        actor=actor,
         object_type="Booking",
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
@@ -127,8 +161,14 @@ def create_booking(
 
 @transaction.atomic
 def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
+    booking = _lock(booking)
     if booking.status == Booking.Status.CANCELLED:
         return booking
+    if Booking.Status.CANCELLED not in ALLOWED_TRANSITIONS[booking.status]:
+        raise ConflictError(
+            f"A {booking.get_status_display().lower()} appointment cannot be cancelled",
+            code="invalid_transition",
+        )
     old_status = booking.status
     booking.status = Booking.Status.CANCELLED
     booking.cancellation_reason = reason
@@ -157,6 +197,14 @@ def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
         action="booking.cancelled",
         metadata={"reason": reason},
     )
+    record_audit(
+        AuditAction.BOOKING_CANCELLED,
+        organization=booking.organization,
+        actor=actor,
+        object_type="Booking",
+        object_identifier=str(booking.id),
+        metadata={"reference": booking.reference},
+    )
     queue_booking_notification(
         booking=booking,
         notification_type="booking_cancellation",
@@ -166,3 +214,95 @@ def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
         recipient_user=booking.customer.user if booking.customer else None,
     )
     return booking
+
+
+@transaction.atomic
+def change_booking_status(*, booking: Booking, new_status: str, actor=None, note: str = ""):
+    if new_status not in Booking.Status.values:
+        raise DomainError(f"Unknown status '{new_status}'", code="invalid_status")
+    if new_status == Booking.Status.CANCELLED:
+        return cancel_booking(booking=booking, actor=actor, reason=note)
+
+    booking = _lock(booking)
+    if new_status not in ALLOWED_TRANSITIONS[booking.status]:
+        raise ConflictError(
+            f"Cannot change status from {booking.status} to {new_status}",
+            code="invalid_transition",
+        )
+    old_status = booking.status
+    booking.status = new_status
+    booking.save(update_fields=["status", "updated_at"])
+    BookingStatusHistory.objects.create(
+        booking=booking, old_status=old_status, new_status=new_status, changed_by=actor, note=note
+    )
+    record_audit(
+        AuditAction.BOOKING_STATUS_CHANGED,
+        organization=booking.organization,
+        actor=actor,
+        object_type="Booking",
+        object_identifier=str(booking.id),
+        metadata={"from": old_status, "to": new_status},
+    )
+    return booking
+
+
+@transaction.atomic
+def reschedule_booking(*, booking: Booking, new_start, actor=None) -> Booking:
+    """Move an appointment to ``new_start``: one transaction, all-or-nothing.
+
+    The old appointment is closed as cancelled ("Rescheduled") and a new one is created and
+    linked via ``rescheduled_from``. If the new time is rejected, nothing changes.
+    """
+    booking = _lock(booking)
+    if booking.status not in RESCHEDULABLE_STATUSES:
+        raise ConflictError(
+            f"A {booking.get_status_display().lower()} appointment cannot be rescheduled",
+            code="invalid_transition",
+        )
+
+    old_status = booking.status
+    booking.status = Booking.Status.CANCELLED
+    booking.cancellation_reason = "Rescheduled"
+    booking.cancelled_by = actor
+    booking.cancelled_at = timezone.now()
+    booking.save(
+        update_fields=[
+            "status",
+            "cancellation_reason",
+            "cancelled_by",
+            "cancelled_at",
+            "updated_at",
+        ]
+    )
+    BookingStatusHistory.objects.create(
+        booking=booking,
+        old_status=old_status,
+        new_status=booking.status,
+        changed_by=actor,
+        note="Rescheduled",
+    )
+
+    new_booking = create_booking(
+        organization=booking.organization,
+        service=booking.service,
+        staff_profile=booking.staff,
+        customer_name=booking.customer_name,
+        customer_email=booking.customer_email,
+        customer_phone=booking.customer_phone,
+        start_datetime=new_start,
+        customer_timezone=booking.customer_timezone,
+        customer_notes=booking.customer_notes,
+        actor=actor,
+        customer_user=booking.customer.user if booking.customer else None,
+    )
+    new_booking.rescheduled_from = booking
+    new_booking.save(update_fields=["rescheduled_from", "updated_at"])
+    record_audit(
+        AuditAction.BOOKING_RESCHEDULED,
+        organization=booking.organization,
+        actor=actor,
+        object_type="Booking",
+        object_identifier=str(new_booking.id),
+        metadata={"from_booking": str(booking.id)},
+    )
+    return new_booking

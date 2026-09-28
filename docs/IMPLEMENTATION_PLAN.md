@@ -241,6 +241,11 @@ The permission matrix in `docs/PERMISSIONS.md` matches the registry, and a test 
 
 ### M1.3: Tenant-safe serializers and viewsets
 
+> **Status: done (2026-09-28, branch `m1.3-tenant-safe-api`).**
+> - Beyond the plan below: a basic status-transition table and an atomic reschedule are in
+>   `bookings/services.py`, and customers no longer see `internal_notes`.
+> - M4.3 still owns the full lifecycle work (per-transition capabilities, check-in/out actions).
+
 #### Objective
 Remove the cross-tenant reference and mass-assignment holes.
 
@@ -278,6 +283,14 @@ None.
 - Every relational field is tenant-limited. A test introspects all serializers.
 
 ### M1.4: Audit framework
+
+> **Status: done (2026-09-28, branch `m1.4-audit-framework`).**
+> - The audit helper is `core.audit.record_audit`; the old `write_audit_log` was removed.
+> - Plain create/update/delete endpoints are audited through `core.api.AuditedModelViewSetMixin`,
+>   which puts the write and its audit row in one transaction.
+> - A read-only `/api/v1/audit-logs/` endpoint was added.
+> - Deviation: `BookingActivityLog` writes are kept until the CRM activity timeline (M2.3)
+>   replaces them, so customer history isn't lost in between.
 
 #### Objective
 Consistent, safe audit logging.

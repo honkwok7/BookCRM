@@ -419,7 +419,7 @@ class BookingVisibilityTests(TwoTenantMixin, APITestCase):
         self.assertIsNone(booking.customer.user)
         self.assertNotEqual(booking.customer.user, receptionist)
 
-    def test_booking_conflict_is_400_not_500(self):
+    def test_booking_conflict_is_409_not_500(self):
         self.as_role(OrganizationRole.RECEPTIONIST)
         response = self.client.post(
             "/api/v1/bookings/",
@@ -432,7 +432,7 @@ class BookingVisibilityTests(TwoTenantMixin, APITestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
 
 
 # --------------------------------------------------------------------------- public slots

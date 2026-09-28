@@ -9,6 +9,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         "created_at",
         "organization",
         "user",
+        "actor_type",
         "action",
         "object_type",
         "object_identifier",
@@ -19,6 +20,8 @@ class AuditLogAdmin(admin.ModelAdmin):
         "id",
         "organization",
         "user",
+        "actor_type",
+        "impersonator",
         "action",
         "object_type",
         "object_identifier",
@@ -33,4 +36,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
