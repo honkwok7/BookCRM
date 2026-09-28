@@ -1,11 +1,13 @@
 from datetime import datetime
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from core.permissions import IsOrganizationManagerOrOwner
-from organizations.selectors import get_request_organization, scope_queryset_by_organization
+from core.permissions import HasCapability
+from organizations.selectors import scope_queryset_by_organization
+from organizations.tenancy import get_public_organization, requested_organization_slug
 from scheduling.models import (
     AvailabilityException,
     OrganizationHoliday,
@@ -22,10 +24,12 @@ from scheduling.services import generate_slots
 from services.models import Service
 from staff.models import StaffProfile
 
+SCHEDULE_PERMISSION = HasCapability(read="staff.view", write="staff.manage")
+
 
 class WeeklyAvailabilityViewSet(viewsets.ModelViewSet):
     serializer_class = WeeklyAvailabilitySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
     def get_queryset(self):
         queryset = WeeklyAvailability.objects.select_related("organization", "staff")
@@ -34,7 +38,7 @@ class WeeklyAvailabilityViewSet(viewsets.ModelViewSet):
 
 class AvailabilityExceptionViewSet(viewsets.ModelViewSet):
     serializer_class = AvailabilityExceptionSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
     def get_queryset(self):
         queryset = AvailabilityException.objects.select_related("organization", "staff")
@@ -43,7 +47,7 @@ class AvailabilityExceptionViewSet(viewsets.ModelViewSet):
 
 class TimeOffViewSet(viewsets.ModelViewSet):
     serializer_class = TimeOffSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
     def get_queryset(self):
         queryset = TimeOff.objects.select_related("organization", "staff")
@@ -52,7 +56,7 @@ class TimeOffViewSet(viewsets.ModelViewSet):
 
 class OrganizationHolidayViewSet(viewsets.ModelViewSet):
     serializer_class = OrganizationHolidaySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
 
     def get_queryset(self):
         queryset = OrganizationHoliday.objects.select_related("organization")
@@ -64,9 +68,10 @@ class SlotViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], url_path="available-slots")
     def available_slots(self, request):
-        org = get_request_organization(request)
+        # Public endpoint: the organization comes from the public booking slug, never a membership.
+        org = get_public_organization(requested_organization_slug(request))
         if not org:
-            return Response({"detail": "Organization not found"}, status=400)
+            return Response({"detail": "Organization not found"}, status=404)
 
         service_id = request.query_params.get("service")
         staff_id = request.query_params.get("staff")
@@ -74,11 +79,18 @@ class SlotViewSet(viewsets.ViewSet):
         if not (service_id and staff_id and date_value):
             return Response({"detail": "service, staff and date are required"}, status=400)
 
-        service = Service.objects.get(id=service_id, organization=org)
-        staff_profile = StaffProfile.objects.get(
-            id=staff_id, organization=org, is_active=True, is_accepting_bookings=True
-        )
-        date_obj = datetime.strptime(date_value, "%Y-%m-%d").date()
+        try:
+            date_obj = datetime.strptime(date_value, "%Y-%m-%d").date()
+            service = Service.objects.filter(
+                id=service_id, organization=org, is_active=True, is_public=True, is_archived=False
+            ).first()
+            staff_profile = StaffProfile.objects.filter(
+                id=staff_id, organization=org, is_active=True, is_accepting_bookings=True
+            ).first()
+        except ValueError, DjangoValidationError:
+            return Response({"detail": "Invalid service, staff or date"}, status=400)
+        if service is None or staff_profile is None:
+            return Response({"detail": "Service or staff not found"}, status=404)
 
         slots = generate_slots(
             organization=org, service=service, staff_profile=staff_profile, date=date_obj

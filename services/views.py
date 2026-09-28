@@ -1,6 +1,6 @@
 from rest_framework import permissions, viewsets
 
-from core.permissions import IsOrganizationManagerOrOwner
+from core.permissions import HasCapability
 from organizations.selectors import scope_queryset_by_organization
 from services.models import Service, ServiceCategory
 from services.serializers import ServiceCategorySerializer, ServiceSerializer
@@ -8,7 +8,10 @@ from services.serializers import ServiceCategorySerializer, ServiceSerializer
 
 class ServiceCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceCategorySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCapability(read="services.view", write="services.manage"),
+    ]
 
     def get_queryset(self):
         queryset = ServiceCategory.objects.select_related("organization")
@@ -17,7 +20,10 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
 
 class ServiceViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizationManagerOrOwner]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCapability(read="services.view", write="services.manage"),
+    ]
     filterset_fields = ("is_active", "is_public", "is_archived", "category")
     search_fields = ("name", "description")
     ordering_fields = ("name", "price", "duration_minutes", "created_at")
