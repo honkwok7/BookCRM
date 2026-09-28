@@ -1,71 +1,68 @@
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.dateparse import parse_datetime
+from zoneinfo import ZoneInfo
+
+from django.http import Http404
+from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views import View
 
+from bookings.forms import PublicBookingForm
 from bookings.services import create_booking
-from organizations.models import Organization
-from services.models import Service
-from staff.models import StaffProfile
+from core.exceptions import ConflictError, DomainError
+from organizations.tenancy import get_public_organization
 
 
 class PublicBookingPageView(View):
+    """The organization's public booking page (replaced by the booking wizard in M4.6)."""
+
     template_name = "web/public_booking.html"
 
+    def _organization(self, slug):
+        # Same rule as the public API: active, not suspended, booking page enabled.
+        organization = get_public_organization(slug)
+        if organization is None:
+            raise Http404
+        return organization
+
+    def _render(self, request, organization, form, status=200):
+        context = {"organization": organization, "form": form}
+        if not organization.allow_guest_booking and not request.user.is_authenticated:
+            context["sign_in_required"] = True
+        return render(request, self.template_name, context, status=status)
+
     def get(self, request, slug):
-        organization = get_object_or_404(
-            Organization, slug=slug, booking_page_enabled=True, is_active=True
-        )
-        services = Service.objects.filter(
-            organization=organization, is_public=True, is_active=True, is_archived=False
-        )
-        staff = StaffProfile.objects.filter(
-            organization=organization, is_active=True, is_accepting_bookings=True
-        )
-        return render(
-            request,
-            self.template_name,
-            {"organization": organization, "services": services, "staff": staff},
-        )
+        organization = self._organization(slug)
+        return self._render(request, organization, PublicBookingForm(organization=organization))
 
     def post(self, request, slug):
-        organization = get_object_or_404(
-            Organization, slug=slug, booking_page_enabled=True, is_active=True
-        )
-        service = get_object_or_404(
-            Service, id=request.POST.get("service"), organization=organization
-        )
-        staff_profile = get_object_or_404(
-            StaffProfile, id=request.POST.get("staff"), organization=organization
-        )
-        start_datetime = parse_datetime(request.POST.get("start_datetime", ""))
-        if not start_datetime:
-            return render(
-                request,
-                self.template_name,
-                {
-                    "organization": organization,
-                    "services": Service.objects.filter(
-                        organization=organization, is_public=True, is_active=True, is_archived=False
-                    ),
-                    "staff": StaffProfile.objects.filter(
-                        organization=organization, is_active=True, is_accepting_bookings=True
-                    ),
-                    "error": "Invalid start datetime format",
-                },
-                status=400,
-            )
+        organization = self._organization(slug)
+        form = PublicBookingForm(request.POST, organization=organization)
+        if not organization.allow_guest_booking and not request.user.is_authenticated:
+            return self._render(request, organization, form, status=403)
+        with timezone.override(ZoneInfo(organization.timezone)):
+            valid = form.is_valid()
+        if not valid:
+            return self._render(request, organization, form, status=400)
 
-        booking = create_booking(
-            organization=organization,
-            service=service,
-            staff_profile=staff_profile,
-            customer_name=request.POST.get("customer_name"),
-            customer_email=request.POST.get("customer_email"),
-            customer_phone=request.POST.get("customer_phone", ""),
-            start_datetime=start_datetime,
-            customer_timezone=request.POST.get("customer_timezone", "UTC"),
-            customer_notes=request.POST.get("customer_notes", ""),
-        )
+        data = form.cleaned_data
+        user = request.user if request.user.is_authenticated else None
+        try:
+            booking = create_booking(
+                organization=organization,
+                service=data["service"],
+                staff_profile=data["staff"],
+                customer_name=data["customer_name"],
+                customer_email=data["customer_email"],
+                customer_phone=data["customer_phone"],
+                start_datetime=data["start_datetime"],
+                customer_timezone=organization.timezone,
+                customer_notes=data["customer_notes"],
+                actor=user,
+                customer_user=user,
+            )
+        except DomainError as error:
+            form.add_error(None, error.message)
+            status = 409 if isinstance(error, ConflictError) else 400
+            return self._render(request, organization, form, status=status)
         return redirect("booking-success", reference=booking.reference)
 
 

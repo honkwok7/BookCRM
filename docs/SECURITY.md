@@ -7,7 +7,9 @@ claimed; that would need a separate formal review.
 
 | Control | Status | Where |
 |---|---|---|
-| Email-first custom user, strong password validators | ✅ | `accounts/models.py`, `AUTH_PASSWORD_VALIDATORS` |
+| Email-first custom user; password validators on registration and reset; emails unique ignoring case | ✅ | `accounts/serializers.py`, `AUTH_PASSWORD_VALIDATORS` |
+| Password reset signs the user out everywhere (refresh tokens blacklisted) | ✅ | `accounts/services.py` |
+| Account emails via Celery after commit; links built from `SITE_URL`, never the Host header | ✅ | `accounts/tasks.py` |
 | JWT rotation + blacklist | ✅ | `SIMPLE_JWT` |
 | Tenant isolation: membership-backed tenant resolution, no superuser bypass | ✅ | `organizations/tenancy.py`, [MULTI_TENANCY.md](MULTI_TENANCY.md) |
 | Capability-based authorization on every tenant endpoint | ✅ | `organizations/permissions.py`, [PERMISSIONS.md](PERMISSIONS.md) |
@@ -19,11 +21,14 @@ claimed; that would need a separate formal review.
 | CSRF, clickjacking (`DENY`), `nosniff`, auto-escaping templates | ✅ | Django defaults and settings |
 | `manage.py check --deploy` in CI | ❌ | Planned for M11.1 |
 | HSTS, secure cookies and SSL redirect enforced in production | ❌ | Configurable through env vars today; enforced in M11.1 |
-| Login and password-reset rate limiting / lockout | ❌ | Throttle scopes exist but aren't applied yet (M2.5) |
+| Login and password-reset rate limiting | ✅ | Scoped throttles `login` / `password_reset` (`accounts/views.py`) |
+| Account lockout after repeated failures | ❌ | M2.5 (web session login) |
+| Forwarded headers trusted only behind a configured proxy (`TRUSTED_PROXY_COUNT`) | ✅ | `config/settings.py`, [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Double-booking prevention under concurrency (staff-calendar lock, PostgreSQL race tests) | ✅ | `bookings/services.py`, `tests/test_booking_engine.py` |
 | Database-level exclusion constraint as a second guarantee | ❌ | M4.2 (see [BOOKING_ENGINE.md](BOOKING_ENGINE.md)) |
 | Upload validation (size, type) | ❌ | M11.1 |
-| Customer data export / anonymization | ❌ | M11.1 |
+| Customer anonymization (customer record and the copies on appointments, notifications, waitlist) | ✅ | `crm/services.py`, [CRM.md](CRM.md); API endpoint in M2.4 |
+| Customer data export | ❌ | M11.1 |
 
 ## Audit logging
 
