@@ -64,10 +64,56 @@ API:
 - On `/api/v1/customers/`, `tags` lists the customer's tags. Sending `tag_ids` replaces them,
   and `?tag=<id>` filters the list.
 
+## Notes
+
+`crm.CustomerNote` stores the author, a type (general, call, follow-up, alert), a
+**visibility**, the text, a pinned flag and `edited_at`.
+
+| Visibility | Who can read it | Who can write it |
+|---|---|---|
+| `internal` (the default) | Team members with `customers.notes.private` (owner and manager by default; it can be granted to others) | The same |
+| `customer_visible` | Anyone with `customers.view`, and the customer themselves (portal, M5) | Anyone with `customers.manage` |
+
+- **Enforcement:** visibility is enforced in the selectors (`team_notes`,
+  `notes_for_customer`). Without the capability, an internal note answers 404, as if it
+  didn't exist.
+- **Editing and deleting:** allowed for the author, or anyone holding
+  `customers.notes.private`. Changing the text sets `edited_at`. The audit log records that
+  the content changed, never the text itself.
+- **Anonymized and merged customers:** anonymization deletes a customer's notes, and merging
+  moves the duplicate's notes to the kept record.
+
+API: `/api/v1/customer-notes/`, filterable with `?customer=`, `?visibility=`,
+`?note_type=` and `?pinned=`.
+
+## Activity timeline
+
+`crm.CustomerActivity` is the customer's history, written only by
+`crm.activity.record_activity()` inside the same transaction as the change it describes.
+
+| Written by | Kinds |
+|---|---|
+| Booking service | `appointment_booked`, `appointment_rescheduled`, `appointment_cancelled`, `appointment_completed`, `appointment_no_show` |
+| CRM service | `customer_created`, `profile_updated` (changed field names only), `consent_changed`, `tag_added`, `tag_removed`, `note_created`, `customer_merged` |
+| Notification task | `email_sent` (after the email was delivered) |
+| Later milestones | `sms_sent`, `form_completed`, `payment_recorded` |
+
+- **No free text in entries:** entries hold ids and codes (booking reference, statuses, tag
+  id, field names), never names, emails, reasons or note text. The timeline therefore needs
+  no rewriting when a customer is anonymized.
+- **Internal entries:** an entry about an internal note is marked `internal` and hidden from
+  users without `customers.notes.private`.
+- **History for older data:** migration `crm/0004` created entries from the bookings that
+  existed before the timeline. A booking that was rescheduled appears once, as the reschedule.
+
+API: `GET /api/v1/customers/{id}/timeline/` returns entries newest first, paginated.
+
 ## Reads (`crm/selectors.py`)
 
 - `get_customer_for_org(organization, id)`
 - `list_tags(organization)`: tags with their customer counts.
+- `team_notes(organization, include_internal=, customer=)`, `notes_for_customer(customer)`.
+- `customer_timeline(customer, include_internal=)`.
 - `list_customers(organization, search=, status=, tag=, include_anonymized=)`: every search word
   must match a first name, last name, preferred name, email or phone.
 - `customer_stats(customer)`: computed from appointments on every call, not stored as

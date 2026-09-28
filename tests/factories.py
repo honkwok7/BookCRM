@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer, WaitlistEntry
 from core.models import AuditLog
-from crm.models import CustomerTag, Tag
+from crm.models import CustomerActivity, CustomerNote, CustomerTag, Tag
 from notifications.models import NotificationLog
 from organizations.models import (
     Organization,
@@ -134,6 +134,24 @@ class CustomerTagFactory(factory.django.DjangoModelFactory):
     organization = factory.SubFactory(OrganizationFactory)
     customer = factory.SubFactory(CustomerFactory, organization=SAME_ORG)
     tag = factory.SubFactory(TagFactory, organization=SAME_ORG)
+
+
+class CustomerNoteFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CustomerNote
+
+    organization = factory.SubFactory(OrganizationFactory)
+    customer = factory.SubFactory(CustomerFactory, organization=SAME_ORG)
+    content = factory.Sequence(lambda n: f"Note {n}")
+
+
+class CustomerActivityFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CustomerActivity
+
+    organization = factory.SubFactory(OrganizationFactory)
+    customer = factory.SubFactory(CustomerFactory, organization=SAME_ORG)
+    kind = CustomerActivity.Kind.PROFILE_UPDATED
 
 
 class BookingFactory(factory.django.DjangoModelFactory):

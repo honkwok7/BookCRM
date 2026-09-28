@@ -22,7 +22,10 @@ from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from crm.models import Tag
+from crm.selectors import customer_timeline
+from crm.serializers import CustomerActivitySerializer
 from organizations.models import OrganizationRole
+from organizations.permissions import Capability
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
 from services.models import Service
@@ -138,7 +141,21 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
     def get_serializer_class(self):
+        if self.action == "timeline":
+            return CustomerActivitySerializer
         return CustomerDetailSerializer if self.action == "retrieve" else CustomerSerializer
+
+    @action(detail=True, methods=["get"])
+    def timeline(self, request, pk=None):
+        """The customer's history, newest first (paginated). Internal entries need
+        customers.notes.private."""
+        tenant = resolve_tenant(request)
+        activities = customer_timeline(
+            self.get_object(),
+            include_internal=tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE),
+        )
+        page = self.paginate_queryset(activities)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
     def perform_create(self, serializer):
         serializer.save()

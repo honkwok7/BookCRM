@@ -3,13 +3,16 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from config.celery import app
+from crm.activity import Kind, record_activity
 from notifications.models import NotificationLog
 
 
 @app.task(bind=True, max_retries=3)
 def send_templated_email(self, *, notification_log_id, organization_id, subject, template_base):
     # Tenant context is explicit: the log must belong to the organization the caller named.
-    log = NotificationLog.objects.select_related("related_booking__service").get(
+    log = NotificationLog.objects.select_related(
+        "related_booking__service", "related_booking__customer"
+    ).get(
         id=notification_log_id,
         organization_id=organization_id,
     )
@@ -32,3 +35,16 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
         log.retry_count += 1
         log.save(update_fields=["status", "failure_reason", "retry_count", "updated_at"])
         raise self.retry(exc=exc, countdown=30) from exc
+
+    # Outside the try: a timeline failure must never mark a delivered email as failed (and
+    # trigger a resend).
+    booking = log.related_booking
+    record_activity(
+        Kind.EMAIL_SENT,
+        customer=booking.customer if booking else None,
+        subject=log,
+        metadata={
+            "notification_type": log.notification_type,
+            "reference": booking.reference if booking else "",
+        },
+    )

@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer
 from bookings.services import ACTIVE_BOOKING_STATUSES
-from crm.models import Tag
+from crm.models import CustomerActivity, CustomerNote, Tag
 
 
 def get_customer_for_org(organization, customer_id) -> Customer | None:
@@ -77,3 +77,37 @@ def list_tags(organization) -> QuerySet[Tag]:
             "customer_tags", filter=~Q(customer_tags__customer__status="anonymized")
         )
     )
+
+
+# -- Notes and timeline --------------------------------------------------------------------
+# Visibility is enforced here, not by callers: without ``include_internal`` (i.e. without the
+# customers.notes.private capability) internal notes and their timeline entries never appear.
+
+
+def team_notes(organization, *, include_internal: bool, customer=None) -> QuerySet[CustomerNote]:
+    notes = CustomerNote.objects.filter(organization=organization).select_related(
+        "author", "customer"
+    )
+    if customer is not None:
+        notes = notes.filter(customer=customer)
+    if not include_internal:
+        notes = notes.filter(visibility=CustomerNote.Visibility.CUSTOMER_VISIBLE)
+    return notes
+
+
+def notes_for_customer(customer) -> QuerySet[CustomerNote]:
+    """What the customer themselves may read (portal): customer-visible notes only."""
+    return CustomerNote.objects.filter(
+        organization_id=customer.organization_id,
+        customer=customer,
+        visibility=CustomerNote.Visibility.CUSTOMER_VISIBLE,
+    )
+
+
+def customer_timeline(customer, *, include_internal: bool) -> QuerySet[CustomerActivity]:
+    activities = CustomerActivity.objects.filter(
+        organization_id=customer.organization_id, customer=customer
+    ).select_related("actor")
+    if not include_internal:
+        activities = activities.filter(internal=False)
+    return activities
