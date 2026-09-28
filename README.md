@@ -111,12 +111,17 @@ pytest --cov=. --cov-report=html --cov-report=term
 - ReDoc: `/api/redoc/`
 
 ## Demo credentials
-After `python manage.py seed_demo`:
-- Admin: `admin@schedula.local` / `Admin12345!`
-- Owner: `owner@demo.local` / `Owner12345!`
-- Manager: `manager@demo.local` / `Manager12345!`
-- Staff: `staff@demo.local` / `Staff12345!`
-- Customer: `customer@demo.local` / `Customer12345!`
+After `python manage.py seed_demo` (idempotent; safe to re-run):
+
+| Who | Email | Password |
+|---|---|---|
+| Platform admin | `admin@bookcrm.local` | `Admin12345!` |
+| Harmony Wellness Centre: owner / manager / receptionist | `owner@harmony.local`, `manager@harmony.local`, `reception@harmony.local` | `Demo12345!` |
+| Harmony: massage therapist / chiropractor | `massage@harmony.local`, `chiro@harmony.local` | `Demo12345!` |
+| Serenity Spa: owner / esthetician | `owner@serenity.local`, `esthetician@serenity.local` | `Demo12345!` |
+
+The customer `alex@example.test` exists in both organizations as two separate records,
+which demonstrates tenant isolation.
 
 Development-only credentials. Change immediately outside local/demo.
 

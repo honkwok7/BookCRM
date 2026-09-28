@@ -13,8 +13,7 @@ class CustomUserManager(UserManager):
         if not email:
             raise ValueError("Email must be provided")
         email = self.normalize_email(email)
-        username = extra_fields.get("username") or email.split("@")[0]
-        extra_fields["username"] = f"{username}-{secrets.token_hex(3)}"
+        extra_fields.setdefault("username", self.model.generate_username(email))
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -60,6 +59,16 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
+
+    @staticmethod
+    def generate_username(email: str) -> str:
+        # ``username`` is unique but unused for login; derive a unique value from the email.
+        return f"{(email or 'user').split('@')[0][:120]}-{secrets.token_hex(3)}"
+
+    def save(self, *args, **kwargs):
+        if not self.username:
+            self.username = self.generate_username(self.email)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.email

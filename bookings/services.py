@@ -74,6 +74,7 @@ def create_booking(
     customer_notes="",
     actor=None,
     customer_user=None,
+    notify: bool = True,
 ):
     if start_datetime <= timezone.now():
         raise DomainError("Cannot book in the past", code="in_past")
@@ -148,14 +149,15 @@ def create_booking(
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
     )
-    queue_booking_notification(
-        booking=booking,
-        notification_type="booking_confirmation",
-        subject=f"Booking confirmed: {booking.reference}",
-        template_base="booking_confirmation",
-        recipient_email=booking.customer_email,
-        recipient_user=customer_user,
-    )
+    if notify:
+        queue_booking_notification(
+            booking=booking,
+            notification_type="booking_confirmation",
+            subject=f"Booking confirmed: {booking.reference}",
+            template_base="booking_confirmation",
+            recipient_email=booking.customer_email,
+            recipient_user=customer_user,
+        )
     return booking
 
 
