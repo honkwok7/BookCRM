@@ -7,8 +7,10 @@ Errors are ``DomainError`` (400) or ``ConflictError`` (409) with a stable ``code
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.utils.text import slugify
 
 from bookings.models import (
     Booking,
@@ -19,6 +21,7 @@ from bookings.models import (
 )
 from core.audit import AuditAction, diff_snapshots, record_audit, snapshot
 from core.exceptions import ConflictError, DomainError
+from crm.models import HEX_COLOR, CustomerTag, Tag
 from notifications.models import NotificationLog
 
 CONSENT_FIELDS = ("marketing_consent", "email_consent", "sms_consent")
@@ -47,10 +50,11 @@ PII_FIELDS = (
     "tags",
 )
 
-# Fields callers may set through create_customer/update_customer.
+# Fields callers may set through create_customer/update_customer. Tags are assigned with the
+# tag functions below; the legacy ``tags`` JSON is read-only.
 EDITABLE_FIELDS = frozenset(
     {
-        *(field for field in PII_FIELDS if field != "name"),
+        *(field for field in PII_FIELDS if field not in ("name", "tags")),
         *CONSENT_FIELDS,
         "status",
         "preferred_language",
@@ -221,13 +225,14 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         )
 
     before = snapshot(target)
-    for field in EDITABLE_FIELDS - set(CONSENT_FIELDS) - {"status", "notes", "tags"}:
+    for field in EDITABLE_FIELDS - set(CONSENT_FIELDS) - {"status", "notes"}:
         if not getattr(target, field) and getattr(duplicate, field):
             setattr(target, field, getattr(duplicate, field))
     target.user_id = target.user_id or duplicate.user_id
     if duplicate.notes:
         target.notes = "\n\n".join(filter(None, [target.notes, duplicate.notes]))
-    target.tags = list(dict.fromkeys([*target.tags, *duplicate.tags]))
+    target_tags = set(target.customer_tags.values_list("tag_id", flat=True))
+    duplicate.customer_tags.exclude(tag_id__in=target_tags).update(customer=target)
 
     moved = Booking.objects.filter(customer=duplicate).update(customer=target)
     duplicate_id = str(duplicate.pk)
@@ -270,6 +275,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     customer.status = Customer.Status.ANONYMIZED
     customer.anonymized_at = customer.consent_updated_at = timezone.now()
     customer.save()
+    customer.customer_tags.all().delete()  # labels can be sensitive ("diabetic", ...)
 
     bookings = Booking.objects.filter(customer=customer)
     scrubbed = bookings.update(
@@ -296,3 +302,112 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
 
     _audit(AuditAction.CUSTOMER_ANONYMIZED, customer, actor, metadata={"appointments": scrubbed})
     return customer
+
+
+# -- Tags ----------------------------------------------------------------------------------
+
+
+def _tag_fields(name: str, color: str) -> tuple[str, str, str]:
+    name, color = name.strip(), color.strip()
+    slug = slugify(name)[:80]
+    if not slug or len(name) > 60:
+        raise DomainError("A tag needs a name of up to 60 characters", code="invalid_tag")
+    if color:
+        try:
+            HEX_COLOR(color)
+        except ValidationError as error:
+            raise DomainError(error.messages[0], code="invalid_color") from error
+    return name, slug, color
+
+
+def _check_tag_unique(organization_id, slug, exclude_pk=None) -> None:
+    clashes = Tag.objects.filter(organization_id=organization_id, slug=slug).exclude(pk=exclude_pk)
+    if clashes.exists():
+        raise ConflictError("A tag with this name already exists", code="duplicate_tag")
+
+
+def _audit_tag(action, tag, actor, **kwargs):
+    record_audit(action, organization=tag.organization, actor=actor, target=tag, **kwargs)
+
+
+@transaction.atomic
+def create_tag(*, organization, name: str, color: str = "", actor=None) -> Tag:
+    name, slug, color = _tag_fields(name, color)
+    _check_tag_unique(organization.pk, slug)
+    tag = Tag.objects.create(organization=organization, name=name, slug=slug, color=color)
+    _audit_tag(AuditAction.TAG_CREATED, tag, actor, metadata={"name": name})
+    return tag
+
+
+@transaction.atomic
+def update_tag(*, tag: Tag, name: str | None = None, color: str | None = None, actor=None) -> Tag:
+    before = snapshot(tag)
+    tag.name, tag.slug, tag.color = _tag_fields(
+        tag.name if name is None else name, tag.color if color is None else color
+    )
+    _check_tag_unique(tag.organization_id, tag.slug, exclude_pk=tag.pk)
+    tag.save()
+    changes = diff_snapshots(before, snapshot(tag))
+    if changes:
+        _audit_tag(AuditAction.TAG_UPDATED, tag, actor, changes=changes)
+    return tag
+
+
+@transaction.atomic
+def delete_tag(*, tag: Tag, actor=None) -> None:
+    customers = tag.customer_tags.count()
+    _audit_tag(
+        AuditAction.TAG_DELETED, tag, actor, metadata={"name": tag.name, "customers": customers}
+    )
+    tag.delete()
+
+
+def _lock_taggable(customer: Customer, tag: Tag) -> Customer:
+    """Re-read the customer under a row lock: a stale copy must not tag an anonymized row."""
+    if tag.organization_id != customer.organization_id:
+        raise DomainError("Tag not found", code="not_found")  # same answer as a missing id
+    customer = Customer.objects.select_for_update().get(pk=customer.pk)
+    if customer.status == Customer.Status.ANONYMIZED:
+        raise ConflictError("An anonymized customer cannot be changed", code="anonymized")
+    return customer
+
+
+def _audit_tagging(action, customer, tag, actor):
+    # Only the tag id: the link between a person and a label like "diabetic" is personal data
+    # once the tag is renamed or deleted, and must not outlive anonymization in plain text.
+    _audit(action, customer, actor, metadata={"tag": str(tag.pk)})
+
+
+@transaction.atomic
+def add_customer_tag(*, customer: Customer, tag: Tag, actor=None) -> bool:
+    """Tag a customer. Returns False if the tag was already there."""
+    customer = _lock_taggable(customer, tag)
+    _, created = CustomerTag.objects.get_or_create(
+        customer=customer,
+        tag=tag,
+        defaults={"organization_id": customer.organization_id, "tagged_by": actor},
+    )
+    if created:
+        _audit_tagging(AuditAction.CUSTOMER_TAG_ADDED, customer, tag, actor)
+    return created
+
+
+@transaction.atomic
+def remove_customer_tag(*, customer: Customer, tag: Tag, actor=None) -> bool:
+    """Untag a customer. Returns False if the tag was not there."""
+    customer = _lock_taggable(customer, tag)
+    deleted, _ = CustomerTag.objects.filter(customer=customer, tag=tag).delete()
+    if deleted:
+        _audit_tagging(AuditAction.CUSTOMER_TAG_REMOVED, customer, tag, actor)
+    return bool(deleted)
+
+
+@transaction.atomic
+def set_customer_tags(*, customer: Customer, tags, actor=None) -> None:
+    """Make the customer's tags exactly ``tags`` (each change audited)."""
+    wanted = {tag.pk: tag for tag in tags}
+    current = {ct.tag_id: ct.tag for ct in customer.customer_tags.select_related("tag")}
+    for tag_id in wanted.keys() - current.keys():
+        add_customer_tag(customer=customer, tag=wanted[tag_id], actor=actor)
+    for tag_id in current.keys() - wanted.keys():
+        remove_customer_tag(customer=customer, tag=current[tag_id], actor=actor)

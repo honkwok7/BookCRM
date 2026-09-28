@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer
 from bookings.services import ACTIVE_BOOKING_STATUSES
+from crm.models import Tag
 
 
 def get_customer_for_org(organization, customer_id) -> Customer | None:
@@ -14,11 +15,20 @@ def get_customer_for_org(organization, customer_id) -> Customer | None:
 
 
 def list_customers(
-    organization, *, search: str = "", status: str | None = None, include_anonymized=False
+    organization,
+    *,
+    search: str = "",
+    status: str | None = None,
+    tag=None,
+    include_anonymized=False,
 ) -> QuerySet[Customer]:
-    customers = Customer.objects.filter(organization=organization).select_related(
-        "assigned_staff__user", "preferred_staff__user"
+    customers = (
+        Customer.objects.filter(organization=organization)
+        .select_related("assigned_staff__user", "preferred_staff__user")
+        .prefetch_related("tag_set")
     )
+    if tag is not None:
+        customers = customers.filter(customer_tags__tag=tag)
     if status:
         customers = customers.filter(status=status)
     elif not include_anonymized:
@@ -58,3 +68,12 @@ def customer_stats(customer: Customer) -> dict:
     )
     stats["lifetime_value"] = stats["lifetime_value"] or 0
     return stats
+
+
+def list_tags(organization) -> QuerySet[Tag]:
+    """The organization's tags with how many (non-anonymized) customers carry each."""
+    return Tag.objects.filter(organization=organization).annotate(
+        customer_count=Count(
+            "customer_tags", filter=~Q(customer_tags__customer__status="anonymized")
+        )
+    )

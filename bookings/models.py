@@ -101,7 +101,15 @@ class Customer(BaseUUIDModel):
     source = models.CharField(max_length=20, choices=Source.choices, blank=True)
     alerts = models.CharField(max_length=255, blank=True)  # short internal alert text
     notes = models.TextField(blank=True)
-    tags = models.JSONField(default=list, blank=True)  # replaced by crm.Tag in M2.2
+    # Legacy free-text labels: frozen since M2.2 (copied into crm.Tag), removed in M11.3.
+    tags = models.JSONField(default=list, blank=True)
+    tag_set = models.ManyToManyField(
+        "crm.Tag",
+        through="crm.CustomerTag",
+        through_fields=("customer", "tag"),
+        related_name="customers",
+        blank=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
