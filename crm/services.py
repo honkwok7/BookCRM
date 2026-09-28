@@ -21,7 +21,8 @@ from bookings.models import (
 )
 from core.audit import AuditAction, diff_snapshots, record_audit, snapshot
 from core.exceptions import ConflictError, DomainError
-from crm.models import HEX_COLOR, CustomerTag, Tag
+from crm.activity import Kind, record_activity
+from crm.models import HEX_COLOR, CustomerActivity, CustomerNote, CustomerTag, Tag
 from notifications.models import NotificationLog
 
 CONSENT_FIELDS = ("marketing_consent", "email_consent", "sms_consent")
@@ -123,6 +124,9 @@ def create_customer(*, organization, actor=None, **fields) -> Customer:
         customer.consent_updated_at = timezone.now()
     customer.save()
     _audit(AuditAction.CUSTOMER_CREATED, customer, actor, metadata={"source": customer.source})
+    record_activity(
+        Kind.CUSTOMER_CREATED, customer=customer, actor=actor, metadata={"source": customer.source}
+    )
     return customer
 
 
@@ -157,8 +161,19 @@ def update_customer(*, customer: Customer, actor=None, **changes) -> Customer:
     changes = diff_snapshots(before, snapshot(customer), redact_fields=PII_FIELDS)
     if changes:
         _audit(AuditAction.CUSTOMER_UPDATED, customer, actor, changes=changes)
+        profile_fields = sorted(set(changes) - set(CONSENT_FIELDS) - {"consent_updated_at"})
+        if profile_fields:
+            record_activity(
+                Kind.PROFILE_UPDATED,
+                customer=customer,
+                actor=actor,
+                metadata={"fields": profile_fields},  # names only, never values
+            )
     if consent_changes:
         _audit(AuditAction.CUSTOMER_CONSENT_CHANGED, customer, actor, metadata=consent_changes)
+        record_activity(
+            Kind.CONSENT_CHANGED, customer=customer, actor=actor, metadata=consent_changes
+        )
     return customer
 
 
@@ -236,6 +251,9 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
 
     moved = Booking.objects.filter(customer=duplicate).update(customer=target)
     duplicate_id = str(duplicate.pk)
+    # The duplicate's history and notes become the target's.
+    CustomerActivity.objects.filter(customer=duplicate).update(customer=target)
+    CustomerNote.objects.filter(customer=duplicate).update(customer=target)
     duplicate.delete()  # before saving target: target may take over the duplicate's email
     target.save()
 
@@ -245,6 +263,12 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         actor,
         metadata={"merged_customer": duplicate_id, "appointments_moved": moved},
         changes=diff_snapshots(before, snapshot(target), redact_fields=PII_FIELDS),
+    )
+    record_activity(
+        Kind.CUSTOMER_MERGED,
+        customer=target,
+        actor=actor,
+        metadata={"merged_customer": duplicate_id, "appointments_moved": moved},
     )
     return target
 
@@ -276,6 +300,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     customer.anonymized_at = customer.consent_updated_at = timezone.now()
     customer.save()
     customer.customer_tags.all().delete()  # labels can be sensitive ("diabetic", ...)
+    customer.customer_notes.all().delete()  # free text about the person
 
     bookings = Booking.objects.filter(customer=customer)
     scrubbed = bookings.update(
@@ -376,6 +401,8 @@ def _audit_tagging(action, customer, tag, actor):
     # Only the tag id: the link between a person and a label like "diabetic" is personal data
     # once the tag is renamed or deleted, and must not outlive anonymization in plain text.
     _audit(action, customer, actor, metadata={"tag": str(tag.pk)})
+    kind = Kind.TAG_ADDED if action == AuditAction.CUSTOMER_TAG_ADDED else Kind.TAG_REMOVED
+    record_activity(kind, customer=customer, actor=actor, subject=tag)
 
 
 @transaction.atomic
@@ -411,3 +438,79 @@ def set_customer_tags(*, customer: Customer, tags, actor=None) -> None:
         add_customer_tag(customer=customer, tag=wanted[tag_id], actor=actor)
     for tag_id in current.keys() - wanted.keys():
         remove_customer_tag(customer=customer, tag=current[tag_id], actor=actor)
+
+
+# -- Notes ---------------------------------------------------------------------------------
+# Who may read or write which notes (customers.notes.private for internal ones) is decided by
+# the caller's capabilities in the API/web layer; the selectors in crm.selectors enforce
+# visibility on reads.
+
+NOTE_FIELDS = frozenset({"content", "visibility", "note_type", "pinned"})
+
+
+def _clean_note_fields(fields: dict) -> dict:
+    unknown = set(fields) - NOTE_FIELDS
+    if unknown:
+        raise DomainError(f"Unknown note fields: {', '.join(sorted(unknown))}", code="invalid")
+    if "content" in fields:
+        fields["content"] = (fields["content"] or "").strip()
+        if not fields["content"]:
+            raise DomainError("A note cannot be empty", code="empty_note")
+    return fields
+
+
+def _audit_note(action, note, actor, **kwargs):
+    record_audit(
+        action,
+        organization=note.customer.organization,
+        actor=actor,
+        target=note,
+        metadata={"customer": str(note.customer_id), "visibility": note.visibility},
+        **kwargs,
+    )
+
+
+@transaction.atomic
+def create_note(*, customer: Customer, author=None, **fields) -> CustomerNote:
+    fields = _clean_note_fields(fields)
+    if "content" not in fields:
+        raise DomainError("A note cannot be empty", code="empty_note")
+    customer = Customer.objects.select_for_update().get(pk=customer.pk)
+    if customer.status == Customer.Status.ANONYMIZED:
+        raise ConflictError("An anonymized customer cannot be changed", code="anonymized")
+    note = CustomerNote.objects.create(
+        organization_id=customer.organization_id, customer=customer, author=author, **fields
+    )
+    _audit_note(AuditAction.NOTE_CREATED, note, author)
+    record_activity(
+        Kind.NOTE_CREATED,
+        customer=customer,
+        actor=author,
+        subject=note,
+        metadata={"note_type": note.note_type, "visibility": note.visibility},
+        internal=note.visibility == CustomerNote.Visibility.INTERNAL,
+    )
+    return note
+
+
+@transaction.atomic
+def update_note(*, note: CustomerNote, actor=None, **fields) -> CustomerNote:
+    fields = _clean_note_fields(fields)
+    note = CustomerNote.objects.select_for_update().select_related("customer").get(pk=note.pk)
+    before = snapshot(note)
+    for field, value in fields.items():
+        setattr(note, field, value)
+    if note.content != before["content"]:
+        note.edited_at = timezone.now()
+    note.save()
+    changes = diff_snapshots(before, snapshot(note), redact_fields=("content",))
+    changes.pop("edited_at", None)
+    if changes:
+        _audit_note(AuditAction.NOTE_UPDATED, note, actor, changes=changes)
+    return note
+
+
+@transaction.atomic
+def delete_note(*, note: CustomerNote, actor=None) -> None:
+    _audit_note(AuditAction.NOTE_DELETED, note, actor)
+    note.delete()

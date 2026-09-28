@@ -46,6 +46,7 @@ B_OBJECT_FACTORIES = {
     "booking": lambda org, mark: f.BookingFactory(organization=org, customer_name=mark),
     "customer": lambda org, mark: f.CustomerFactory(organization=org, first_name=mark),
     "tag": lambda org, mark: f.CustomerTagFactory(organization=org, tag__name=mark).tag,
+    "customer-note": lambda org, mark: f.CustomerNoteFactory(organization=org, content=mark),
     "waitlist": lambda org, mark: f.WaitlistEntryFactory(organization=org, customer_name=mark),
     "audit-log": lambda org, mark: f.AuditLogFactory(organization=org, metadata={"note": mark}),
 }
@@ -179,6 +180,7 @@ class TenantIsolationSuite(TestCase):
             ("bookings", "staff", self.b_objects["booking"].staff_id),
             ("services", "category", self.b_objects["service"].category_id),
             ("customers", "tag", self.b_objects["tag"].pk),
+            ("customer-notes", "customer", self.b_objects["customer"].pk),
         ]
         for prefix, param, b_id in cases:
             missing = uuid.uuid4()
@@ -206,6 +208,27 @@ class TenantIsolationSuite(TestCase):
             with_b.json()["staff"][0].replace(str(b_staff.pk), "ID"),
             with_missing.json()["staff"][0].replace(str(missing), "ID"),
         )
+
+    def test_other_tenant_customer_timeline_is_404(self):
+        b_customer = self.b_objects["customer"]
+        f.CustomerActivityFactory(
+            organization=self.org_b, customer=b_customer, metadata={"note": SECRET}
+        )
+        response = self.client.get(f"/api/v1/customers/{b_customer.pk}/timeline/")
+        self.assertEqual(response.status_code, 404)
+        own = f.CustomerFactory(organization=self.org_a)
+        body = self.client.get(f"/api/v1/customers/{own.pk}/timeline/").content.decode()
+        self.assertNotIn(SECRET, body)
+
+    def test_notes_cannot_be_written_for_other_tenant_customers(self):
+        b_customer = self.b_objects["customer"]
+        response = self.client.post(
+            "/api/v1/customer-notes/",
+            {"customer": str(b_customer.pk), "content": "pwned"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(b_customer.customer_notes.filter(content="pwned").exists())
 
     def test_tagging_with_other_tenant_tag_looks_like_a_missing_tag(self):
         customer = f.CustomerFactory(organization=self.org_a)

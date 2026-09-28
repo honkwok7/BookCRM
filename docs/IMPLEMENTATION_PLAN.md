@@ -546,6 +546,21 @@ Filtering by tag works through both the API and the UI.
 
 ### M2.3: Notes and activity timeline
 
+> **Status: done (2026-09-28, branch `m2.3-notes-activity`).** See [CRM.md](CRM.md#notes).
+> - **Models:** `crm.CustomerNote` and `crm.CustomerActivity`. The generic subject is stored
+>   as `subject_type` (model label) plus `subject_id`, instead of a ContentType foreign key.
+> - **Timeline writers:** `record_activity()` is called from the booking service, the CRM
+>   service and the email task. Tag activity from M2.2 is included.
+> - **Visibility:** notes default to `internal`. Internal notes and their timeline entries
+>   need `customers.notes.private`. Only the author or a capability holder may edit or
+>   delete a note.
+> - **Backfill:** from **bookings** (not `BookingActivityLog`, which is incomplete) in
+>   migration `crm/0004`. `seed_demo` also writes timeline entries and sample notes.
+> - **Bug fixed:** reschedule now keeps the booking's CRM customer. Before, if the customer's
+>   email had changed, it created a duplicate customer from the old email.
+> - **Deferred:** "Staff see their own notes" needs customer access for staff, which is
+>   M2.4 (assigned customers).
+
 #### Objective
 Internal notes and the customer history.
 

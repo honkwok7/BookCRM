@@ -18,8 +18,9 @@ from django.utils import timezone
 
 from bookings.models import Booking, Customer
 from bookings.services import create_booking
-from crm.models import Tag
-from crm.services import add_customer_tag, create_customer, create_tag
+from crm.activity import Kind, booking_metadata, record_activity
+from crm.models import CustomerNote, Tag
+from crm.services import add_customer_tag, create_customer, create_note, create_tag
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
@@ -69,6 +70,21 @@ ORGANIZATIONS = [
             ("New client", "#10b981"): ["+14165550107"],
             ("Prefers mornings", "#6366f1"): ["priya@example.test"],
         },
+        "notes": [
+            (
+                "grace@example.test",
+                "internal",
+                "alert",
+                "Sensitive to deep pressure; ask before increasing intensity.",
+            ),
+            (
+                "alex@example.test",
+                "customer_visible",
+                "follow_up",
+                "Stretch routine sent after the last visit; review at the next appointment.",
+            ),
+            ("+14165550107", "internal", "call", "Walk-in; prefers a phone call over email."),
+        ],
     },
     {
         "slug": "serenity-spa",
@@ -100,6 +116,11 @@ PLANS = [
     ("business", "Business", 149, 1490, 100, 500, 20000, True),
 ]
 PASSWORD = "Demo12345!"
+PAST_OUTCOME_ACTIVITY = {
+    Booking.Status.COMPLETED: Kind.APPOINTMENT_COMPLETED,
+    Booking.Status.NO_SHOW: Kind.APPOINTMENT_NO_SHOW,
+    Booking.Status.CANCELLED: Kind.APPOINTMENT_CANCELLED,
+}
 
 
 class Command(BaseCommand):
@@ -247,6 +268,19 @@ class Command(BaseCommand):
         if not Booking.objects.filter(organization=organization).exists():
             self._appointments(organization, services, customers)
 
+        owner = User.objects.get(email=spec["members"][0][0])
+        for contact, visibility, note_type, content in spec.get("notes", []):
+            customer = next(c for c in customers if contact in (c.email, c.phone))
+            if not customer.customer_notes.exists():
+                create_note(
+                    customer=customer,
+                    author=owner,
+                    visibility=visibility,
+                    note_type=note_type,
+                    content=content,
+                    pinned=note_type == CustomerNote.NoteType.ALERT,
+                )
+
     def _appointments(self, organization, services, customers):
         tz = ZoneInfo(organization.timezone)
         today = timezone.now().astimezone(tz).date()
@@ -280,7 +314,7 @@ class Command(BaseCommand):
             start = weekday_at(-14 + index, 11) if index < 14 else weekday_at(-3, 11)
             if start >= timezone.now():
                 continue
-            Booking.objects.create(
+            booking = Booking.objects.create(
                 reference=f"SCH-{start.year}-{9000 + index:06d}-{organization.slug[:3]}"[:20],
                 organization=organization,
                 customer=customer,
@@ -296,6 +330,21 @@ class Command(BaseCommand):
                 price_snapshot=service.price,
                 duration_snapshot_minutes=service.duration_minutes,
                 status=outcomes[index % len(outcomes)],
+            )
+            # Timeline entries the booking service would have written at the time.
+            record_activity(
+                Kind.APPOINTMENT_BOOKED,
+                customer=customer,
+                subject=booking,
+                metadata=booking_metadata(booking),
+                occurred_at=start - timedelta(days=7),
+            )
+            record_activity(
+                PAST_OUTCOME_ACTIVITY[booking.status],
+                customer=customer,
+                subject=booking,
+                metadata=booking_metadata(booking),
+                occurred_at=start + timedelta(minutes=service.duration_minutes),
             )
 
     def _report(self):

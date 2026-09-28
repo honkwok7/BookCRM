@@ -9,6 +9,7 @@ from django.utils import timezone
 from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, Customer
 from core.audit import AuditAction, record_audit
 from core.exceptions import ConflictError, DomainError
+from crm.activity import Kind, booking_metadata, record_activity
 from crm.services import find_or_create_customer
 from notifications.services import queue_booking_notification
 from staff.models import StaffProfile
@@ -38,6 +39,11 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     Booking.Status.REJECTED: frozenset(),
 }
 RESCHEDULABLE_STATUSES = frozenset({Booking.Status.PENDING, Booking.Status.CONFIRMED})
+# Status changes that are worth a customer-timeline entry (check-in etc. are not).
+STATUS_ACTIVITY = {
+    Booking.Status.COMPLETED: Kind.APPOINTMENT_COMPLETED,
+    Booking.Status.NO_SHOW: Kind.APPOINTMENT_NO_SHOW,
+}
 
 
 def lock_staff(staff_id) -> StaffProfile:
@@ -81,7 +87,17 @@ def create_booking(
     actor=None,
     customer_user=None,
     notify: bool = True,
+    customer: Customer | None = None,
+    activity_kind: str | None = Kind.APPOINTMENT_BOOKED,
 ):
+    """Book an appointment.
+
+    ``customer``: book for this existing CRM customer instead of looking one up by the contact
+    details (used by reschedule). ``activity_kind``: the timeline entry to record, or None when
+    the caller records its own.
+    """
+    if customer is not None and customer.organization_id != organization.pk:
+        raise DomainError("Customer not found", code="not_found")
     if start_datetime <= timezone.now():
         raise DomainError("Cannot book in the past", code="in_past")
 
@@ -101,15 +117,16 @@ def create_booking(
     if conflict_exists:
         raise ConflictError("Selected slot is no longer available", code="slot_unavailable")
 
-    customer = find_or_create_customer(
-        organization=organization,
-        name=customer_name,
-        email=customer_email,
-        phone=customer_phone,
-        user=customer_user,
-        source=Customer.Source.PUBLIC_BOOKING if customer_user else Customer.Source.RECEPTION,
-        actor=actor,
-    )
+    if customer is None:
+        customer = find_or_create_customer(
+            organization=organization,
+            name=customer_name,
+            email=customer_email,
+            phone=customer_phone,
+            user=customer_user,
+            source=Customer.Source.PUBLIC_BOOKING if customer_user else Customer.Source.RECEPTION,
+            actor=actor,
+        )
 
     tzname = organization.timezone
     reference = Booking.generate_reference(year=start_datetime.astimezone(ZoneInfo(tzname)).year)
@@ -155,6 +172,14 @@ def create_booking(
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
     )
+    if activity_kind:
+        record_activity(
+            activity_kind,
+            customer=customer,
+            actor=actor,
+            subject=booking,
+            metadata=booking_metadata(booking),
+        )
     if notify:
         queue_booking_notification(
             booking=booking,
@@ -213,6 +238,13 @@ def cancel_booking(*, booking: Booking, actor=None, reason: str = ""):
         object_identifier=str(booking.id),
         metadata={"reference": booking.reference},
     )
+    record_activity(
+        Kind.APPOINTMENT_CANCELLED,
+        customer=booking.customer,
+        actor=actor,
+        subject=booking,
+        metadata={**booking_metadata(booking), "from_status": old_status},
+    )
     queue_booking_notification(
         booking=booking,
         notification_type="booking_cancellation",
@@ -251,6 +283,15 @@ def change_booking_status(*, booking: Booking, new_status: str, actor=None, note
         object_identifier=str(booking.id),
         metadata={"from": old_status, "to": new_status},
     )
+    outcome = STATUS_ACTIVITY.get(new_status)
+    if outcome:
+        record_activity(
+            outcome,
+            customer=booking.customer,
+            actor=actor,
+            subject=booking,
+            metadata=booking_metadata(booking),
+        )
     return booking
 
 
@@ -303,6 +344,9 @@ def reschedule_booking(*, booking: Booking, new_start, actor=None) -> Booking:
         customer_notes=booking.customer_notes,
         actor=actor,
         customer_user=booking.customer.user if booking.customer else None,
+        # Same CRM customer, even if their email changed since the booking was made.
+        customer=booking.customer,
+        activity_kind=None,
     )
     new_booking.rescheduled_from = booking
     new_booking.save(update_fields=["rescheduled_from", "updated_at"])
@@ -313,5 +357,16 @@ def reschedule_booking(*, booking: Booking, new_start, actor=None) -> Booking:
         object_type="Booking",
         object_identifier=str(new_booking.id),
         metadata={"from_booking": str(booking.id)},
+    )
+    record_activity(
+        Kind.APPOINTMENT_RESCHEDULED,
+        customer=new_booking.customer,
+        actor=actor,
+        subject=new_booking,
+        metadata={
+            **booking_metadata(new_booking),
+            "from_reference": booking.reference,
+            "from_start": booking.start_datetime.isoformat(),
+        },
     )
     return new_booking
