@@ -1,9 +1,10 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from bookings.views import BookingViewSet, CustomerViewSet, WaitlistViewSet
+from api.search import GlobalSearchView
+from bookings.views import BookingViewSet, WaitlistViewSet
 from core.audit_api import AuditLogViewSet
-from crm.views import CustomerNoteViewSet, TagViewSet
+from crm.views import CustomerNoteViewSet, CustomerViewSet, TagViewSet
 from scheduling.views import (
     AvailabilityExceptionViewSet,
     OrganizationHolidayViewSet,
@@ -35,5 +36,6 @@ router.register("waitlist", WaitlistViewSet, basename="waitlist")
 router.register("audit-logs", AuditLogViewSet, basename="audit-log")
 
 urlpatterns = [
+    path("search/", GlobalSearchView.as_view(), name="global-search"),
     path("", include(router.urls)),
 ]

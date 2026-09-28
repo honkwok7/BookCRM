@@ -595,6 +595,22 @@ The timeline shows the booking lifecycle events for seeded data.
 
 ### M2.4: CRM API and search
 
+> **Status: done (2026-09-28, branch `m2.4-crm-api-search`).** See [CRM.md](CRM.md#search).
+> - **Endpoint names:** the history endpoint is `/customers/{id}/timeline/` (from M2.3), not
+>   `/activity`. Customer search is `/customers/search/?q=`.
+> - **Code moved:** the customer API moved to `crm/views.py` (same URLs).
+> - **Provider access:** providers see their assigned or treated customers, read-only, and
+>   their own notes. This covers the "own notes" rule deferred from M2.3.
+> - **New capability** `customers.erase` for delete and anonymize (owner and manager).
+>   Receptionists could previously hard-delete customers.
+> - **Phone search:** a digits-only `phone_search` column, plus trigram indexes on
+>   `UPPER(name/email)` and `phone_search`, created only on PostgreSQL.
+> - **N+1 guard:** a query-count test that shows the list cost doesn't grow with the number
+>   of rows (plain `TestCase`, not the pytest fixture).
+> - **Benchmark** (`benchmark_customer_search`, 50k customers, local PostgreSQL 18): worst
+>   p95 86.5 ms, from name words that match thousands of rows. Phone and email take about
+>   3 ms. The target is under 100 ms.
+
 #### Objective
 Customer endpoints and organization-scoped global search.
 

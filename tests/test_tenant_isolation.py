@@ -209,6 +209,38 @@ class TenantIsolationSuite(TestCase):
             with_missing.json()["staff"][0].replace(str(missing), "ID"),
         )
 
+    def test_search_never_returns_other_tenant_data(self):
+        # B's booking reference and customer name are searchable text too.
+        b_booking = self.b_objects["booking"]
+        for query in (SECRET, b_booking.reference):
+            with self.subTest(endpoint="global", query=query):
+                response = self.client.get("/api/v1/search/", {"q": query})
+                self.assertEqual(response.status_code, 200)
+                results = response.json()["results"]
+                self.assertTrue(all(rows == [] for rows in results.values()), results)
+            with self.subTest(endpoint="customers", query=query):
+                response = self.client.get("/api/v1/customers/search/", {"q": query})
+                self.assertEqual(response.json(), [])
+        for url in ("/api/v1/search/", "/api/v1/customers/search/"):
+            with self.subTest(url=url, check="header"):
+                response = self.client.get(
+                    url, {"q": SECRET}, HTTP_X_ORGANIZATION_SLUG=self.org_b.slug
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_other_tenant_customer_detail_actions_are_404(self):
+        b_customer = self.b_objects["customer"]
+        for path in ("timeline", "notes", "appointments"):
+            with self.subTest(action=path):
+                response = self.client.get(f"/api/v1/customers/{b_customer.pk}/{path}/")
+                self.assertEqual(response.status_code, 404)
+        own = f.CustomerFactory(organization=self.org_a)
+        response = self.client.post(
+            f"/api/v1/customers/{own.pk}/merge/", {"duplicate": str(b_customer.pk)}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Customer.objects.filter(pk=b_customer.pk).exists())
+
     def test_other_tenant_customer_timeline_is_404(self):
         b_customer = self.b_objects["customer"]
         f.CustomerActivityFactory(

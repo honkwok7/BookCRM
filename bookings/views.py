@@ -3,7 +3,7 @@ from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from bookings.models import Booking, Customer, WaitlistEntry
+from bookings.models import Booking, WaitlistEntry
 from bookings.selectors import bookings_visible_to
 from bookings.serializers import (
     BookingCancelSerializer,
@@ -12,8 +12,6 @@ from bookings.serializers import (
     BookingRescheduleSerializer,
     BookingSerializer,
     BookingStatusSerializer,
-    CustomerDetailSerializer,
-    CustomerSerializer,
     WaitlistEntrySerializer,
 )
 from bookings.services import change_booking_status, reschedule_booking
@@ -21,11 +19,7 @@ from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
-from crm.models import Tag
-from crm.selectors import customer_timeline
-from crm.serializers import CustomerActivitySerializer
 from organizations.models import OrganizationRole
-from organizations.permissions import Capability
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
 from services.models import Service
@@ -110,58 +104,6 @@ class BookingViewSet(
             actor=request.user,
         )
         return self._respond(booking)
-
-
-class CustomerFilter(django_filters.FilterSet):
-    # ?tag=<id> must be one of the caller's own tags (tenant-safe, like every relation filter).
-    tag = TenantModelChoiceFilter(Tag, field_name="customer_tags__tag")
-
-    class Meta:
-        model = Customer
-        fields = ("status", "tag")
-
-
-class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
-    audit_actions = {"delete": AuditAction.CUSTOMER_DELETED}
-    # crm.services audits create/update (field-level, personal values redacted).
-    audited_by_service = ("create", "update")
-    serializer_class = CustomerSerializer
-    permission_classes = [
-        permissions.IsAuthenticated,
-        HasCapability(read="customers.view", write="customers.manage"),
-    ]
-    filterset_class = CustomerFilter
-    search_fields = ("first_name", "last_name", "preferred_name", "email", "phone")
-    ordering_fields = ("last_name", "first_name", "created_at")
-
-    def get_queryset(self):
-        queryset = Customer.objects.select_related("organization", "user").prefetch_related(
-            "tag_set"
-        )
-        return scope_queryset_by_organization(queryset, self.request)
-
-    def get_serializer_class(self):
-        if self.action == "timeline":
-            return CustomerActivitySerializer
-        return CustomerDetailSerializer if self.action == "retrieve" else CustomerSerializer
-
-    @action(detail=True, methods=["get"])
-    def timeline(self, request, pk=None):
-        """The customer's history, newest first (paginated). Internal entries need
-        customers.notes.private."""
-        tenant = resolve_tenant(request)
-        activities = customer_timeline(
-            self.get_object(),
-            include_internal=tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE),
-        )
-        page = self.paginate_queryset(activities)
-        return self.get_paginated_response(self.get_serializer(page, many=True).data)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
 
 
 class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):

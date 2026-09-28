@@ -64,6 +64,9 @@ class Customer(BaseUUIDModel):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
     secondary_phone = models.CharField(max_length=30, blank=True)
+    # Digits of phone + secondary_phone ("14165550101 4165550199"), kept in sync on save, so a
+    # search for "(416) 555-0101" finds "+1 416-555-0101".
+    phone_search = models.CharField(max_length=64, blank=True, editable=False)
     address_line1 = models.CharField(max_length=255, blank=True)
     address_line2 = models.CharField(max_length=255, blank=True)
     city = models.CharField(max_length=120, blank=True)
@@ -159,11 +162,23 @@ class Customer(BaseUUIDModel):
             self.first_name, self.last_name = self.split_name(self.name)
         self.name = " ".join(part for part in (self.first_name, self.last_name) if part)
 
+    @staticmethod
+    def digits(value: str) -> str:
+        return "".join(ch for ch in value or "" if ch.isdigit())
+
     def save(self, *args, **kwargs):
         self.sync_name()
+        self.phone_search = " ".join(
+            filter(None, (self.digits(self.phone), self.digits(self.secondary_phone)))
+        )
         update_fields = kwargs.get("update_fields")
-        if update_fields is not None and {"name", "first_name", "last_name"} & set(update_fields):
-            kwargs["update_fields"] = {*update_fields, "name", "first_name", "last_name"}
+        if update_fields is not None:
+            fields = set(update_fields)
+            if {"name", "first_name", "last_name"} & fields:
+                fields |= {"name", "first_name", "last_name"}
+            if {"phone", "secondary_phone"} & fields:
+                fields.add("phone_search")
+            kwargs["update_fields"] = fields
         super().save(*args, **kwargs)
 
 

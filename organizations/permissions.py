@@ -29,6 +29,7 @@ class Capability(StrEnum):
     CUSTOMERS_VIEW = "customers.view"
     CUSTOMERS_MANAGE = "customers.manage"
     CUSTOMERS_NOTES_PRIVATE = "customers.notes.private"
+    CUSTOMERS_ERASE = "customers.erase"
     WAITLIST_MANAGE = "waitlist.manage"
     REPORTS_VIEW = "reports.view"
     COMMUNICATIONS_MANAGE = "communications.manage"
@@ -54,6 +55,7 @@ CAPABILITY_DESCRIPTIONS: dict[Capability, str] = {
     Capability.CUSTOMERS_VIEW: "View customer records",
     Capability.CUSTOMERS_MANAGE: "Create and edit customer records",
     Capability.CUSTOMERS_NOTES_PRIVATE: "Read and write internal customer notes",
+    Capability.CUSTOMERS_ERASE: "Delete or anonymize customer records (irreversible)",
     Capability.WAITLIST_MANAGE: "View and manage the waitlist",
     Capability.REPORTS_VIEW: "View dashboards and reports",
     Capability.COMMUNICATIONS_MANAGE: "Edit notification templates and reminders",

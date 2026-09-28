@@ -309,9 +309,13 @@ class NoteApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_staff_without_customer_access_cannot_read_notes(self):
+    def test_staff_only_see_notes_on_their_own_customers(self):
+        # Full rules in crm/test_crm_api.py (M2.4); here: none of this customer's notes.
+        create_note(customer=self.customer, author=self.manager, content="x", visibility=VISIBLE)
         staff = self.member(OrganizationRole.STAFF)
-        self.assertEqual(self.as_user(staff).get("/api/v1/customer-notes/").status_code, 403)
+        response = self.as_user(staff).get("/api/v1/customer-notes/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 0)
 
     def test_timeline_is_paginated_newest_first(self):
         for day in range(3):
