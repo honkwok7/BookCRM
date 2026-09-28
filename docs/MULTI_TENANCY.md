@@ -55,10 +55,28 @@ Serializers for tenant data extend `core.api.TenantScopedModelSerializer`:
 - `core/test_api_contract.py` fails if a serializer uses `fields = "__all__"`, or has a
   writable relation that isn't tenant-limited.
 
+## Filters
+
+Relation filters (`?service=`, `?staff=`, `?category=`) use `core.filters.TenantModelChoiceFilter`.
+IDs are validated against the caller's organization only, so filtering by another
+organization's ID looks exactly like filtering by an ID that doesn't exist.
+
+## Isolation test suite
+
+`tests/test_tenant_isolation.py` attacks every API resource as the **owner** of organization A
+against organization B's data. It covers:
+- list, search and retrieve;
+- PUT, PATCH and DELETE;
+- every custom detail action;
+- selecting B by header;
+- filters by B's IDs, and writes that reference B's IDs, which must look identical to
+  missing IDs;
+- memberships, the current organization and the dashboard.
+
+The suite is driven by the API router. A new resource fails
+`test_every_api_resource_is_covered` until it is added to the suite.
+
 ## Known gaps (tracked in IMPLEMENTATION_PLAN.md)
 
 - **Web session tenant switching (M2.5):** the `/app/switch/<slug>/` view arrives with the web
   app shell. `set_active_organization` is already in place.
-- **Filter id checks:** `django-filter` filters on relation ids (`?service=`, `?staff=`) validate
-  ids against all organizations. The results are still tenant-scoped; only the "invalid choice"
-  message differs. This is revisited with the API consolidation in M10.1.

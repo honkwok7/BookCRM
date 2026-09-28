@@ -1,7 +1,9 @@
+import django_filters
 from rest_framework import permissions, viewsets
 
 from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
+from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from organizations.selectors import scope_queryset_by_organization
 from services.models import Service, ServiceCategory
@@ -25,6 +27,14 @@ class ServiceCategoryViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         return scope_queryset_by_organization(queryset, self.request)
 
 
+class ServiceFilter(django_filters.FilterSet):
+    category = TenantModelChoiceFilter(ServiceCategory)
+
+    class Meta:
+        model = Service
+        fields = ("is_active", "is_public", "is_archived", "category")
+
+
 class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     audit_actions = {
         "create": AuditAction.SERVICE_CREATED,
@@ -36,7 +46,7 @@ class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         permissions.IsAuthenticated,
         HasCapability(read="services.view", write="services.manage"),
     ]
-    filterset_fields = ("is_active", "is_public", "is_archived", "category")
+    filterset_class = ServiceFilter
     search_fields = ("name", "description")
     ordering_fields = ("name", "price", "duration_minutes", "created_at")
 

@@ -1,8 +1,9 @@
+import django_filters
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from bookings.models import Customer, WaitlistEntry
+from bookings.models import Booking, Customer, WaitlistEntry
 from bookings.selectors import bookings_visible_to
 from bookings.serializers import (
     BookingCancelSerializer,
@@ -17,10 +18,22 @@ from bookings.serializers import (
 from bookings.services import change_booking_status, reschedule_booking
 from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
+from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from organizations.models import OrganizationRole
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
+from services.models import Service
+from staff.models import StaffProfile
+
+
+class BookingFilter(django_filters.FilterSet):
+    service = TenantModelChoiceFilter(Service)
+    staff = TenantModelChoiceFilter(StaffProfile)
+
+    class Meta:
+        model = Booking
+        fields = ("status", "service", "staff")
 
 
 class BookingViewSet(
@@ -33,7 +46,7 @@ class BookingViewSet(
     booking service (cancel, reschedule, update_status) so the same rules apply everywhere."""
 
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ("status", "service", "staff")
+    filterset_class = BookingFilter
     ordering_fields = ("start_datetime", "created_at")
 
     def get_queryset(self):
@@ -63,10 +76,11 @@ class BookingViewSet(
 
     @action(detail=True, methods=["post"])
     def reschedule(self, request, pk=None):
+        booking = self.get_object()  # 404 before input validation
         serializer = BookingRescheduleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_booking = reschedule_booking(
-            booking=self.get_object(),
+            booking=booking,
             new_start=serializer.validated_data["start_datetime"],
             actor=request.user,
         )
@@ -81,10 +95,11 @@ class BookingViewSet(
         ],
     )
     def update_status(self, request, pk=None):
+        booking = self.get_object()  # 404 before input validation
         serializer = BookingStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         booking = change_booking_status(
-            booking=self.get_object(),
+            booking=booking,
             new_status=serializer.validated_data["status"],
             note=serializer.validated_data["note"],
             actor=request.user,

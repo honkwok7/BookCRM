@@ -1,174 +1,280 @@
-from datetime import timedelta
+"""Demo data for local development: ``python manage.py seed_demo``.
+
+Idempotent: safe to run repeatedly. Future appointments go through the real booking service
+(same validation as the API) with notifications off; a handful of *past* appointments are
+written directly because the booking service rightly refuses times in the past.
+
+Two organizations demonstrate tenant isolation, including one customer email that exists in
+both. Locations (Downtown / North York) arrive with M3.1.
+"""
+
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 
+from bookings.models import Booking, Customer
 from bookings.services import create_booking
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
-from services.models import Service
+from services.models import Service, ServiceCategory
 from staff.models import StaffProfile
 from subscriptions.models import Plan, Subscription
 
+User = get_user_model()
+
+PLATFORM_ADMIN = ("admin@bookcrm.local", "Admin12345!")
+
+ORGANIZATIONS = [
+    {
+        "slug": "harmony-wellness",
+        "name": "Harmony Wellness Centre",
+        "timezone": "America/Toronto",
+        "currency": "CAD",
+        "email": "hello@harmony.local",
+        "plan": "professional",
+        "members": [
+            ("owner@harmony.local", "Olivia", "Owner", OrganizationRole.OWNER, None),
+            ("manager@harmony.local", "Marcus", "Manager", OrganizationRole.MANAGER, None),
+            ("reception@harmony.local", "Rita", "Reception", OrganizationRole.RECEPTIONIST, None),
+            ("massage@harmony.local", "Maya", "Chen", OrganizationRole.STAFF, "Massage Therapist"),
+            ("chiro@harmony.local", "Daniel", "Park", OrganizationRole.STAFF, "Chiropractor"),
+        ],
+        "categories": {
+            "Massage Therapy": [
+                ("60 Minute Massage", 60, 110, "massage@harmony.local"),
+                ("90 Minute Massage", 90, 150, "massage@harmony.local"),
+            ],
+            "Chiropractic": [
+                ("Initial Chiropractic Assessment", 60, 120, "chiro@harmony.local"),
+                ("Follow-up Chiropractic Visit", 30, 75, "chiro@harmony.local"),
+            ],
+        },
+        "customers": [
+            ("Alex Morgan", "alex@example.test", "+14165550101"),
+            ("Priya Shah", "priya@example.test", "+14165550102"),
+            ("Tom Becker", "tom@example.test", "+14165550103"),
+            ("Grace Liu", "grace@example.test", "+14165550104"),
+            ("Samuel Ortiz", "samuel@example.test", "+14165550105"),
+            ("Hannah Kim", "hannah@example.test", "+14165550106"),
+        ],
+    },
+    {
+        "slug": "serenity-spa",
+        "name": "Serenity Spa",
+        "timezone": "America/Vancouver",
+        "currency": "CAD",
+        "email": "hello@serenity.local",
+        "plan": "starter",
+        "members": [
+            ("owner@serenity.local", "Sofia", "Owner", OrganizationRole.OWNER, None),
+            ("esthetician@serenity.local", "Elena", "Rossi", OrganizationRole.STAFF, "Esthetician"),
+        ],
+        "categories": {
+            "Facials": [("Signature Facial", 60, 130, "esthetician@serenity.local")],
+            "Body": [("Hot Stone Massage", 75, 140, "esthetician@serenity.local")],
+        },
+        "customers": [
+            # Same email as a Harmony customer: two separate records, invisible to each other.
+            ("Alex Morgan", "alex@example.test", "+16045550101"),
+            ("Nora White", "nora@example.test", "+16045550102"),
+        ],
+    },
+]
+
+PLANS = [
+    ("starter", "Starter", 29, 290, 3, 10, 300, False),
+    ("professional", "Professional", 79, 790, 15, 50, 2000, True),
+    ("business", "Business", 149, 1490, 100, 500, 20000, True),
+]
+PASSWORD = "Demo12345!"
+
 
 class Command(BaseCommand):
-    help = "Seed demo data for local development"
+    help = "Seed idempotent demo data (Harmony Wellness Centre and Serenity Spa)."
 
     def handle(self, *args, **options):
-        user_model = get_user_model()
+        with transaction.atomic():
+            self._platform_admin()
+            plans = self._plans()
+            for spec in ORGANIZATIONS:
+                self._organization(spec, plans)
+        self._report()
 
-        admin_user, _ = user_model.objects.get_or_create(
-            email="admin@schedula.local",
-            defaults={"is_staff": True, "is_superuser": True, "email_verified": True},
+    # -- building blocks ---------------------------------------------------------------------
+
+    def _user(self, email, first_name="", last_name="", password=PASSWORD, **extra):
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "first_name": first_name,
+                "last_name": last_name,
+                "email_verified": True,
+                **extra,
+            },
         )
-        admin_user.set_password("Admin12345!")
-        admin_user.save()
+        if created:
+            user.set_password(password)
+            user.save(update_fields=["password"])
+        return user
 
-        owner, _ = user_model.objects.get_or_create(
-            email="owner@demo.local", defaults={"email_verified": True}
-        )
-        owner.set_password("Owner12345!")
-        owner.save()
+    def _platform_admin(self):
+        email, password = PLATFORM_ADMIN
+        self._user(email, "Platform", "Admin", password, is_staff=True, is_superuser=True)
 
-        manager, _ = user_model.objects.get_or_create(
-            email="manager@demo.local", defaults={"email_verified": True}
-        )
-        manager.set_password("Manager12345!")
-        manager.save()
+    def _plans(self):
+        plans = {}
+        for slug, name, monthly, yearly, staff, services, bookings, analytics in PLANS:
+            plans[slug], _ = Plan.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    "name": name,
+                    "monthly_price": monthly,
+                    "yearly_price": yearly,
+                    "maximum_staff": staff,
+                    "maximum_services": services,
+                    "maximum_monthly_bookings": bookings,
+                    "analytics_enabled": analytics,
+                    "api_access_enabled": True,
+                },
+            )
+        return plans
 
-        staff_user, _ = user_model.objects.get_or_create(
-            email="staff@demo.local", defaults={"email_verified": True}
-        )
-        staff_user.set_password("Staff12345!")
-        staff_user.save()
-
-        customer_user, _ = user_model.objects.get_or_create(
-            email="customer@demo.local", defaults={"email_verified": True}
-        )
-        customer_user.set_password("Customer12345!")
-        customer_user.save()
-
+    def _organization(self, spec, plans):
         organization, _ = Organization.objects.get_or_create(
-            slug="demo-clinic",
+            slug=spec["slug"],
             defaults={
-                "name": "Demo Clinic",
-                "email": "hello@demo.local",
-                "timezone": "UTC",
-                "currency": "USD",
+                "name": spec["name"],
+                "timezone": spec["timezone"],
+                "currency": spec["currency"],
+                "email": spec["email"],
             },
         )
-
-        OrganizationMembership.objects.get_or_create(
-            organization=organization, user=owner, defaults={"role": OrganizationRole.OWNER}
-        )
-        OrganizationMembership.objects.get_or_create(
-            organization=organization, user=manager, defaults={"role": OrganizationRole.MANAGER}
-        )
-        OrganizationMembership.objects.get_or_create(
-            organization=organization, user=staff_user, defaults={"role": OrganizationRole.STAFF}
-        )
-
-        free_plan, _ = Plan.objects.get_or_create(
-            slug="free",
-            defaults={
-                "name": "Free",
-                "monthly_price": 0,
-                "yearly_price": 0,
-                "maximum_staff": 2,
-                "maximum_services": 3,
-                "maximum_monthly_bookings": 100,
-                "analytics_enabled": False,
-                "api_access_enabled": True,
-            },
-        )
-        pro_plan, _ = Plan.objects.get_or_create(
-            slug="professional",
-            defaults={
-                "name": "Professional",
-                "monthly_price": 49,
-                "yearly_price": 490,
-                "maximum_staff": 10,
-                "maximum_services": 25,
-                "maximum_monthly_bookings": 1000,
-                "analytics_enabled": True,
-                "api_access_enabled": True,
-            },
-        )
-        Plan.objects.get_or_create(
-            slug="business",
-            defaults={
-                "name": "Business",
-                "monthly_price": 99,
-                "yearly_price": 990,
-                "maximum_staff": 100,
-                "maximum_services": 200,
-                "maximum_monthly_bookings": 10000,
-                "analytics_enabled": True,
-                "api_access_enabled": True,
-            },
-        )
-
+        now = timezone.now()
         Subscription.objects.get_or_create(
             organization=organization,
             defaults={
-                "plan": pro_plan,
+                "plan": plans[spec["plan"]],
                 "status": Subscription.Status.ACTIVE,
-                "billing_cycle": Subscription.BillingCycle.MONTHLY,
-                "current_period_start": timezone.now(),
-                "current_period_end": timezone.now() + timedelta(days=30),
+                "current_period_start": now,
+                "current_period_end": now + timedelta(days=30),
             },
         )
 
-        staff_profile, _ = StaffProfile.objects.get_or_create(
-            organization=organization,
-            user=staff_user,
-            defaults={"job_title": "Consultant", "is_active": True, "is_accepting_bookings": True},
-        )
+        staff_by_email = {}
+        for email, first, last, role, job_title in spec["members"]:
+            user = self._user(email, first, last)
+            OrganizationMembership.objects.get_or_create(
+                organization=organization, user=user, defaults={"role": role}
+            )
+            if role == OrganizationRole.STAFF:
+                profile, _ = StaffProfile.objects.get_or_create(
+                    organization=organization, user=user, defaults={"job_title": job_title}
+                )
+                staff_by_email[email] = profile
+                for day in range(5):  # Monday-Friday, 09:00-17:00 local time
+                    WeeklyAvailability.objects.get_or_create(
+                        organization=organization,
+                        staff=profile,
+                        day_of_week=day,
+                        start_time=time(9),
+                        end_time=time(17),
+                    )
 
-        service, _ = Service.objects.get_or_create(
-            organization=organization,
-            slug="general-consultation",
-            defaults={
-                "name": "General Consultation",
-                "description": "30-minute consultation",
-                "price": 50,
-                "currency": "USD",
-                "duration_minutes": 30,
-                "buffer_before_minutes": 5,
-                "buffer_after_minutes": 5,
-            },
-        )
-        service.assigned_staff_members.add(staff_profile)
-
-        for day in [0, 1, 2, 3, 4]:
-            WeeklyAvailability.objects.get_or_create(
+        services = []
+        for category_name, items in spec["categories"].items():
+            category, _ = ServiceCategory.objects.get_or_create(
                 organization=organization,
-                staff=staff_profile,
-                day_of_week=day,
-                start_time="09:00",
-                end_time="17:00",
-                defaults={"is_active": True},
+                slug=category_name.lower().replace(" ", "-"),
+                defaults={"name": category_name},
+            )
+            for name, minutes, price, provider_email in items:
+                service, _ = Service.objects.get_or_create(
+                    organization=organization,
+                    slug=name.lower().replace(" ", "-"),
+                    defaults={
+                        "name": name,
+                        "category": category,
+                        "duration_minutes": minutes,
+                        "price": price,
+                        "currency": spec["currency"],
+                        "buffer_after_minutes": 10,
+                    },
+                )
+                service.assigned_staff_members.add(staff_by_email[provider_email])
+                services.append((service, staff_by_email[provider_email]))
+
+        customers = []
+        for name, email, phone in spec["customers"]:
+            customer, _ = Customer.objects.get_or_create(
+                organization=organization, email=email, defaults={"name": name, "phone": phone}
+            )
+            customers.append(customer)
+
+        if not Booking.objects.filter(organization=organization).exists():
+            self._appointments(organization, services, customers)
+
+    def _appointments(self, organization, services, customers):
+        tz = ZoneInfo(organization.timezone)
+        today = timezone.now().astimezone(tz).date()
+
+        def weekday_at(days_ahead, hour):
+            day = today + timedelta(days=days_ahead)
+            while day.weekday() >= 5:
+                day += timedelta(days=1)
+            return datetime.combine(day, time(hour), tzinfo=tz)
+
+        # Upcoming: through the booking service (validation, history, audit; no emails).
+        for index, customer in enumerate(customers):
+            service, provider = services[index % len(services)]
+            create_booking(
+                organization=organization,
+                service=service,
+                staff_profile=provider,
+                customer_name=customer.name,
+                customer_email=customer.email,
+                customer_phone=customer.phone,
+                start_datetime=weekday_at(1 + index // 2, 10 + 2 * (index % 3)),
+                customer_timezone=organization.timezone,
+                notify=False,
             )
 
-        start_dt = timezone.now() + timedelta(days=1)
-        start_dt = start_dt.replace(hour=10, minute=0, second=0, microsecond=0)
-        create_booking(
-            organization=organization,
-            service=service,
-            staff_profile=staff_profile,
-            customer_name="Demo Customer",
-            customer_email=customer_user.email,
-            customer_phone="+10000000000",
-            start_datetime=start_dt,
-            customer_timezone="UTC",
-            actor=owner,
-            customer_user=customer_user,
-        )
+        # History: written directly (the service refuses past times) with final statuses.
+        outcomes = [Booking.Status.COMPLETED, Booking.Status.COMPLETED, Booking.Status.NO_SHOW]
+        outcomes += [Booking.Status.CANCELLED]
+        for index, customer in enumerate(customers):
+            service, provider = services[index % len(services)]
+            start = weekday_at(-14 + index, 11) if index < 14 else weekday_at(-3, 11)
+            if start >= timezone.now():
+                continue
+            Booking.objects.create(
+                reference=f"SCH-{start.year}-{9000 + index:06d}-{organization.slug[:3]}"[:20],
+                organization=organization,
+                customer=customer,
+                customer_name=customer.name,
+                customer_email=customer.email,
+                customer_phone=customer.phone,
+                service=service,
+                staff=provider,
+                start_datetime=start,
+                end_datetime=start + timedelta(minutes=service.duration_minutes),
+                organization_timezone=organization.timezone,
+                customer_timezone=organization.timezone,
+                price_snapshot=service.price,
+                duration_snapshot_minutes=service.duration_minutes,
+                status=outcomes[index % len(outcomes)],
+            )
 
-        self.stdout.write(self.style.SUCCESS("Demo data seeded."))
-        self.stdout.write("Admin: admin@schedula.local / Admin12345!")
-        self.stdout.write("Owner: owner@demo.local / Owner12345!")
-        self.stdout.write("Manager: manager@demo.local / Manager12345!")
-        self.stdout.write("Staff: staff@demo.local / Staff12345!")
-        self.stdout.write("Customer: customer@demo.local / Customer12345!")
+    def _report(self):
+        self.stdout.write(self.style.SUCCESS("Demo data ready."))
+        self.stdout.write(f"  Platform admin: {PLATFORM_ADMIN[0]} / {PLATFORM_ADMIN[1]}")
+        for spec in ORGANIZATIONS:
+            self.stdout.write(f"  {spec['name']} (/book/{spec['slug']}/), password {PASSWORD}:")
+            for email, _, _, role, job_title in spec["members"]:
+                self.stdout.write(
+                    f"    {role:<13} {email}" + (f"  ({job_title})" if job_title else "")
+                )
+        self.stdout.write("  Development-only credentials.")

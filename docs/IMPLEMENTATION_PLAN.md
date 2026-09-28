@@ -329,6 +329,14 @@ Every service-layer mutation in Phases 1–4 writes an audit row, and a test enf
 
 ### M1.5: Tenant isolation test suite and factories
 
+> **Status: done (2026-09-28, branch `m1.5-isolation-suite`).**
+> - Built: `tests/factories.py` (every model, same-organization defaults), the router-driven
+>   `tests/test_tenant_isolation.py`, and tenant-safe relation filters (`core/filters.py`).
+>   Detail actions now return 404 before validating input.
+> - `seed_demo` was rewritten (Harmony Wellness Centre and Serenity Spa, idempotent, no emails).
+> - Fixed: users created outside `create_user` got an empty, colliding `username`.
+> - Task-level isolation is covered in `organizations/test_tenant_hotfixes.py`.
+
 #### Objective
 Prove that Tenant A cannot see or change Tenant B's data.
 
