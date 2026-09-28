@@ -7,10 +7,21 @@ from organizations.views import (
     OrganizationMembershipListView,
 )
 
-
 urlpatterns = [
     path("organizations/current/", CurrentOrganizationView.as_view(), name="organization-current"),
-    path("organizations/memberships/", OrganizationMembershipListView.as_view(), name="organization-memberships"),
-    path("organizations/invitations/", InvitationCreateView.as_view(), name="organization-invitations-create"),
-    path("organizations/invitations/accept/", InvitationAcceptView.as_view(), name="organization-invitations-accept"),
+    path(
+        "organizations/memberships/",
+        OrganizationMembershipListView.as_view(),
+        name="organization-memberships",
+    ),
+    path(
+        "organizations/invitations/",
+        InvitationCreateView.as_view(),
+        name="organization-invitations-create",
+    ),
+    path(
+        "organizations/invitations/accept/",
+        InvitationAcceptView.as_view(),
+        name="organization-invitations-accept",
+    ),
 ]

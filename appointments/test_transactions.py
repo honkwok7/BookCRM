@@ -20,33 +20,56 @@ from specialists.models import Specialist, WorkingHour
 
 class MutationFixtures:
     def make_fixtures(self):
-        self.user = get_user_model().objects.create_user("mutation-customer", role=UserRole.CUSTOMER)
+        self.user = get_user_model().objects.create_user(
+            "mutation-customer", role=UserRole.CUSTOMER
+        )
         self.admin = get_user_model().objects.create_user("mutation-admin", role=UserRole.ADMIN)
         self.specialist = Specialist.objects.create(name="Mutation specialist", profession="GP")
         self.day = timezone.localdate() + timedelta(days=7)
         WorkingHour.objects.create(
-            specialist=self.specialist, day=self.day.weekday(),
-            start_time=time(9), end_time=time(17),
+            specialist=self.specialist,
+            day=self.day.weekday(),
+            start_time=time(9),
+            end_time=time(17),
         )
         self.client.force_authenticate(self.user)
 
     def appointment(self, start="09:00", duration=60, state=AppointmentStatus.PENDING):
         return Appointment.objects.create(
-            user=self.user, specialist=self.specialist, date=self.day,
-            time=time.fromisoformat(start), duration=duration, status=state,
+            user=self.user,
+            specialist=self.specialist,
+            date=self.day,
+            time=time.fromisoformat(start),
+            duration=duration,
+            status=state,
             notes="Preserved notes",
         )
 
     def creation(self, start="10:00", duration=60):
-        return ("post", "/api/appointments/", {
-            "specialist": self.specialist.pk, "date": str(self.day),
-            "time": start, "duration": duration,
-        })
+        return (
+            "post",
+            "/api/appointments/",
+            {
+                "specialist": self.specialist.pk,
+                "date": str(self.day),
+                "time": start,
+                "duration": duration,
+            },
+        )
 
     def action(self, appointment, action, start="10:00"):
-        return ("patch", f"/api/appointments/{appointment.pk}/{action}/", {
-            "date": str(self.day), "time": start,
-        } if action == "reschedule" else {})
+        return (
+            "patch",
+            f"/api/appointments/{appointment.pk}/{action}/",
+            (
+                {
+                    "date": str(self.day),
+                    "time": start,
+                }
+                if action == "reschedule"
+                else {}
+            ),
+        )
 
     def request(self, operation, client=None):
         method, url, data = operation
@@ -102,10 +125,15 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
             phases.append(("save", len(connection.atomic_blocks)))
             return save(appointment, *args, **kwargs)
 
-        with patch.object(AppointmentSerializer, "validate", checked_validate), patch.object(Appointment, "save", checked_save):
+        with (
+            patch.object(AppointmentSerializer, "validate", checked_validate),
+            patch.object(Appointment, "save", checked_save),
+        ):
             response = self.request(self.creation())
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(phases, [("validate", depth + 1), ("validate", depth + 1), ("save", depth + 1)])
+        self.assertEqual(
+            phases, [("validate", depth + 1), ("validate", depth + 1), ("save", depth + 1)]
+        )
 
     def test_reschedule_rereads_status_after_schedule_lock(self):
         appointment = self.appointment()
@@ -143,7 +171,7 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
                 appointment = self.appointment(state=AppointmentStatus.CONFIRMED)
                 original = mutations.lock_appointment
 
-                def lock(pk, **kwargs):
+                def lock(pk, original=original, **kwargs):
                     Appointment.objects.filter(pk=pk).update(status=AppointmentStatus.COMPLETED)
                     return original(pk, **kwargs)
 
@@ -160,6 +188,7 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
         depth = len(connection.atomic_blocks)
         events = []
         from django.db.models.query import QuerySet
+
         original = QuerySet.get
 
         def get(queryset, *args, **kwargs):
@@ -187,7 +216,11 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
 
         for action in ("confirm", "cancel", "complete", "no-show", "reschedule"):
             with self.subTest(action=action):
-                state = AppointmentStatus.PENDING if action == "confirm" else AppointmentStatus.CONFIRMED
+                state = (
+                    AppointmentStatus.PENDING
+                    if action == "confirm"
+                    else AppointmentStatus.CONFIRMED
+                )
                 appointment = self.appointment(state=state)
                 with patch.object(Appointment, "save", save_with_intervening_notes):
                     response = self.request(self.action(appointment, action))
@@ -214,7 +247,11 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
             with self.subTest(action=action):
                 appointment = None
                 if action != "create":
-                    state = AppointmentStatus.PENDING if action == "confirm" else AppointmentStatus.CONFIRMED
+                    state = (
+                        AppointmentStatus.PENDING
+                        if action == "confirm"
+                        else AppointmentStatus.CONFIRMED
+                    )
                     appointment = self.appointment(state=state)
                 before = list(Appointment.objects.values())
 
@@ -223,7 +260,9 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
                     raise self.conflict()
 
                 with patch.object(Appointment, "save", failed_save):
-                    operation = self.creation() if action == "create" else self.action(appointment, action)
+                    operation = (
+                        self.creation() if action == "create" else self.action(appointment, action)
+                    )
                     response = self.request(operation)
                 self.assertEqual(response.status_code, 400, response.data)
                 self.assertIn("non_field_errors", response.data)
@@ -234,9 +273,13 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
 
     def test_postgres_transaction_conflicts_have_controlled_responses(self):
         for sqlstate in ("40001", "40P01", "55P03"):
-            with self.subTest(sqlstate=sqlstate), patch.object(
-                mutations, "lock_specialist",
-                side_effect=self.conflict(operational=True, sqlstate=sqlstate),
+            with (
+                self.subTest(sqlstate=sqlstate),
+                patch.object(
+                    mutations,
+                    "lock_specialist",
+                    side_effect=self.conflict(operational=True, sqlstate=sqlstate),
+                ),
             ):
                 response = self.request(self.creation())
                 self.assertEqual(response.status_code, 400, response.data)
@@ -249,7 +292,10 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
             cause.sqlite_errorcode = code
             error = OperationalError("private database diagnostics")
             error.__cause__ = cause
-            with self.subTest(code=code), patch.object(mutations, "lock_specialist", side_effect=error):
+            with (
+                self.subTest(code=code),
+                patch.object(mutations, "lock_specialist", side_effect=error),
+            ):
                 response = self.request(self.creation())
                 self.assertEqual(response.status_code, 400, response.data)
                 self.assertNotIn("private", str(response.data))
@@ -283,7 +329,10 @@ class MutationTransactionTests(MutationFixtures, APITestCase):
         self.assertEqual(Appointment.objects.count(), 0)
 
 
-@skipUnless(connection.vendor == "postgresql", "Requires PostgreSQL row locks and pg_blocking_pids; SQLite cannot prove these races.")
+@skipUnless(
+    connection.vendor == "postgresql",
+    "Requires PostgreSQL row locks and pg_blocking_pids; SQLite cannot prove these races.",
+)
 class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
     """Separate connections, controlled ordering, and observed database waits."""
 
@@ -322,7 +371,10 @@ class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
             finally:
                 connections.close_all()
 
-        with patch.object(mutations, lock_name, gated_lock), ThreadPoolExecutor(max_workers=2) as pool:
+        with (
+            patch.object(mutations, lock_name, gated_lock),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
             first = pool.submit(worker, "first", first_operation)
             second = None
             try:
@@ -336,7 +388,9 @@ class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
                         blockers = cursor.fetchone()[0]
                     if pids["first"] in blockers:
                         break
-                    self.assertFalse(second.done(), "Competing request did not wait for the database lock")
+                    self.assertFalse(
+                        second.done(), "Competing request did not wait for the database lock"
+                    )
                     self.assertLess(monotonic(), deadline, "No PostgreSQL lock wait observed")
             finally:
                 release.set()
@@ -357,10 +411,13 @@ class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
 
     def test_two_reschedules_compete_for_destination(self):
         first, second = self.appointment("09:00"), self.appointment("14:00")
-        self.assert_conflict(self.race(
-            self.action(first, "reschedule", "11:00"),
-            self.action(second, "reschedule", "11:30"),
-        ), 200)
+        self.assert_conflict(
+            self.race(
+                self.action(first, "reschedule", "11:00"),
+                self.action(second, "reschedule", "11:30"),
+            ),
+            200,
+        )
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertEqual(first.time, time(11))
@@ -368,30 +425,42 @@ class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
 
     def test_creation_wins_against_reschedule(self):
         appointment = self.appointment("14:00")
-        self.assert_conflict(self.race(self.creation(), self.action(appointment, "reschedule", "10:30")), 201)
+        self.assert_conflict(
+            self.race(self.creation(), self.action(appointment, "reschedule", "10:30")), 201
+        )
         appointment.refresh_from_db()
         self.assertEqual(appointment.time, time(14))
 
     def test_reschedule_wins_against_creation(self):
         appointment = self.appointment("14:00")
-        self.assert_conflict(self.race(self.action(appointment, "reschedule"), self.creation("10:30")), 200)
+        self.assert_conflict(
+            self.race(self.action(appointment, "reschedule"), self.creation("10:30")), 200
+        )
         self.assertEqual(Appointment.objects.count(), 1)
 
     def test_lifecycle_competition_cannot_overwrite_terminal_state(self):
         appointment = self.appointment(state=AppointmentStatus.CONFIRMED)
-        self.assert_conflict(self.race(
-            self.action(appointment, "complete"), self.action(appointment, "no-show"),
-            lock_name="lock_appointment",
-        ), 200)
+        self.assert_conflict(
+            self.race(
+                self.action(appointment, "complete"),
+                self.action(appointment, "no-show"),
+                lock_name="lock_appointment",
+            ),
+            200,
+        )
         appointment.refresh_from_db()
         self.assertEqual(appointment.status, AppointmentStatus.COMPLETED)
 
     def test_cancellation_cannot_be_overwritten_by_reschedule(self):
         appointment = self.appointment()
-        self.assert_conflict(self.race(
-            self.action(appointment, "cancel"), self.action(appointment, "reschedule"),
-            lock_name="lock_appointment",
-        ), 200)
+        self.assert_conflict(
+            self.race(
+                self.action(appointment, "cancel"),
+                self.action(appointment, "reschedule"),
+                lock_name="lock_appointment",
+            ),
+            200,
+        )
         appointment.refresh_from_db()
         self.assertEqual(appointment.status, AppointmentStatus.CANCELLED)
         self.assertEqual(appointment.time, time(9))
@@ -399,7 +468,8 @@ class PostgreSQLMutationRaceTests(MutationFixtures, APITransactionTestCase):
     def test_lifecycle_preserves_concurrently_rescheduled_time(self):
         appointment = self.appointment(state=AppointmentStatus.CONFIRMED)
         results = self.race(
-            self.action(appointment, "reschedule", "11:00"), self.action(appointment, "complete"),
+            self.action(appointment, "reschedule", "11:00"),
+            self.action(appointment, "complete"),
             lock_name="lock_appointment",
         )
         self.assertEqual([result[0] for result in results], [200, 200], results)

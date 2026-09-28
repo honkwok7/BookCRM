@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta, timezone as datetime_timezone
+from datetime import UTC, date, datetime, time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -14,12 +14,16 @@ class SchedulingCorrectnessTests(APITestCase):
     def setUpTestData(cls):
         cls.user = get_user_model().objects.create_user("scheduling-customer")
         cls.specialist = Specialist.objects.create(
-            name="Scheduling specialist", profession="GP", slot_duration=30,
+            name="Scheduling specialist",
+            profession="GP",
+            slot_duration=30,
         )
         cls.day = timezone.localdate() + timedelta(days=7)
         cls.working = WorkingHour.objects.create(
-            specialist=cls.specialist, day=cls.day.weekday(),
-            start_time=time(9), end_time=time(17),
+            specialist=cls.specialist,
+            day=cls.day.weekday(),
+            start_time=time(9),
+            end_time=time(17),
         )
 
     def setUp(self):
@@ -27,15 +31,19 @@ class SchedulingCorrectnessTests(APITestCase):
 
     def existing(self, start="10:00", duration=60, **kwargs):
         return Appointment.objects.create(
-            user=self.user, specialist=self.specialist,
-            date=kwargs.pop("date", self.day), time=time.fromisoformat(start),
-            duration=duration, **kwargs,
+            user=self.user,
+            specialist=self.specialist,
+            date=kwargs.pop("date", self.day),
+            time=time.fromisoformat(start),
+            duration=duration,
+            **kwargs,
         )
 
     def create(self, start, duration=None, day=None):
         payload = {
             "specialist": self.specialist.pk,
-            "date": str(day or self.day), "time": start,
+            "date": str(day or self.day),
+            "time": start,
         }
         if duration is not None:
             payload["duration"] = duration
@@ -44,7 +52,8 @@ class SchedulingCorrectnessTests(APITestCase):
     def reschedule(self, appointment, start, day=None):
         return self.client.patch(
             f"/api/appointments/{appointment.pk}/reschedule/",
-            {"date": str(day or self.day), "time": start}, format="json",
+            {"date": str(day or self.day), "time": start},
+            format="json",
         )
 
     def slots(self, day=None):
@@ -75,8 +84,10 @@ class SchedulingCorrectnessTests(APITestCase):
         self.working.end_time = time(12)
         self.working.save()
         WorkingHour.objects.create(
-            specialist=self.specialist, day=self.day.weekday(),
-            start_time=time(14), end_time=time(18),
+            specialist=self.specialist,
+            day=self.day.weekday(),
+            start_time=time(14),
+            end_time=time(18),
         )
 
     def test_same_start_rejected(self):
@@ -119,7 +130,8 @@ class SchedulingCorrectnessTests(APITestCase):
 
     def test_terminal_statuses_release_complete_intervals(self):
         for state in (
-            AppointmentStatus.CANCELLED, AppointmentStatus.COMPLETED,
+            AppointmentStatus.CANCELLED,
+            AppointmentStatus.COMPLETED,
             AppointmentStatus.NO_SHOW,
         ):
             with self.subTest(status=state):
@@ -209,27 +221,40 @@ class SchedulingCorrectnessTests(APITestCase):
         self.working.end_time = time(10, 45)
         self.working.save()
         WorkingHour.objects.create(
-            specialist=self.specialist, day=self.day.weekday(),
-            start_time=time(10, 15), end_time=time(12),
+            specialist=self.specialist,
+            day=self.day.weekday(),
+            start_time=time(10, 15),
+            end_time=time(12),
         )
         self.assert_rejected("10:30", 60)
 
     def test_reschedule_excludes_own_overlapping_old_interval(self):
         appointment = self.existing("10:00", 60, notes="Preserve me")
         preserved = (
-            appointment.pk, appointment.user_id, appointment.specialist_id,
-            appointment.status, appointment.notes, appointment.duration,
+            appointment.pk,
+            appointment.user_id,
+            appointment.specialist_id,
+            appointment.status,
+            appointment.notes,
+            appointment.duration,
             appointment.created_at,
         )
         response = self.reschedule(appointment, "10:30")
         self.assertEqual(response.status_code, 200, response.data)
         appointment.refresh_from_db()
         self.assertEqual(appointment.time, time(10, 30))
-        self.assertEqual((
-            appointment.pk, appointment.user_id, appointment.specialist_id,
-            appointment.status, appointment.notes, appointment.duration,
-            appointment.created_at,
-        ), preserved)
+        self.assertEqual(
+            (
+                appointment.pk,
+                appointment.user_id,
+                appointment.specialist_id,
+                appointment.status,
+                appointment.notes,
+                appointment.duration,
+                appointment.created_at,
+            ),
+            preserved,
+        )
 
     def test_reschedule_moves_complete_occupied_interval(self):
         appointment = self.existing("10:00", 60)
@@ -265,8 +290,11 @@ class SchedulingCorrectnessTests(APITestCase):
     def test_other_specialist_and_nonoverlapping_dates_do_not_block(self):
         other = Specialist.objects.create(name="Other", profession="GP")
         Appointment.objects.create(
-            user=self.user, specialist=other, date=self.day,
-            time=time(10), duration=60,
+            user=self.user,
+            specialist=other,
+            date=self.day,
+            time=time(10),
+            duration=60,
         )
         self.existing(date=self.day - timedelta(days=1))
         self.existing(date=self.day + timedelta(days=1))
@@ -309,7 +337,7 @@ class SchedulingCorrectnessTests(APITestCase):
     def test_today_policy_preserved_in_non_utc_timezone(self):
         # 06:30 UTC is 10:00 Tehran local time. Availability historically lists
         # today's grid; mutations reject starts at or before the current time.
-        now = datetime.combine(self.day, time(6, 30), tzinfo=datetime_timezone.utc)
+        now = datetime.combine(self.day, time(6, 30), tzinfo=UTC)
         with timezone.override("Asia/Tehran"), patch("django.utils.timezone.now", return_value=now):
             appointment = self.existing("14:00")
             self.assertIn("09:00", self.slots())

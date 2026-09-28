@@ -7,7 +7,6 @@ from django.utils import timezone
 from core.services import write_audit_log
 from organizations.models import OrganizationInvitation, OrganizationMembership
 
-
 User = get_user_model()
 
 

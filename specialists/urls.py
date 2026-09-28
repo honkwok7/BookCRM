@@ -9,7 +9,6 @@ from specialists.views import (
     SpecialistWorkingHoursView,
 )
 
-
 urlpatterns = [
     path("specialists/", SpecialistListView.as_view(), name="specialist-list"),
     path("specialists/<int:pk>/", SpecialistDetailView.as_view(), name="specialist-detail"),

@@ -8,31 +8,46 @@ from accounts.models import UserRole
 from appointments.models import Appointment, AppointmentStatus
 from specialists.models import Specialist, WorkingHour
 
-
 User = get_user_model()
 
 
 class RolePolicyAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.customer = User.objects.create_user("customer", password="StrongRolePass123", role=UserRole.CUSTOMER)
+        cls.customer = User.objects.create_user(
+            "customer", password="StrongRolePass123", role=UserRole.CUSTOMER
+        )
         cls.other_customer = User.objects.create_user("other-customer", role=UserRole.CUSTOMER)
-        cls.staff_customer = User.objects.create_user("staff-customer", role=UserRole.CUSTOMER, is_staff=True)
+        cls.staff_customer = User.objects.create_user(
+            "staff-customer", role=UserRole.CUSTOMER, is_staff=True
+        )
         cls.super_customer = User.objects.create_superuser("super-customer", role=UserRole.CUSTOMER)
         cls.owner = User.objects.create_user("owner", role=UserRole.OWNER)
         cls.admin = User.objects.create_user("admin", role=UserRole.ADMIN)
         cls.specialist_user = User.objects.create_user("specialist", role=UserRole.SPECIALIST)
-        cls.other_specialist_user = User.objects.create_user("other-specialist", role=UserRole.SPECIALIST)
-        cls.unlinked_specialist = User.objects.create_user("unlinked-specialist", role=UserRole.SPECIALIST)
+        cls.other_specialist_user = User.objects.create_user(
+            "other-specialist", role=UserRole.SPECIALIST
+        )
+        cls.unlinked_specialist = User.objects.create_user(
+            "unlinked-specialist", role=UserRole.SPECIALIST
+        )
         cls.linked_customer = User.objects.create_user("linked-customer", role=UserRole.CUSTOMER)
-        cls.specialist = Specialist.objects.create(name="A", profession="GP", user=cls.specialist_user)
-        cls.other_specialist = Specialist.objects.create(name="B", profession="GP", user=cls.other_specialist_user)
-        cls.customer_profile = Specialist.objects.create(name="C", profession="GP", user=cls.linked_customer)
+        cls.specialist = Specialist.objects.create(
+            name="A", profession="GP", user=cls.specialist_user
+        )
+        cls.other_specialist = Specialist.objects.create(
+            name="B", profession="GP", user=cls.other_specialist_user
+        )
+        cls.customer_profile = Specialist.objects.create(
+            name="C", profession="GP", user=cls.linked_customer
+        )
         cls.day = timezone.localdate() + timedelta(days=7)
         for specialist in (cls.specialist, cls.other_specialist, cls.customer_profile):
             WorkingHour.objects.create(
-                specialist=specialist, day=cls.day.weekday(),
-                start_time=time(9), end_time=time(17),
+                specialist=specialist,
+                day=cls.day.weekday(),
+                start_time=time(9),
+                end_time=time(17),
             )
 
     def authenticate(self, user):
@@ -40,15 +55,25 @@ class RolePolicyAPITests(APITestCase):
 
     def appointment(self, user=None, specialist=None, state=AppointmentStatus.PENDING):
         return Appointment.objects.create(
-            user=user or self.other_customer, specialist=specialist or self.specialist,
-            date=self.day, time=time(10), duration=30, status=state,
+            user=user or self.other_customer,
+            specialist=specialist or self.specialist,
+            date=self.day,
+            time=time(10),
+            duration=30,
+            status=state,
         )
 
     def book(self, **extra):
-        return self.client.post("/api/appointments/", {
-            "specialist": self.specialist.pk, "date": str(self.day), "time": "12:00",
-            **extra,
-        }, format="json")
+        return self.client.post(
+            "/api/appointments/",
+            {
+                "specialist": self.specialist.pk,
+                "date": str(self.day),
+                "time": "12:00",
+                **extra,
+            },
+            format="json",
+        )
 
     def mutate(self, appointment, action):
         return self.client.patch(
@@ -80,7 +105,9 @@ class RolePolicyAPITests(APITestCase):
     def assert_actions_denied(self, actor, *, specialist=None, customer=None, actions=None):
         self.authenticate(actor)
         appointment = self.appointment(
-            user=customer, specialist=specialist, state=AppointmentStatus.CONFIRMED,
+            user=customer,
+            specialist=specialist,
+            state=AppointmentStatus.CONFIRMED,
         )
         original = Appointment.objects.values().get(pk=appointment.pk)
         for action in actions or ("confirm", "cancel", "complete", "no-show", "reschedule"):
@@ -97,12 +124,20 @@ class RolePolicyAPITests(APITestCase):
         pk = response.data["id"]
         for method in ("put", "patch"):
             response = getattr(self.client, method)(
-                f"/api/specialists/{pk}/", {"name": "Updated", "profession": "GP"}, format="json",
+                f"/api/specialists/{pk}/",
+                {"name": "Updated", "profession": "GP"},
+                format="json",
             )
             self.assertEqual(response.status_code, 200, response.data)
-        response = self.client.post(f"/api/specialists/{pk}/working-hours/", {
-            "day": self.day.weekday(), "start_time": "09:00", "end_time": "17:00",
-        }, format="json")
+        response = self.client.post(
+            f"/api/specialists/{pk}/working-hours/",
+            {
+                "day": self.day.weekday(),
+                "start_time": "09:00",
+                "end_time": "17:00",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         wh_pk = response.data["id"]
         response = self.client.delete(f"/api/specialists/{pk}/working-hours/{wh_pk}/")
@@ -116,22 +151,36 @@ class RolePolicyAPITests(APITestCase):
         self.authenticate(actor)
         response = self.client.get("/api/appointments/")
         self.assertEqual(response.status_code, 403, response.data)
-        response = self.client.post("/api/specialists/", {
-            "name": "Escalation", "profession": "GP", "user": actor.pk,
-        }, format="json")
+        response = self.client.post(
+            "/api/specialists/",
+            {
+                "name": "Escalation",
+                "profession": "GP",
+                "user": actor.pk,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 403, response.data)
         self.assertFalse(Specialist.objects.filter(name="Escalation").exists())
         pk = self.other_specialist.pk
         for method in ("put", "patch", "delete"):
             response = getattr(self.client, method)(
-                f"/api/specialists/{pk}/", {"name": "Changed", "profession": "GP"}, format="json",
+                f"/api/specialists/{pk}/",
+                {"name": "Changed", "profession": "GP"},
+                format="json",
             )
             self.assertEqual(response.status_code, 403, response.data)
         self.other_specialist.refresh_from_db()
         self.assertEqual(self.other_specialist.name, "B")
-        response = self.client.post(f"/api/specialists/{pk}/working-hours/", {
-            "day": self.day.weekday(), "start_time": "17:00", "end_time": "18:00",
-        }, format="json")
+        response = self.client.post(
+            f"/api/specialists/{pk}/working-hours/",
+            {
+                "day": self.day.weekday(),
+                "start_time": "17:00",
+                "end_time": "18:00",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 403, response.data)
         wh = WorkingHour.objects.get(specialist_id=pk)
         response = self.client.delete(f"/api/specialists/{pk}/working-hours/{wh.pk}/")
@@ -159,11 +208,18 @@ class RolePolicyAPITests(APITestCase):
                 self.authenticate(actor)
                 response = self.client.get("/api/appointments/")
                 self.assertEqual(response.status_code, 200, response.data)
-                self.assertEqual({row["id"] for row in response.data}, {first.pk, second.pk})
-                for specialist, appointment in ((self.specialist, first), (self.other_specialist, second)):
+                self.assertEqual(
+                    {row["id"] for row in response.data["results"]}, {first.pk, second.pk}
+                )
+                for specialist, appointment in (
+                    (self.specialist, first),
+                    (self.other_specialist, second),
+                ):
                     response = self.client.get(f"/api/specialists/{specialist.pk}/appointments/")
                     self.assertEqual(response.status_code, 200, response.data)
-                    self.assertEqual([row["id"] for row in response.data], [appointment.pk])
+                    self.assertEqual(
+                        [row["id"] for row in response.data["results"]], [appointment.pk]
+                    )
 
     def test_owner_admin_and_specialists_cannot_book_with_or_without_profiles(self):
         for actor in (self.owner, self.admin):
@@ -215,7 +271,9 @@ class RolePolicyAPITests(APITestCase):
 
     def test_specialist_customer_ownership_does_not_bypass_assignment(self):
         self.assert_actions_denied(
-            self.specialist_user, specialist=self.other_specialist, customer=self.specialist_user,
+            self.specialist_user,
+            specialist=self.other_specialist,
+            customer=self.specialist_user,
         )
 
     def test_specialist_lists_only_assigned_specialist_appointments(self):
@@ -224,7 +282,7 @@ class RolePolicyAPITests(APITestCase):
         self.authenticate(self.specialist_user)
         response = self.client.get(f"/api/specialists/{self.specialist.pk}/appointments/")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual([row["id"] for row in response.data], [own.pk])
+        self.assertEqual([row["id"] for row in response.data["results"]], [own.pk])
         response = self.client.get(f"/api/specialists/{self.other_specialist.pk}/appointments/")
         self.assertEqual(response.status_code, 403, response.data)
 
@@ -234,9 +292,15 @@ class RolePolicyAPITests(APITestCase):
     def test_specialist_cannot_manage_own_working_hours(self):
         self.authenticate(self.specialist_user)
         pk = self.specialist.pk
-        response = self.client.post(f"/api/specialists/{pk}/working-hours/", {
-            "day": self.day.weekday(), "start_time": "17:00", "end_time": "18:00",
-        }, format="json")
+        response = self.client.post(
+            f"/api/specialists/{pk}/working-hours/",
+            {
+                "day": self.day.weekday(),
+                "start_time": "17:00",
+                "end_time": "18:00",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 403, response.data)
         wh = WorkingHour.objects.get(specialist_id=pk)
         response = self.client.delete(f"/api/specialists/{pk}/working-hours/{wh.pk}/")
@@ -272,7 +336,9 @@ class RolePolicyAPITests(APITestCase):
 
     def test_customer_cannot_perform_specialist_actions_on_own_appointment(self):
         self.assert_actions_denied(
-            self.customer, customer=self.customer, actions=("confirm", "complete", "no-show"),
+            self.customer,
+            customer=self.customer,
+            actions=("confirm", "complete", "no-show"),
         )
 
     def test_customer_cannot_manage_specialists_or_working_hours(self):
@@ -311,8 +377,13 @@ class RolePolicyAPITests(APITestCase):
 
     def test_all_roles_my_appointments_remains_ownership_filtered(self):
         for actor in (
-            self.owner, self.admin, self.specialist_user, self.unlinked_specialist,
-            self.customer, self.linked_customer, self.staff_customer,
+            self.owner,
+            self.admin,
+            self.specialist_user,
+            self.unlinked_specialist,
+            self.customer,
+            self.linked_customer,
+            self.staff_customer,
         ):
             with self.subTest(actor=actor.username):
                 own = self.appointment(user=actor)
@@ -320,15 +391,23 @@ class RolePolicyAPITests(APITestCase):
                 self.authenticate(actor)
                 response = self.client.get("/api/my-appointments/")
                 self.assertEqual(response.status_code, 200, response.data)
-                self.assertEqual([row["id"] for row in response.data], [own.pk])
+                self.assertEqual([row["id"] for row in response.data["results"]], [own.pk])
                 own.delete()
                 other.delete()
 
     def test_public_specialist_working_hour_and_availability_reads_remain_public(self):
-        for actor in (None, self.customer, self.admin, self.owner, self.specialist_user, self.unlinked_specialist):
+        for actor in (
+            None,
+            self.customer,
+            self.admin,
+            self.owner,
+            self.specialist_user,
+            self.unlinked_specialist,
+        ):
             self.authenticate(actor)
             for url in (
-                "/api/specialists/", f"/api/specialists/{self.specialist.pk}/",
+                "/api/specialists/",
+                f"/api/specialists/{self.specialist.pk}/",
                 f"/api/specialists/{self.specialist.pk}/working-hours/",
                 f"/api/specialists/{self.specialist.pk}/available-slots/?date={self.day}",
             ):
@@ -340,7 +419,11 @@ class RolePolicyAPITests(APITestCase):
         self.authenticate(None)
         appointment = self.appointment()
         self.assertEqual(self.book().status_code, 401)
-        for url in ("/api/appointments/", "/api/my-appointments/", f"/api/specialists/{self.specialist.pk}/appointments/"):
+        for url in (
+            "/api/appointments/",
+            "/api/my-appointments/",
+            f"/api/specialists/{self.specialist.pk}/appointments/",
+        ):
             self.assertEqual(self.client.get(url).status_code, 401)
         for action in ("confirm", "cancel", "complete", "no-show", "reschedule"):
             self.assertEqual(self.mutate(appointment, action).status_code, 401)
@@ -350,15 +433,22 @@ class RolePolicyAPITests(APITestCase):
         wh = WorkingHour.objects.get(specialist=self.other_specialist)
         for actor in (self.owner, self.admin):
             self.authenticate(actor)
-            response = self.client.delete(f"/api/specialists/{self.specialist.pk}/working-hours/{wh.pk}/")
+            response = self.client.delete(
+                f"/api/specialists/{self.specialist.pk}/working-hours/{wh.pk}/"
+            )
             self.assertEqual(response.status_code, 404, response.data)
             self.assertTrue(WorkingHour.objects.filter(pk=wh.pk).exists())
 
     def test_role_change_is_enforced_with_existing_jwt(self):
         self.authenticate(None)
-        response = self.client.post("/api/login/", {
-            "username": self.customer.username, "password": "StrongRolePass123",
-        }, format="json")
+        response = self.client.post(
+            "/api/login/",
+            {
+                "email": self.customer.email,
+                "password": "StrongRolePass123",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
         self.assertEqual(self.client.get("/api/appointments/").status_code, 403)
@@ -370,12 +460,21 @@ class RolePolicyAPITests(APITestCase):
 
     def assert_registration_cannot_elevate(self, role):
         self.authenticate(None)
-        response = self.client.post("/api/register/", {
-            "username": "new-user", "password": "StrongNewPass123", "role": role,
-            "is_staff": True, "is_superuser": True,
-        }, format="json")
+        response = self.client.post(
+            "/api/register/",
+            {
+                "email": "new-user@example.test",
+                "password": "StrongNewPass123",
+                "role": role,
+                "is_staff": True,
+                "is_superuser": True,
+                "accept_terms": True,
+                "accept_privacy": True,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 201, response.data)
-        user = User.objects.get(username="new-user")
+        user = User.objects.get(email="new-user@example.test")
         self.assertEqual(user.role, UserRole.CUSTOMER)
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
@@ -396,10 +495,16 @@ class RolePolicyAPITests(APITestCase):
         for method in ("patch", "put"):
             for role in (UserRole.OWNER, UserRole.ADMIN, UserRole.SPECIALIST):
                 with self.subTest(method=method, role=role):
-                    response = getattr(self.client, method)("/api/profile/", {
-                        "role": role, "is_staff": True, "is_superuser": True,
-                        "first_name": "Allowed edit",
-                    }, format="json")
+                    response = getattr(self.client, method)(
+                        "/api/profile/",
+                        {
+                            "role": role,
+                            "is_staff": True,
+                            "is_superuser": True,
+                            "first_name": "Allowed edit",
+                        },
+                        format="json",
+                    )
                     self.assertEqual(response.status_code, 200, response.data)
                     self.customer.refresh_from_db()
                     self.assertEqual(self.customer.role, UserRole.CUSTOMER)
@@ -410,10 +515,16 @@ class RolePolicyAPITests(APITestCase):
 
     def test_admin_specialist_creation_cannot_assign_customer_role_or_link(self):
         self.authenticate(self.admin)
-        response = self.client.post("/api/specialists/", {
-            "name": "Unlinked", "profession": "GP", "user": self.customer.pk,
-            "role": UserRole.SPECIALIST,
-        }, format="json")
+        response = self.client.post(
+            "/api/specialists/",
+            {
+                "name": "Unlinked",
+                "profession": "GP",
+                "user": self.customer.pk,
+                "role": UserRole.SPECIALIST,
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         profile = Specialist.objects.get(pk=response.data["id"])
         self.assertIsNone(profile.user_id)

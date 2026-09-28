@@ -4,13 +4,15 @@ services:
     container_name: schedula-web
     env_file:
       - .env
+    environment:
+      RUN_MIGRATIONS: "1"
     ports:
       - "8000:8000"
     depends_on:
       - db
       - redis
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=4)"]
       interval: 30s
       timeout: 5s
       retries: 5

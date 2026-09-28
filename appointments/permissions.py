@@ -6,6 +6,7 @@ from accounts.permissions import get_specialist_profile, has_role, is_applicatio
 
 class IsAdminOrAssignedSpecialist(BasePermission):
     """Owner/admin role, or specialist role with the assigned profile."""
+
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated)
 
@@ -18,6 +19,7 @@ class IsAdminOrAssignedSpecialist(BasePermission):
 
 class IsAppointmentCanceller(BasePermission):
     """Owner/admin, owning customer, or assigned specialist; also used for reschedule."""
+
     def has_object_permission(self, request, view, obj):
         if is_application_admin(request.user):
             return True

@@ -7,8 +7,15 @@ from notifications.models import NotificationLog
 
 
 @app.task(bind=True, max_retries=3)
-def send_templated_email(self, *, notification_log_id, subject, template_base, context):
-    log = NotificationLog.objects.get(id=notification_log_id)
+def send_templated_email(self, *, notification_log_id, organization_id, subject, template_base):
+    # Tenant context is explicit: the log must belong to the organization the caller named.
+    log = NotificationLog.objects.select_related("related_booking__service").get(
+        id=notification_log_id,
+        organization_id=organization_id,
+    )
+    if log.status == NotificationLog.Status.SENT:
+        return
+    context = {"booking": log.related_booking}
     try:
         text_body = render_to_string(f"emails/{template_base}.txt", context)
         html_body = render_to_string(f"emails/{template_base}.html", context)
@@ -24,4 +31,4 @@ def send_templated_email(self, *, notification_log_id, subject, template_base, c
         log.failure_reason = str(exc)
         log.retry_count += 1
         log.save(update_fields=["status", "failure_reason", "retry_count", "updated_at"])
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc

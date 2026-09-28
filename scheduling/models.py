@@ -5,58 +5,77 @@ from core.models import BaseUUIDModel
 
 
 class WeeklyAvailability(BaseUUIDModel):
-	organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="weekly_availabilities")
-	staff = models.ForeignKey("staff.StaffProfile", on_delete=models.CASCADE, related_name="weekly_availabilities")
-	day_of_week = models.PositiveSmallIntegerField()
-	start_time = models.TimeField()
-	end_time = models.TimeField()
-	is_active = models.BooleanField(default=True)
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="weekly_availabilities"
+    )
+    staff = models.ForeignKey(
+        "staff.StaffProfile", on_delete=models.CASCADE, related_name="weekly_availabilities"
+    )
+    day_of_week = models.PositiveSmallIntegerField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_active = models.BooleanField(default=True)
 
-	class Meta:
-		ordering = ["staff", "day_of_week", "start_time"]
-		constraints = [
-			models.CheckConstraint(condition=models.Q(day_of_week__gte=0, day_of_week__lte=6), name="weekly_availability_valid_day"),
-		]
+    class Meta:
+        ordering = ["staff", "day_of_week", "start_time"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(day_of_week__gte=0, day_of_week__lte=6),
+                name="weekly_availability_valid_day",
+            ),
+        ]
 
-	def clean(self):
-		if self.start_time >= self.end_time:
-			raise ValidationError("start_time must be before end_time")
+    def clean(self):
+        if self.start_time >= self.end_time:
+            raise ValidationError("start_time must be before end_time")
 
 
 class AvailabilityException(BaseUUIDModel):
-	organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="availability_exceptions")
-	staff = models.ForeignKey("staff.StaffProfile", on_delete=models.CASCADE, related_name="availability_exceptions")
-	date = models.DateField()
-	unavailable_all_day = models.BooleanField(default=False)
-	start_time = models.TimeField(null=True, blank=True)
-	end_time = models.TimeField(null=True, blank=True)
-	reason = models.CharField(max_length=255, blank=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="availability_exceptions",
+    )
+    staff = models.ForeignKey(
+        "staff.StaffProfile", on_delete=models.CASCADE, related_name="availability_exceptions"
+    )
+    date = models.DateField()
+    unavailable_all_day = models.BooleanField(default=False)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    reason = models.CharField(max_length=255, blank=True)
 
-	def clean(self):
-		if not self.unavailable_all_day and (not self.start_time or not self.end_time):
-			raise ValidationError("start_time and end_time are required for partial availability")
+    def clean(self):
+        if not self.unavailable_all_day and (not self.start_time or not self.end_time):
+            raise ValidationError("start_time and end_time are required for partial availability")
 
 
 class TimeOff(BaseUUIDModel):
-	organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="time_off_entries")
-	staff = models.ForeignKey("staff.StaffProfile", on_delete=models.CASCADE, related_name="time_off_entries")
-	start_datetime = models.DateTimeField()
-	end_datetime = models.DateTimeField()
-	reason = models.CharField(max_length=255, blank=True)
-	approval_status = models.CharField(max_length=30, default="approved")
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="time_off_entries"
+    )
+    staff = models.ForeignKey(
+        "staff.StaffProfile", on_delete=models.CASCADE, related_name="time_off_entries"
+    )
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField()
+    reason = models.CharField(max_length=255, blank=True)
+    approval_status = models.CharField(max_length=30, default="approved")
 
-	def clean(self):
-		if self.start_datetime >= self.end_datetime:
-			raise ValidationError("start_datetime must be before end_datetime")
+    def clean(self):
+        if self.start_datetime >= self.end_datetime:
+            raise ValidationError("start_datetime must be before end_datetime")
 
 
 class OrganizationHoliday(BaseUUIDModel):
-	organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="holidays")
-	date = models.DateField()
-	name = models.CharField(max_length=120)
-	full_day_closure = models.BooleanField(default=True)
-	start_time = models.TimeField(null=True, blank=True)
-	end_time = models.TimeField(null=True, blank=True)
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="holidays"
+    )
+    date = models.DateField()
+    name = models.CharField(max_length=120)
+    full_day_closure = models.BooleanField(default=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
 
-	class Meta:
-		unique_together = ("organization", "date", "name")
+    class Meta:
+        unique_together = ("organization", "date", "name")

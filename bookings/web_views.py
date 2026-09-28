@@ -12,15 +12,31 @@ class PublicBookingPageView(View):
     template_name = "web/public_booking.html"
 
     def get(self, request, slug):
-        organization = get_object_or_404(Organization, slug=slug, booking_page_enabled=True, is_active=True)
-        services = Service.objects.filter(organization=organization, is_public=True, is_active=True, is_archived=False)
-        staff = StaffProfile.objects.filter(organization=organization, is_active=True, is_accepting_bookings=True)
-        return render(request, self.template_name, {"organization": organization, "services": services, "staff": staff})
+        organization = get_object_or_404(
+            Organization, slug=slug, booking_page_enabled=True, is_active=True
+        )
+        services = Service.objects.filter(
+            organization=organization, is_public=True, is_active=True, is_archived=False
+        )
+        staff = StaffProfile.objects.filter(
+            organization=organization, is_active=True, is_accepting_bookings=True
+        )
+        return render(
+            request,
+            self.template_name,
+            {"organization": organization, "services": services, "staff": staff},
+        )
 
     def post(self, request, slug):
-        organization = get_object_or_404(Organization, slug=slug, booking_page_enabled=True, is_active=True)
-        service = get_object_or_404(Service, id=request.POST.get("service"), organization=organization)
-        staff_profile = get_object_or_404(StaffProfile, id=request.POST.get("staff"), organization=organization)
+        organization = get_object_or_404(
+            Organization, slug=slug, booking_page_enabled=True, is_active=True
+        )
+        service = get_object_or_404(
+            Service, id=request.POST.get("service"), organization=organization
+        )
+        staff_profile = get_object_or_404(
+            StaffProfile, id=request.POST.get("staff"), organization=organization
+        )
         start_datetime = parse_datetime(request.POST.get("start_datetime", ""))
         if not start_datetime:
             return render(
@@ -28,8 +44,12 @@ class PublicBookingPageView(View):
                 self.template_name,
                 {
                     "organization": organization,
-                    "services": Service.objects.filter(organization=organization, is_public=True, is_active=True, is_archived=False),
-                    "staff": StaffProfile.objects.filter(organization=organization, is_active=True, is_accepting_bookings=True),
+                    "services": Service.objects.filter(
+                        organization=organization, is_public=True, is_active=True, is_archived=False
+                    ),
+                    "staff": StaffProfile.objects.filter(
+                        organization=organization, is_active=True, is_accepting_bookings=True
+                    ),
                     "error": "Invalid start datetime format",
                 },
                 status=400,
