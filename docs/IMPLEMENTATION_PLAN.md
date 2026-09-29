@@ -844,6 +844,27 @@ Every org has at least one location.
 
 ### M3.2: Staff and service assignments
 
+> **Status: done (2026-09-29, branch `m3.2-staff-assignments`).** See [STAFF.md](STAFF.md).
+> - **Models:** `StaffProfile` gained `display_name`, `provider_type`,
+>   `online_booking_visible`, `max_daily_appointments` and `locations`;
+>   `StaffServiceOffering` (location empty = all their locations; custom duration and price).
+> - **Backfill:** migration `staff/0003` puts every staff member at their organization's
+>   default location and turns each `assigned_staff_members` link into an "all locations"
+>   offering. The M2M stays as a mirror written only by `staff/services.py`; the services API
+>   still accepts it and converts it to offerings.
+> - **Services and selectors:** `create_staff_profile` (active non-customer member, staff limit
+>   through `enforce_plan_limit`), `set_staff_locations`, offering CRUD, `set_staff_offerings`,
+>   `list_providers_for(service, location, public=)` and `offering_for`.
+> - **API:** `/api/v1/staff/` writes through the services; new `/api/v1/staff-offerings/` (in
+>   the isolation suite) and `GET /services/{id}/providers/`.
+> - **Public exposure:** the booking page shows `public_name` and lists, like the slot API and
+>   self-service bookings, only staff visible online. (Email addresses were already hidden
+>   since the 2026-09-28 review.)
+> - **UI:** `/app/staff/` and a person page with tabs Profile, Services, Locations,
+>   Availability and Time off (the last two read-only until M3.4).
+> - **Deferred:** the booking engine enforcing offerings and the daily limit (M3.4/M4.1);
+>   inviting new team members from the web app (only via the API today).
+
 #### Objective
 Staff ↔ locations ↔ services.
 

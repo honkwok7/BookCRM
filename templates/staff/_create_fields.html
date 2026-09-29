@@ -1,0 +1,8 @@
+<p class="-mt-2 text-sm text-slate-600">Choose a member of your team who sees customers. You'll pick the services they offer next.</p>
+{% include "components/field.html" with field=form.user %}
+<div class="grid gap-4 sm:grid-cols-2">
+  {% include "components/field.html" with field=form.display_name %}
+  {% include "components/field.html" with field=form.job_title %}
+  {% include "components/field.html" with field=form.provider_type %}
+</div>
+{% include "staff/_locations_field.html" with field=form.locations %}

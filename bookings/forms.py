@@ -6,7 +6,7 @@ from bookings.selectors import bookable_services, bookable_staff
 class StaffChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, staff):
         # Public page: show a name, never the staff member's email address.
-        return staff.user.get_full_name() or staff.job_title or "Team member"
+        return staff.public_name
 
 
 class PublicBookingForm(forms.Form):

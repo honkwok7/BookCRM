@@ -1,0 +1,16 @@
+{% extends "layouts/app.html" %}
+{% block title %}Add staff member · {{ organization.name }}{% endblock %}
+{% block page_title %}Add staff member{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+{% if form.fields.user.queryset.exists or form.is_bound %}
+  {% include "staff/_form_shell.html" with title="Add staff member" submit="Add staff member" fields_template="staff/_create_fields.html" %}
+{% else %}
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Add staff member</h2>{% endif %}
+  {% url 'app-team' as team_url %}
+  {% include "components/empty_state.html" with title="Everyone on your team is already listed" message="Invite the person to your team first; once they join, you can add them here." icon="users" action_url=team_url action_label="Go to the team" %}
+{% endif %}
+{% endpartialdef %}
+</div>
+{% endblock %}

@@ -247,7 +247,11 @@ class BookingCreateSerializer(serializers.Serializer):
             .filter(id=validated_data["service"])
             .first()
         )
-        staff_profile = bookable_staff(organization).filter(id=validated_data["staff"]).first()
+        staff_profile = (
+            bookable_staff(organization, public=not is_team)
+            .filter(id=validated_data["staff"])
+            .first()
+        )
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
 

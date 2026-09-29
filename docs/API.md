@@ -18,9 +18,19 @@ Base path: `/api/v1/`
 - `POST /api/organizations/invitations/accept/`
 
 ## Services, Staff, Scheduling
-- `/api/v1/services/`
+- `/api/v1/services/`. Writing `assigned_staff_members` sets who offers the service at all
+  their locations (see [STAFF.md](STAFF.md)).
+- `GET /api/v1/services/{id}/providers/?location=<id>`: staff who can be booked for the
+  service (there).
 - `/api/v1/service-categories/`
-- `/api/v1/staff/`
+- `/api/v1/staff/`. Read: `staff.view`; write: `staff.manage`. `user` must be an active team
+  member; `locations` replaces where they work. Filters: `location`, `is_active`,
+  `is_accepting_bookings`, `online_booking_visible`. 409 `plan_limit` beyond the plan's staff
+  limit; 409 `in_use` when deleting someone with appointments.
+- `/api/v1/staff-offerings/` (CRUD): `staff`, `service`, `location` (empty = all their
+  locations), `custom_duration_minutes`, `custom_price`, `is_active`; read-only
+  `duration_minutes` and `price` are the values that apply. Filters: `staff`, `service`,
+  `location`, `is_active`.
 - `/api/v1/availability/weekly/`
 - `/api/v1/availability/exceptions/`
 - `/api/v1/availability/time-off/`

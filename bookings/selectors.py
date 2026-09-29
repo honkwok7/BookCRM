@@ -20,10 +20,16 @@ def bookable_services(organization, *, public: bool):
     return services.filter(is_public=True) if public else services
 
 
-def bookable_staff(organization):
-    return StaffProfile.objects.filter(
+def bookable_staff(organization, *, public: bool = True):
+    """Providers that can be booked now; the public page lists only those visible online.
+
+    Which services each provider offers, and where, is ``staff.selectors.list_providers_for``;
+    the booking engine starts enforcing it with the availability rewrite (M3.4/M4.1).
+    """
+    staff = StaffProfile.objects.filter(
         organization=organization, is_active=True, is_accepting_bookings=True
     ).select_related("user")
+    return staff.filter(online_booking_visible=True) if public else staff
 
 
 def _own_customer_filter(user) -> Q:

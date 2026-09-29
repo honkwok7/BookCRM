@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% block title %}Services · {{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Services {{ staff.public_name }} offers{% endblock %}
+{% block content %}
+<div class="card card-body max-w-4xl">
+{% partialdef form inline %}
+{% include "staff/_form_shell.html" with title="Services "|add:staff.public_name|add:" offers" submit="Save services" fields_template="staff/_services_fields.html" %}
+{% endpartialdef %}
+</div>
+{% endblock %}

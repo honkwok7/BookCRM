@@ -1,0 +1,38 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+A staff member's page. Each tab is its own URL; with htmx, clicking a tab swaps only the
+"tabs" partial (tab bar + panel) and updates the address bar.
+{% endcomment %}
+{% block title %}{{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ staff.public_name }}{% endblock %}
+{% block page_description %}
+<div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
+  {% if staff.is_active %}{% include "components/badge.html" with label="Active" level="success" %}{% else %}{% include "components/badge.html" with label="Inactive" %}{% endif %}
+  {% if staff.job_title %}<span>{{ staff.job_title }}</span>{% endif %}
+  {% if staff.public_name != staff.full_name %}<span>{{ staff.full_name }}</span>{% endif %}
+  <a class="flex items-center gap-1" href="mailto:{{ staff.user.email }}">{% include "components/icon.html" with name="mail" class="size-4" %}{{ staff.user.email }}</a>
+  {% if staff.phone_number %}<a class="flex items-center gap-1" href="tel:{{ staff.phone_number }}">{% include "components/icon.html" with name="phone" class="size-4" %}{{ staff.phone_number }}</a>{% endif %}
+</div>
+{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'app-staff-list' %}" class="btn btn-secondary">All staff</a>
+  {% if can_manage %}
+    <a href="{% url 'app-staff-edit' staff.pk %}" class="btn btn-primary" hx-get="{% url 'app-staff-edit' staff.pk %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="pencil" class="size-4" %}Edit profile
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<div id="staff-tabs">
+{% partialdef tabs inline %}
+  <nav class="-mb-px flex gap-6 overflow-x-auto border-b border-slate-200" aria-label="Staff member sections">
+    {% for item in tabs %}
+      <a href="{{ item.url }}" class="tab"{% if item.active %} aria-current="page"{% endif %} hx-get="{{ item.url }}" hx-target="#staff-tabs" hx-push-url="true">{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+  <section class="pt-6" aria-label="{% for item in tabs %}{% if item.active %}{{ item.label }}{% endif %}{% endfor %}">
+    {% include tab_template %}
+  </section>
+{% endpartialdef %}
+</div>
+{% endblock %}

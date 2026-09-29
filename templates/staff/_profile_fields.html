@@ -1,0 +1,8 @@
+{% for title, fields in form.sections %}
+  <fieldset class="grid gap-4">
+    <legend class="mb-2 text-sm font-semibold text-slate-900">{{ title }}</legend>
+    <div class="grid gap-4 {% if title == 'Profile' %}sm:grid-cols-2{% endif %}">
+      {% for field in fields %}{% include "components/field.html" with field=field %}{% endfor %}
+    </div>
+  </fieldset>
+{% endfor %}

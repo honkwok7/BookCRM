@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% block title %}Locations · {{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Where {{ staff.public_name }} works{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+{% include "staff/_form_shell.html" with title="Where "|add:staff.public_name|add:" works" submit="Save locations" fields_template="staff/_locations_fields.html" %}
+{% endpartialdef %}
+</div>
+{% endblock %}
