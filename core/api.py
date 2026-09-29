@@ -72,7 +72,9 @@ class AuditedModelViewSetMixin:
 
     audit_actions: dict = {}
     audit_redact_fields: tuple[str, ...] = ()
-    # Writes ("create"/"update") audited by the service the serializer calls instead.
+    # Writes ("create"/"update"/"delete") audited by the service the serializer calls instead.
+    # They still run in one transaction here, so a serializer that calls several services
+    # (e.g. save a service, then its providers) is all-or-nothing.
     audited_by_service: tuple[str, ...] = ()
 
     def _audit(self, kind, instance, changes=None):
@@ -90,12 +92,16 @@ class AuditedModelViewSetMixin:
     def perform_create(self, serializer):
         with transaction.atomic():
             instance = serializer.save()
-            self._audit("create", instance)
+            if "create" not in self.audited_by_service:
+                self._audit("create", instance)
 
     def perform_update(self, serializer):
         from core.audit import diff_snapshots, snapshot
 
         with transaction.atomic():
+            if "update" in self.audited_by_service:
+                serializer.save()
+                return
             before = snapshot(serializer.instance)
             instance = serializer.save()
             changes = diff_snapshots(

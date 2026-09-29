@@ -2,7 +2,8 @@
 address, time zone, phone and email. New organizations get theirs from locations.signals.
 
 Mirrors ``locations.services.default_location_fields`` (migrations can't import app code that
-may change later). Reversing deletes only the locations this migration could have created.
+may change later). Reversing is a no-op: the rows can't be told apart from default
+locations created later, and reversing 0001 drops the table anyway.
 """
 
 import zoneinfo
@@ -34,15 +35,10 @@ def create_default_locations(apps, schema_editor):
         )
 
 
-def remove_default_locations(apps, schema_editor):
-    Location = apps.get_model("locations", "Location")
-    Location.objects.filter(is_default=True, slug="main").delete()
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("locations", "0001_initial"),
         ("organizations", "0001_initial"),
     ]
 
-    operations = [migrations.RunPython(create_default_locations, remove_default_locations)]
+    operations = [migrations.RunPython(create_default_locations, migrations.RunPython.noop)]

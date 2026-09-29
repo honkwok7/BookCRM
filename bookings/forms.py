@@ -1,6 +1,7 @@
 from django import forms
 
 from bookings.selectors import bookable_services, bookable_staff
+from staff.selectors import provides
 
 
 class StaffChoiceField(forms.ModelChoiceField):
@@ -32,3 +33,12 @@ class PublicBookingForm(forms.Form):
         self.fields["staff"].queryset = bookable_staff(organization)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "border rounded p-2")
+
+    def clean(self):
+        data = super().clean()
+        service, staff = data.get("service"), data.get("staff")
+        if service is not None and staff is not None and not provides(staff, service, public=True):
+            self.add_error(
+                "staff", f"{staff.public_name} doesn't offer {service.name}. Choose someone else."
+            )
+        return data

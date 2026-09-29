@@ -1,0 +1,84 @@
+{% extends "layouts/app.html" %}
+{% load crm_tags %}
+{% block title %}Services · {{ organization.name }}{% endblock %}
+{% block page_title %}Services{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">What customers can book, grouped by category.</p>{% endblock %}
+{% block page_actions %}
+  {% if can_manage %}
+    <a href="{% url 'app-service-category-new' %}" class="btn btn-secondary" hx-get="{% url 'app-service-category-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}New category
+    </a>
+    <a href="{% url 'app-service-new' %}" class="btn btn-primary" hx-get="{% url 'app-service-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}New service
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if can_manage and limit is not None %}
+  <p class="mb-4 text-sm text-slate-700">{{ active_count }} of {{ limit }} service{{ limit|pluralize }} on your plan (archived services don't count).</p>
+{% endif %}
+<div class="card mb-6 p-4">
+  {% include "components/filter_bar.html" with target="#results" query=query search_label="Search services" filters=filters %}
+</div>
+<div id="results" class="grid grid-cols-1 gap-6">
+  {% partialdef results inline %}
+  {% for group in groups %}
+    <section class="card" aria-labelledby="group-{{ forloop.counter }}">
+      <div class="card-header flex flex-wrap items-center justify-between gap-2">
+        <h2 id="group-{{ forloop.counter }}" class="card-title flex items-center gap-2">
+          {% if group.category %}<span class="size-2.5 rounded-full {{ group.category|tag_dot_class }}" aria-hidden="true"></span>{{ group.category.name }}{% else %}No category{% endif %}
+        </h2>
+        {% if can_manage and group.category %}
+          <div class="flex gap-2">
+            <a href="{% url 'app-service-new' %}?category={{ group.category.pk }}" class="btn btn-ghost btn-sm" hx-get="{% url 'app-service-new' %}?category={{ group.category.pk }}" hx-target="#modal-body">{% include "components/icon.html" with name="plus" class="size-4" %}Add service<span class="sr-only"> to {{ group.category.name }}</span></a>
+            <a href="{% url 'app-service-category-edit' group.category.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-service-category-edit' group.category.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit<span class="sr-only"> category {{ group.category.name }}</span></a>
+          </div>
+        {% endif %}
+      </div>
+      {% if group.services %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <caption class="sr-only">{% if group.category %}{{ group.category.name }}{% else %}Services without a category{% endif %}</caption>
+            <thead><tr><th scope="col">Service</th><th scope="col">Duration</th><th scope="col">Price</th><th scope="col">Where</th><th scope="col">Providers</th><th scope="col">Booking</th></tr></thead>
+            <tbody>
+              {% for service in group.services %}
+                <tr>
+                  <td class="font-medium">
+                    {% if can_manage %}<a href="{% url 'app-service-edit' service.pk %}" hx-get="{% url 'app-service-edit' service.pk %}" hx-target="#modal-body">{{ service.name }}</a>{% else %}{{ service.name }}{% endif %}
+                    {% if service.required_provider_type %}<span class="block text-xs font-normal text-slate-600">Only {{ service.required_provider_type }}</span>{% endif %}
+                  </td>
+                  <td class="whitespace-nowrap text-slate-700">{{ service.duration_minutes }} min{% if service.buffer_before_minutes or service.buffer_after_minutes %}<span class="block text-xs text-slate-600">+{{ service.buffer_before_minutes|add:service.buffer_after_minutes }} min buffer</span>{% endif %}</td>
+                  <td class="whitespace-nowrap text-slate-700">{{ service.price|floatformat:2 }} {{ service.currency }}</td>
+                  <td class="text-slate-700">{% for location in service.locations.all %}<span class="block">{{ location.name }}</span>{% empty %}All locations{% endfor %}</td>
+                  <td class="text-slate-700">{% if service.provider_count %}{{ service.provider_count }}{% else %}<span class="text-amber-800">None yet</span>{% endif %}</td>
+                  <td>
+                    {% if service.is_archived %}{% include "components/badge.html" with label="Archived" %}
+                    {% elif not service.is_active %}{% include "components/badge.html" with label="Inactive" %}
+                    {% elif service.is_public %}{% include "components/badge.html" with label="Online" level="success" %}
+                    {% else %}{% include "components/badge.html" with label="Team only" %}{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="p-4 text-sm text-slate-600 sm:px-6">No services in this category yet.</p>
+      {% endif %}
+    </section>
+  {% empty %}
+    <div class="card">
+      {% if filtered %}
+        {% include "components/empty_state.html" with title="No matching services" message="Try another name or filter." icon="search" %}
+      {% elif can_manage %}
+        {% url 'app-service-new' as new_url %}
+        {% include "components/empty_state.html" with title="No services yet" message="Add what customers can book: its duration, price and where it's offered." icon="clipboard" action_url=new_url action_label="Add a service" %}
+      {% else %}
+        {% include "components/empty_state.html" with title="No services yet" icon="clipboard" %}
+      {% endif %}
+    </div>
+  {% endfor %}
+  {% if has_services %}<p class="text-sm text-slate-600">Who offers each service, and where, is set on each person's page under <a href="{% url 'app-staff-list' %}">Staff</a>.</p>{% endif %}
+  {% endpartialdef %}
+</div>
+{% endblock %}

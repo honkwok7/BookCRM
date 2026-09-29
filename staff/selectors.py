@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db.models import Prefetch, Q, QuerySet
 
 from locations.models import Location
+from services.selectors import service_offered_at
 from staff.models import StaffProfile, StaffServiceOffering
 
 
@@ -30,9 +31,12 @@ def list_providers_for(service, location=None, *, public: bool = False):
     """Staff who can be booked for ``service`` (at ``location``, when given).
 
     A provider qualifies when they are active and accepting bookings, have an active offering
-    of the service that applies there, and (with a location) work at that location. ``public``
+    of the service that applies there, have the service's required provider type (if any),
+    and (with a location) work at that location, where the service must be offered. ``public``
     also requires ``online_booking_visible``: hidden providers are bookable by the team only.
     """
+    if location is not None and not service_offered_at(service, location):
+        return StaffProfile.objects.none()
     offerings = StaffServiceOffering.objects.filter(_offering_filter(service, location))
     providers = StaffProfile.objects.filter(
         organization_id=service.organization_id,
@@ -42,9 +46,17 @@ def list_providers_for(service, location=None, *, public: bool = False):
     )
     if location is not None:
         providers = providers.filter(locations=location)
+    if service.required_provider_type:
+        providers = providers.filter(provider_type__iexact=service.required_provider_type)
     if public:
         providers = providers.filter(online_booking_visible=True)
     return providers.select_related("user").distinct()
+
+
+def provides(staff, service, location=None, *, public: bool = False) -> bool:
+    """Can ``staff`` be booked for ``service`` (at ``location``)? The same rule as
+    ``list_providers_for``."""
+    return list_providers_for(service, location, public=public).filter(pk=staff.pk).exists()
 
 
 def offering_for(staff, service, location=None) -> StaffServiceOffering | None:

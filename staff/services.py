@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, Q
 
 from core.audit import AuditAction, diff_snapshots, record_audit, snapshot
 from core.exceptions import ConflictError, DomainError
@@ -131,6 +131,9 @@ def create_staff_profile(*, organization, user, actor=None, locations=None, **fi
 @transaction.atomic
 def update_staff_profile(*, staff: StaffProfile, actor=None, **changes) -> StaffProfile:
     _check_profile_fields(changes)
+    # Lock order for staff writes: organization, then the staff row. The organization lock
+    # makes the plan-limit count on reactivation safe against parallel reactivations.
+    Organization.objects.select_for_update().get(pk=staff.organization_id)
     staff = _lock_staff(staff)
     before = snapshot(staff)
     was_active = staff.is_active
@@ -142,6 +145,8 @@ def update_staff_profile(*, staff: StaffProfile, actor=None, **changes) -> Staff
     diff = diff_snapshots(before, snapshot(staff), redact_fields=REDACTED_FIELDS)
     if diff:
         _audit(AuditAction.STAFF_UPDATED, staff, actor, changes=diff)
+        if "provider_type" in diff:
+            sync_service_mirrors(staff.offerings.values_list("service_id", flat=True))
     return staff
 
 
@@ -157,7 +162,7 @@ def delete_staff_profile(*, staff: StaffProfile, actor=None) -> None:
         raise ConflictError(
             "This person has appointments. Deactivate them instead.", code="in_use"
         ) from error
-    _sync_mirror(service_ids)
+    sync_service_mirrors(service_ids)
 
 
 @transaction.atomic
@@ -186,7 +191,7 @@ def set_staff_locations(*, staff: StaffProfile, locations, actor=None) -> StaffP
         changes={"locations": [before, after]},
         metadata={"offerings_removed": removed},
     )
-    _sync_mirror(service_ids)
+    sync_service_mirrors(service_ids)
     return staff
 
 
@@ -196,12 +201,21 @@ def set_staff_locations(*, staff: StaffProfile, locations, actor=None) -> StaffP
 def _check_offering(staff: StaffProfile, service: Service, location: Location | None) -> None:
     if service.organization_id != staff.organization_id or service.is_archived:
         raise DomainError("Service not found", code="invalid_service")
+    required = service.required_provider_type
+    if required and staff.provider_type.strip().lower() != required.lower():
+        raise DomainError(
+            f"{service.name} can only be offered by a {required}", code="provider_type_mismatch"
+        )
     if location is not None:
         if location.organization_id != staff.organization_id:
             raise DomainError("Location not found or inactive", code="invalid_location")
         if not staff.locations.filter(pk=location.pk).exists():
             raise DomainError(
                 "This person doesn't work at that location", code="location_not_assigned"
+            )
+        if service.locations.exists() and not service.locations.filter(pk=location.pk).exists():
+            raise DomainError(
+                f"{service.name} isn't offered at {location.name}", code="service_not_at_location"
             )
 
 
@@ -220,14 +234,25 @@ def _offering_metadata(offering) -> dict:
     }
 
 
-def _sync_mirror(service_ids) -> None:
-    """Rebuild ``Service.assigned_staff_members`` for these services from the offerings."""
+def valid_offerings(service: Service):
+    """The service's active offerings that still fit its rules: the provider has the
+    required type (if any), and a location-specific offering is at a location where the
+    service is offered. Offerings that stopped fitting are kept (so a fix restores them) but
+    never count."""
+    offerings = StaffServiceOffering.objects.filter(service=service, is_active=True)
+    if service.required_provider_type:
+        offerings = offerings.filter(staff__provider_type__iexact=service.required_provider_type)
+    service_locations = list(service.locations.values_list("pk", flat=True))
+    if service_locations:
+        offerings = offerings.filter(Q(location__isnull=True) | Q(location__in=service_locations))
+    return offerings
+
+
+def sync_service_mirrors(service_ids) -> None:
+    """Rebuild ``Service.assigned_staff_members`` for these services: staff with a valid
+    offering. Called after every change to offerings, a service's rules or a provider type."""
     for service in Service.objects.filter(pk__in=set(service_ids)):
-        staff_ids = (
-            StaffServiceOffering.objects.filter(service=service, is_active=True)
-            .values_list("staff_id", flat=True)
-            .distinct()
-        )
+        staff_ids = valid_offerings(service).values_list("staff_id", flat=True).distinct()
         service.assigned_staff_members.set(list(staff_ids))
 
 
@@ -267,7 +292,7 @@ def add_offering(
         organization=staff.organization,
         metadata=_offering_metadata(offering),
     )
-    _sync_mirror([service.pk])
+    sync_service_mirrors([service.pk])
     return offering
 
 
@@ -292,7 +317,7 @@ def update_offering(*, offering: StaffServiceOffering, actor=None, **changes):
             changes=diff,
             metadata=_offering_metadata(offering),
         )
-    _sync_mirror([offering.service_id])
+    sync_service_mirrors([offering.service_id])
     return offering
 
 
@@ -307,7 +332,7 @@ def remove_offering(*, offering: StaffServiceOffering, actor=None) -> None:
     )
     service_id = offering.service_id
     offering.delete()
-    _sync_mirror([service_id])
+    sync_service_mirrors([service_id])
 
 
 @dataclass(frozen=True)
@@ -366,7 +391,7 @@ def set_staff_offerings(*, staff: StaffProfile, choices, actor=None) -> list:
             custom_price=choice.custom_price,
             actor=actor,
         )
-    _sync_mirror(touched)
+    sync_service_mirrors(touched)
     return list(staff.offerings.select_related("service", "location"))
 
 
@@ -390,4 +415,4 @@ def set_service_providers(*, service: Service, staff_members, actor=None) -> Non
     for staff in staff_members:
         if staff.pk not in offered:
             add_offering(staff=staff, service=service, actor=actor)
-    _sync_mirror([service.pk])
+    sync_service_mirrors([service.pk])

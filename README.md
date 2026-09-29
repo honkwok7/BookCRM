@@ -41,6 +41,7 @@ See:
 - `docs/BOOKING_ENGINE.md`
 - `docs/CRM.md`
 - `docs/LOCATIONS.md`
+- `docs/SERVICES.md`
 - `docs/STAFF.md`
 - `docs/API.md`
 

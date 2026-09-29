@@ -24,6 +24,9 @@ class PublicBookingPageTests(TestCase):
             organization=self.organization,
             user=f.UserFactory(first_name="Maya", last_name="Chen", email="maya@private.test"),
         )
+        f.StaffServiceOfferingFactory(
+            organization=self.organization, staff=self.staff, service=self.service
+        )
         self.url = "/book/harmony/"
         self.start = datetime.combine(
             timezone.localdate() + timedelta(days=7), datetime.min.time().replace(hour=10)

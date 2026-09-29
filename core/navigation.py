@@ -55,6 +55,7 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         "Organization",
         (
+            NavItem("Services", "app-service-list", "clipboard", (Capability.SERVICES_VIEW,)),
             NavItem("Staff", "app-staff-list", "user", (Capability.STAFF_VIEW,)),
             NavItem("Locations", "app-location-list", "map-pin", (Capability.LOCATIONS_VIEW,)),
             NavItem("Team", "app-team", "building", (Capability.MEMBERS_VIEW,)),

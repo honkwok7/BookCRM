@@ -18,8 +18,10 @@ and working at that location. `public=True` also requires `online_booking_visibl
 `offering_for(staff, service, location)` gives the offering that applies (a location-specific
 one wins over "all locations"), with the effective `duration_minutes` and `price`.
 
-The booking engine does not check offerings yet: that arrives with the availability rewrite
-and the booking service consolidation (M3.4, M4.1), which use these selectors.
+`provides(staff, service, location, public=)` answers the same question for one person. The
+public booking page, the public slot API and self-service bookings through the API refuse a
+provider who doesn't offer the service. Team bookings are held to the same rule by the booking
+service from M4.1.
 
 ## Rules
 
@@ -37,7 +39,9 @@ and the booking service consolidation (M3.4, M4.1), which use these selectors.
 | The public booking page and slot API list only staff visible online, by their public name. | `bookings.selectors.bookable_staff`, `scheduling` slot view. |
 
 `Service.assigned_staff_members` is the older way to say who offers a service. It is kept as a
-mirror of the offerings (staff with an active offering) and is only written by
+mirror of the *valid* offerings (active, matching the service's required provider type and
+locations; see `valid_offerings`) and is rebuilt whenever offerings, a service's rules or a
+provider type change. It is only written by
 `staff/services.py`. Writing it through the services API still works: each listed person
 offers the service at all their locations, and anyone left out stops offering it. It will be
 removed in M11.3.

@@ -4,7 +4,8 @@
 - every ``Service.assigned_staff_members`` link becomes an offering at all the person's
   locations (no custom duration or price).
 
-Reversing removes the offerings and location links (the old M2M is left untouched).
+Reversing is a no-op: backfilled rows can't be told apart from ones created later, and
+reversing 0002 drops the offering table and the location links anyway.
 """
 
 from django.db import migrations
@@ -46,12 +47,7 @@ def backfill(apps, schema_editor):
     StaffServiceOffering.objects.bulk_create(rows)
 
 
-def unbackfill(apps, schema_editor):
-    apps.get_model("staff", "StaffServiceOffering").objects.all().delete()
-    apps.get_model("staff", "StaffProfile").locations.through.objects.all().delete()
-
-
 class Migration(migrations.Migration):
     dependencies = [("staff", "0002_locations_and_offerings")]
 
-    operations = [migrations.RunPython(backfill, unbackfill)]
+    operations = [migrations.RunPython(backfill, migrations.RunPython.noop)]
