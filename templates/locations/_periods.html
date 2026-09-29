@@ -1,0 +1,1 @@
+{% comment %}A day's opening periods: {% include "locations/_periods.html" with periods=row.periods %}{% endcomment %}{% if periods %}{% for opens_at, closes_at in periods %}<span class="whitespace-nowrap">{{ opens_at|time:"H:i" }}–{{ closes_at|time:"H:i" }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}<span class="text-slate-600">Closed</span>{% endif %}

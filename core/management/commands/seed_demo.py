@@ -21,6 +21,8 @@ from bookings.services import create_booking
 from crm.activity import Kind, booking_metadata, record_activity
 from crm.models import CustomerNote, Tag
 from crm.services import add_customer_tag, create_customer, create_note, create_tag
+from locations.models import Location
+from locations.services import create_location, ensure_default_location, set_location_hours
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
@@ -39,6 +41,19 @@ ORGANIZATIONS = [
         "currency": "CAD",
         "email": "hello@harmony.local",
         "plan": "professional",
+        "locations": [
+            (
+                "Downtown",
+                {
+                    "address_line1": "200 King Street West",
+                    "city": "Toronto",
+                    "region": "ON",
+                    "postal_code": "M5H 3T4",
+                    "country": "CA",
+                    "phone": "+1 416 555 0142",
+                },
+            )
+        ],
         "members": [
             ("owner@harmony.local", "Olivia", "Owner", OrganizationRole.OWNER, None),
             ("manager@harmony.local", "Marcus", "Manager", OrganizationRole.MANAGER, None),
@@ -111,9 +126,9 @@ ORGANIZATIONS = [
 ]
 
 PLANS = [
-    ("starter", "Starter", 29, 290, 3, 10, 300, False),
-    ("professional", "Professional", 79, 790, 15, 50, 2000, True),
-    ("business", "Business", 149, 1490, 100, 500, 20000, True),
+    ("starter", "Starter", 29, 290, 3, 10, 300, 1, False),
+    ("professional", "Professional", 79, 790, 15, 50, 2000, 3, True),
+    ("business", "Business", 149, 1490, 100, 500, 20000, 20, True),
 ]
 PASSWORD = "Demo12345!"
 PAST_OUTCOME_ACTIVITY = {
@@ -157,7 +172,7 @@ class Command(BaseCommand):
 
     def _plans(self):
         plans = {}
-        for slug, name, monthly, yearly, staff, services, bookings, analytics in PLANS:
+        for slug, name, monthly, yearly, staff, services, bookings, locations, analytics in PLANS:
             plans[slug], _ = Plan.objects.get_or_create(
                 slug=slug,
                 defaults={
@@ -167,10 +182,15 @@ class Command(BaseCommand):
                     "maximum_staff": staff,
                     "maximum_services": services,
                     "maximum_monthly_bookings": bookings,
+                    "maximum_locations": locations,
                     "analytics_enabled": analytics,
                     "api_access_enabled": True,
                 },
             )
+            if plans[slug].maximum_locations < locations:
+                # Plans seeded before locations existed got the default limit of one.
+                plans[slug].maximum_locations = locations
+                plans[slug].save(update_fields=["maximum_locations", "updated_at"])
         return plans
 
     def _organization(self, spec, plans):
@@ -193,6 +213,8 @@ class Command(BaseCommand):
                 "current_period_end": now + timedelta(days=30),
             },
         )
+
+        self._locations(organization, spec.get("locations", []))
 
         staff_by_email = {}
         for email, first, last, role, job_title in spec["members"]:
@@ -280,6 +302,20 @@ class Command(BaseCommand):
                     content=content,
                     pinned=note_type == CustomerNote.NoteType.ALERT,
                 )
+
+    def _locations(self, organization, specs):
+        """The default "Main" location (created with the organization) plus any extra ones,
+        each with weekday opening hours. Hours are only set on a location that has none."""
+        weekdays = [(day, time(9), time(18)) for day in range(5)] + [(5, time(10), time(15))]
+        locations = [ensure_default_location(organization)]
+        for name, fields in specs:
+            location = Location.objects.filter(organization=organization, name=name).first()
+            if location is None:
+                location = create_location(organization=organization, name=name, **fields)
+            locations.append(location)
+        for location in locations:
+            if not location.hours.exists():
+                set_location_hours(location=location, periods=weekdays)
 
     def _appointments(self, organization, services, customers):
         tz = ZoneInfo(organization.timezone)

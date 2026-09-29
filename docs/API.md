@@ -27,6 +27,21 @@ Base path: `/api/v1/`
 - `/api/v1/availability/holidays/`
 - `/api/v1/availability/slots/available-slots/`
 
+## Locations
+Read: `locations.view`. Write: `locations.manage`. Rules and error codes are in
+[LOCATIONS.md](LOCATIONS.md).
+- `GET/POST /api/v1/locations/`, `GET/PUT/PATCH/DELETE /api/v1/locations/{id}/`. The default
+  location comes first. `slug`, `is_default` and `booking_settings` are read-only. Creating or
+  reactivating beyond the plan limit gives 409 `plan_limit`; deactivating or deleting the
+  default gives 409 `default_location`.
+- `GET/PUT /api/v1/locations/{id}/hours/`: `PUT {"hours": [{"weekday": 0, "opens_at": "09:00",
+  "closes_at": "17:00"}, ...]}` replaces the week (Monday = 0, at most two non-overlapping
+  periods a day, `[]` clears the hours).
+- `POST /api/v1/locations/{id}/make-default/`
+- `/api/v1/location-closures/` (CRUD). Filters: `location`, `all_day`, `ends_after`,
+  `starts_before`. `end_date` defaults to `start_date`; a closure that isn't `all_day` needs
+  `start_time` and `end_time`.
+
 ## Bookings (appointments) and customers
 - `GET/POST /api/v1/bookings/`, `GET /api/v1/bookings/{id}/`. There is **no** PUT, PATCH or DELETE (405).
 - `POST /api/v1/bookings/{id}/cancel/` `{"reason": "..."}`

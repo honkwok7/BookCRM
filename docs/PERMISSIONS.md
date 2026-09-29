@@ -32,7 +32,8 @@ Rules that sit outside the matrix:
 | `staff.manage` | ✅ | ✅ | – | – | – | Create and edit staff profiles, availability and time off |
 | `services.view` | ✅ | ✅ | ✅ | ✅ | – | View services and categories |
 | `services.manage` | ✅ | ✅ | – | – | – | Create and edit services and categories |
-| `locations.manage` | ✅ | ✅ | – | – | – | Create and edit locations |
+| `locations.view` | ✅ | ✅ | ✅ | ✅ | – | View locations, their opening hours and closures |
+| `locations.manage` | ✅ | ✅ | – | – | – | Create and edit locations, opening hours and closures |
 | `appointments.view_all` | ✅ | ✅ | ✅ | – | – | View every appointment (otherwise only one's own) |
 | `appointments.manage` | ✅ | ✅ | ✅ | ✅ | – | Book, reschedule, cancel and change appointment status |
 | `customers.view` | ✅ | ✅ | ✅ | – | – | View customer records |

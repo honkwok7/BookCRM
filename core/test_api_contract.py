@@ -23,6 +23,7 @@ User = get_user_model()
 TENANT_SERIALIZER_MODULES = (
     "bookings.serializers",
     "crm.serializers",
+    "locations.serializers",
     "scheduling.serializers",
     "services.serializers",
     "staff.serializers",

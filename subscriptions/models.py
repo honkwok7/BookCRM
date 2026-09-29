@@ -11,6 +11,7 @@ class Plan(BaseUUIDModel):
     maximum_staff = models.PositiveIntegerField(default=1)
     maximum_services = models.PositiveIntegerField(default=3)
     maximum_monthly_bookings = models.PositiveIntegerField(default=100)
+    maximum_locations = models.PositiveIntegerField(default=1)
     analytics_enabled = models.BooleanField(default=False)
     api_access_enabled = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)

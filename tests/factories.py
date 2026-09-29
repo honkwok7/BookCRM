@@ -14,6 +14,7 @@ from django.utils import timezone
 from bookings.models import Booking, Customer, WaitlistEntry
 from core.models import AuditLog
 from crm.models import CustomerActivity, CustomerNote, CustomerTag, Tag
+from locations.models import Location, LocationClosure, LocationHours
 from notifications.models import NotificationLog
 from organizations.models import (
     Organization,
@@ -223,6 +224,40 @@ class OrganizationHolidayFactory(factory.django.DjangoModelFactory):
     organization = factory.SubFactory(OrganizationFactory)
     date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=30))
     name = factory.Sequence(lambda n: f"Holiday {n}")
+
+
+class LocationFactory(factory.django.DjangoModelFactory):
+    """An extra, non-default location (every organization already has its default "Main")."""
+
+    class Meta:
+        model = Location
+
+    organization = factory.SubFactory(OrganizationFactory)
+    name = factory.Sequence(lambda n: f"Location {n}")
+    slug = factory.Sequence(lambda n: f"location-{n}")
+    timezone = "America/Toronto"
+
+
+class LocationHoursFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = LocationHours
+
+    organization = factory.SubFactory(OrganizationFactory)
+    location = factory.SubFactory(LocationFactory, organization=SAME_ORG)
+    weekday = 0
+    opens_at = time(9)
+    closes_at = time(17)
+
+
+class LocationClosureFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = LocationClosure
+
+    organization = factory.SubFactory(OrganizationFactory)
+    location = factory.SubFactory(LocationFactory, organization=SAME_ORG)
+    start_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=14))
+    end_date = factory.SelfAttribute("start_date")
+    reason = factory.Sequence(lambda n: f"Closure {n}")
 
 
 class AuditLogFactory(factory.django.DjangoModelFactory):

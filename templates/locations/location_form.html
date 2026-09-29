@@ -1,0 +1,35 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+Add or edit a location. Opened in the page dialog by htmx (the "form" partial), or as a full
+page without JavaScript. On success the server redirects to the location (HX-Redirect).
+{% endcomment %}
+{% block title %}{% if location %}Edit {{ location.name }}{% else %}New location{% endif %} · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if location %}Edit {{ location.name }}{% else %}New location{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{% if location %}Edit {{ location.name }}{% else %}New location{% endif %}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% if location.is_default %}<p class="-mt-2 text-sm text-slate-600">This is the default location, so it stays active. To deactivate it, make another location the default first.</p>{% endif %}
+  {% for title, fields in form.sections %}
+    <fieldset class="grid gap-4">
+      <legend class="mb-2 text-sm font-semibold text-slate-900">{{ title }}</legend>
+      <div class="grid gap-4 {% if title != 'Booking' %}sm:grid-cols-2{% endif %}">
+        {% for field in fields %}{% include "components/field.html" with field=field %}{% endfor %}
+      </div>
+    </fieldset>
+  {% endfor %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% if location %}{% url 'app-location-detail' location.pk %}{% else %}{% url 'app-location-list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if location %}Save changes{% else %}Add location{% endif %}</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

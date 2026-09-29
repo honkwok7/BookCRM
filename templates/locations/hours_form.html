@@ -1,0 +1,47 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+The weekly opening hours editor: per weekday an "open" box, the opening period and an optional
+second period (e.g. after a lunch closure). Opened in the page dialog or as a full page.
+{% endcomment %}
+{% block title %}Opening hours · {{ location.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Opening hours: {{ location.name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Opening hours: {{ location.name }}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="-mt-2 text-sm text-slate-600">Times are in {{ location.timezone }}. Untick a day to close it. The second period is optional, for example when you close for lunch. Leave every day unticked to stop limiting bookings by opening hours.</p>
+  <div class="grid gap-4">
+    {% for row in form.rows %}
+      <fieldset class="grid gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+        <legend class="sr-only">{{ row.label }}</legend>
+        <div class="flex items-center gap-2">
+          {{ row.open }}
+          <label for="{{ row.open.id_for_label }}" class="text-sm font-semibold text-slate-900">{{ row.label }}</label>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {% for field in row.times %}
+            <div class="form-field">
+              <label for="{{ field.id_for_label }}" class="form-label text-xs">{% cycle "Opens" "Closes" "Reopens (optional)" "Closes again" %}<span class="sr-only"> on {{ row.label }}</span></label>
+              {{ field }}
+              {% if field.errors %}<div id="{{ field.auto_id }}_error">{% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </fieldset>
+    {% endfor %}
+  </div>
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'app-location-detail' location.pk %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save hours</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

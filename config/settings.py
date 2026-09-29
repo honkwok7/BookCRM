@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "scheduling",
     "bookings",
     "crm",
+    "locations",
     "notifications",
     "subscriptions",
     "dashboard",

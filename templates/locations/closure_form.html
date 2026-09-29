@@ -1,0 +1,36 @@
+{% extends "layouts/app.html" %}
+{% block title %}Add closure · {{ location.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Add closure: {{ location.name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Add closure: {{ location.name }}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <div class="grid gap-4 sm:grid-cols-2">
+    {% include "components/field.html" with field=form.start_date %}
+    {% include "components/field.html" with field=form.end_date %}
+  </div>
+  {% include "components/field.html" with field=form.all_day %}
+  <fieldset class="grid gap-4">
+    <legend class="mb-2 text-sm font-semibold text-slate-900">Partial closure</legend>
+    <p class="-mt-2 text-sm text-slate-600">Untick “Closed all day” and enter the times the location is closed on each of these days.</p>
+    <div class="grid gap-4 sm:grid-cols-2">
+      {% include "components/field.html" with field=form.start_time %}
+      {% include "components/field.html" with field=form.end_time %}
+    </div>
+  </fieldset>
+  {% include "components/field.html" with field=form.reason %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'app-location-detail' location.pk %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Add closure</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}
