@@ -196,12 +196,21 @@ def set_staff_locations(*, staff: StaffProfile, locations, actor=None) -> StaffP
 def _check_offering(staff: StaffProfile, service: Service, location: Location | None) -> None:
     if service.organization_id != staff.organization_id or service.is_archived:
         raise DomainError("Service not found", code="invalid_service")
+    required = service.required_provider_type
+    if required and staff.provider_type.strip().lower() != required.lower():
+        raise DomainError(
+            f"{service.name} can only be offered by a {required}", code="provider_type_mismatch"
+        )
     if location is not None:
         if location.organization_id != staff.organization_id:
             raise DomainError("Location not found or inactive", code="invalid_location")
         if not staff.locations.filter(pk=location.pk).exists():
             raise DomainError(
                 "This person doesn't work at that location", code="location_not_assigned"
+            )
+        if service.locations.exists() and not service.locations.filter(pk=location.pk).exists():
+            raise DomainError(
+                f"{service.name} isn't offered at {location.name}", code="service_not_at_location"
             )
 
 

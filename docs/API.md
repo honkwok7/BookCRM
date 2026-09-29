@@ -18,11 +18,16 @@ Base path: `/api/v1/`
 - `POST /api/organizations/invitations/accept/`
 
 ## Services, Staff, Scheduling
-- `/api/v1/services/`. Writing `assigned_staff_members` sets who offers the service at all
-  their locations (see [STAFF.md](STAFF.md)).
+- `/api/v1/services/`. Read: `services.view`; write: `services.manage`. `locations` (empty =
+  every location), `required_provider_type`, `tax_rate` and `cancellation_policy` are
+  writable; `slug` is read-only. Filters: `category`, `location`, `is_active`, `is_public`,
+  `is_archived`. 409 `plan_limit` beyond the plan's service limit; 409 `in_use` when
+  deleting a booked service. Writing `assigned_staff_members` sets who offers the service at
+  all their locations (see [STAFF.md](STAFF.md)). Details: [SERVICES.md](SERVICES.md).
 - `GET /api/v1/services/{id}/providers/?location=<id>`: staff who can be booked for the
   service (there).
-- `/api/v1/service-categories/`
+- `/api/v1/service-categories/`: `name` (unique per organization, ignoring case; 409
+  `duplicate`), `color`, `sort_order`. Deleting one keeps its services, without a category.
 - `/api/v1/staff/`. Read: `staff.view`; write: `staff.manage`. `user` must be an active team
   member; `locations` replaces where they work. Filters: `location`, `is_active`,
   `is_accepting_bookings`, `online_booking_visible`. 409 `plan_limit` beyond the plan's staff

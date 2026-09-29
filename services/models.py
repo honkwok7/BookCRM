@@ -1,7 +1,16 @@
+"""Services and their categories.
+
+Write through ``services.services``: unique slugs, the plan's service limit, validation and
+auditing. ``is_public`` means "bookable online" (the UI says so); the plan's proposed
+``online_bookable`` flag would have duplicated it.
+"""
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.template.defaultfilters import slugify
 
 from core.models import BaseUUIDModel
+from crm.models import HEX_COLOR
 
 
 class ServiceCategory(BaseUUIDModel):
@@ -12,10 +21,12 @@ class ServiceCategory(BaseUUIDModel):
     )
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=150)
+    color = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR])
+    sort_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = ("organization", "slug")
-        ordering = ["name"]
+        ordering = ["sort_order", "name"]
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -57,6 +68,18 @@ class Service(BaseUUIDModel):
     cancellation_deadline_hours = models.PositiveIntegerField(default=24)
     rescheduling_deadline_hours = models.PositiveIntegerField(default=24)
     capacity = models.PositiveIntegerField(default=1)
+    # Empty: offered at every location. Otherwise only at these.
+    locations = models.ManyToManyField("locations.Location", blank=True, related_name="services")
+    # Only staff whose provider_type matches (ignoring case) can offer it. Empty: anyone.
+    required_provider_type = models.CharField(max_length=60, blank=True)
+    # A percentage, e.g. 13.00. A placeholder until a tax model exists.
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    cancellation_policy = models.TextField(blank=True)
     assigned_staff_members = models.ManyToManyField(
         "staff.StaffProfile",
         blank=True,

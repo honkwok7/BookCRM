@@ -1,16 +1,46 @@
-from core.api import TenantScopedModelSerializer
+from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
+from locations.models import Location
+from organizations.selectors import get_request_organization
 from services.models import Service, ServiceCategory
+from services.services import create_category, create_service, update_category, update_service
 from staff.services import set_service_providers
 
 
 class ServiceCategorySerializer(TenantScopedModelSerializer):
     class Meta:
         model = ServiceCategory
-        fields = ("id", "organization", "name", "slug", "created_at", "updated_at")
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
+        fields = (
+            "id",
+            "organization",
+            "name",
+            "slug",
+            "color",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "organization", "slug", "created_at", "updated_at")
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        return create_category(
+            organization=get_request_organization(request), actor=request.user, **validated_data
+        )
+
+    def update(self, instance, validated_data):
+        return update_category(
+            category=instance, actor=self.context["request"].user, **validated_data
+        )
 
 
 class ServiceSerializer(TenantScopedModelSerializer):
+    locations = TenantPrimaryKeyRelatedField(
+        queryset=Location.objects.all(),
+        many=True,
+        required=False,
+        help_text="Where it is offered; empty means every location.",
+    )
+
     class Meta:
         model = Service
         fields = (
@@ -35,30 +65,38 @@ class ServiceSerializer(TenantScopedModelSerializer):
             "cancellation_deadline_hours",
             "rescheduling_deadline_hours",
             "capacity",
+            "locations",
+            "required_provider_type",
+            "tax_rate",
+            "cancellation_policy",
             "assigned_staff_members",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
+        read_only_fields = ("id", "organization", "slug", "image", "created_at", "updated_at")
+        extra_kwargs = {
+            "is_public": {"help_text": "Bookable online."},
+            "currency": {"required": False},
+        }
 
     # ``assigned_staff_members`` is kept for older clients: writing it sets who offers the
     # service (at all their locations) through staff.services. /staff-offerings/ is the full
     # model, with per-location offerings and custom durations and prices.
 
     def create(self, validated_data):
+        request = self.context["request"]
         providers = validated_data.pop("assigned_staff_members", None)
-        service = super().create(validated_data)
+        service = create_service(
+            organization=get_request_organization(request), actor=request.user, **validated_data
+        )
         if providers is not None:
-            set_service_providers(
-                service=service, staff_members=providers, actor=self.context["request"].user
-            )
+            set_service_providers(service=service, staff_members=providers, actor=request.user)
         return service
 
     def update(self, instance, validated_data):
+        actor = self.context["request"].user
         providers = validated_data.pop("assigned_staff_members", None)
-        service = super().update(instance, validated_data)
+        service = update_service(service=instance, actor=actor, **validated_data)
         if providers is not None:
-            set_service_providers(
-                service=service, staff_members=providers, actor=self.context["request"].user
-            )
+            set_service_providers(service=service, staff_members=providers, actor=actor)
         return service

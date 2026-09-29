@@ -7,23 +7,23 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from core.api import AuditedModelViewSetMixin
-from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from locations.models import Location
 from organizations.selectors import scope_queryset_by_organization
 from services.models import Service, ServiceCategory
+from services.selectors import offered_at_filter
 from services.serializers import ServiceCategorySerializer, ServiceSerializer
+from services.services import delete_category, delete_service
 from staff.selectors import list_providers_for
 from staff.serializers import StaffProfileSerializer
 
 
 class ServiceCategoryViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
-    audit_actions = {
-        "create": AuditAction.SERVICE_CATEGORY_CREATED,
-        "update": AuditAction.SERVICE_CATEGORY_UPDATED,
-        "delete": AuditAction.SERVICE_CATEGORY_DELETED,
-    }
+    """Service categories, ordered by ``sort_order`` then name. Writes go through
+    services.services (unique names and slugs, audited there)."""
+
+    audited_by_service = ("create", "update", "delete")
     serializer_class = ServiceCategorySerializer
     permission_classes = [
         permissions.IsAuthenticated,
@@ -34,21 +34,38 @@ class ServiceCategoryViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         queryset = ServiceCategory.objects.select_related("organization")
         return scope_queryset_by_organization(queryset, self.request)
 
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        delete_category(category=instance, actor=self.request.user)
+
 
 class ServiceFilter(django_filters.FilterSet):
     category = TenantModelChoiceFilter(ServiceCategory)
+    # Services offered at this location (limited to it, or not limited at all).
+    location = TenantModelChoiceFilter(Location, method="filter_location")
 
     class Meta:
         model = Service
         fields = ("is_active", "is_public", "is_archived", "category")
 
+    def filter_location(self, queryset, name, location):
+        return queryset.filter(offered_at_filter(location)).distinct()
+
 
 class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
-    audit_actions = {
-        "create": AuditAction.SERVICE_CREATED,
-        "update": AuditAction.SERVICE_UPDATED,
-        "delete": AuditAction.SERVICE_DELETED,
-    }
+    """Services. Read: ``services.view``. Write: ``services.manage``.
+
+    ``locations`` empty means every location. Creating or unarchiving beyond the plan's service
+    limit gives 409 ``plan_limit``; deleting a service with appointments gives 409 ``in_use``
+    (archive it instead).
+    """
+
+    audited_by_service = ("create", "update", "delete")
     serializer_class = ServiceSerializer
     permission_classes = [
         permissions.IsAuthenticated,
@@ -60,9 +77,18 @@ class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Service.objects.select_related("organization", "category").prefetch_related(
-            "assigned_staff_members"
+            "assigned_staff_members", "locations"
         )
         return scope_queryset_by_organization(queryset, self.request)
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        delete_service(service=instance, actor=self.request.user)
 
     @extend_schema(
         parameters=[OpenApiParameter("location", str, description="Location id (optional)")],

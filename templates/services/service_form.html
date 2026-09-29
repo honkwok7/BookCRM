@@ -1,0 +1,45 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+Add or edit a service. Opened in the page dialog by htmx (the "form" partial), or as a full page
+without JavaScript. On success the server redirects to the list (HX-Redirect).
+{% endcomment %}
+{% block title %}{% if service %}Edit {{ service.name }}{% else %}New service{% endif %} · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if service %}Edit {{ service.name }}{% else %}New service{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{% if service %}Edit {{ service.name }}{% else %}New service{% endif %}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% for title, fields in form.sections %}
+    <fieldset class="grid gap-4">
+      <legend class="mb-2 text-sm font-semibold text-slate-900">{{ title }}</legend>
+      {% for field in fields %}
+        {% if field.name == "locations" %}
+          <div class="grid gap-2">
+            <span class="form-label">{{ field.label }}</span>
+            <div class="flex flex-wrap gap-x-5 gap-y-2">
+              {% for choice in field %}<label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>{% endfor %}
+            </div>
+            <p class="form-help">{{ field.help_text }}</p>
+            {% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% else %}
+          {% include "components/field.html" with field=field %}
+        {% endif %}
+      {% endfor %}
+    </fieldset>
+  {% endfor %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'app-service-list' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if service %}Save changes{% else %}Add service{% endif %}</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

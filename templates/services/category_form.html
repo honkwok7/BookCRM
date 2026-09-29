@@ -1,0 +1,35 @@
+{% extends "layouts/app.html" %}
+{% block title %}{% if category %}Edit {{ category.name }}{% else %}New category{% endif %} · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if category %}Edit {{ category.name }}{% else %}New category{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-xl">
+{% partialdef form inline %}
+<div class="grid gap-6">
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="closest div" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{% if category %}Edit {{ category.name }}{% else %}New category{% endif %}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% include "components/field.html" with field=form.name %}
+  <div class="grid gap-4 sm:grid-cols-2">
+    {% include "components/field.html" with field=form.color %}
+    {% include "components/field.html" with field=form.sort_order %}
+  </div>
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'app-service-list' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if category %}Save changes{% else %}Add category{% endif %}</button>
+  </div>
+</form>
+{% if category %}
+  <form method="post" action="{% url 'app-service-category-delete' category.pk %}" hx-post="{% url 'app-service-category-delete' category.pk %}" hx-confirm="Remove the category {{ category.name }}? Its services stay, without a category." class="border-t border-slate-200 pt-4">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger btn-sm">{% include "components/icon.html" with name="trash" class="size-4" %}Remove category</button>
+  </form>
+{% endif %}
+</div>
+{% endpartialdef %}
+</div>
+{% endblock %}

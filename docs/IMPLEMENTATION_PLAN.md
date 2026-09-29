@@ -901,6 +901,24 @@ A provider can offer service X only at location Y.
 
 ### M3.3: Service enhancements
 
+> **Status: done (2026-09-29, branch `m3.3-services`).** See [SERVICES.md](SERVICES.md).
+> - **Models:** `Service` gained `locations` (M2M), `required_provider_type`, `tax_rate` and
+>   `cancellation_policy`; `ServiceCategory` gained `color` and `sort_order`.
+> - **Deviations:** no `online_bookable` column: the existing `is_public` already means that
+>   and the UI calls it "bookable online". No location backfill: an empty `locations` means
+>   "every location", which also covers locations added later (the plan's backfill to "all
+>   current locations" would have excluded them). `min_notice_minutes` keeps its name.
+>   The editor is the page dialog, not a separate drawer component.
+> - **Services layer:** `services/services.py` (unique slugs, plan service limit on create and
+>   unarchive, value checks, `in_use` on deleting a booked service, category CRUD with
+>   case-insensitive unique names) used by the API, the web app and `seed_demo`.
+> - **Rules shared with staff:** an offering must match the service's required provider type and
+>   the service's locations; `list_providers_for` applies both. `services_bookable_at(org,
+>   location, public=)` is the acceptance selector for the public wizard.
+> - **UI:** `/app/services/` grouped by category (colour, position), location and status
+>   filters, dialogs for services and categories.
+> - **Plan change:** the public booking wizard (M4.6) now follows M4.1 + M4.2.
+
 #### Objective
 Complete service configuration.
 
@@ -1176,6 +1194,8 @@ None.
 A receptionist books, reschedules and cancels without leaving the page.
 
 ### M4.6: Public booking wizard
+
+> **Order:** built right after M4.1 + M4.2, before M4.3–M4.5 (see the PR sequence below).
 
 #### Objective
 A polished public self-booking flow.
@@ -2011,16 +2031,23 @@ Create and update as the features land:
 | 9 | M3.1–M3.3 |
 | 10 | M3.4 |
 | 11 | M4.1 + M4.2 |
-| 12 | M4.3–M4.5 |
-| 13 | M4.6 + M4.7 |
-| 14 | M5.1–M5.4 |
-| 15 | M5.5 |
-| 16 | M6 |
-| 17 | M7 |
-| 18 | M8 |
-| 19 | M9 |
-| 20 | M10 |
-| 21 | M11 |
+| 12 | M4.6 |
+| 13 | M4.3–M4.5 |
+| 14 | M4.7 |
+| 15 | M5.1–M5.4 |
+| 16 | M5.5 |
+| 17 | M6 |
+| 18 | M7 |
+| 19 | M8 |
+| 20 | M9 |
+| 21 | M10 |
+| 22 | M11 |
+
+**Reordered 2026-09-29:** the public booking wizard (M4.6) moves ahead of M4.3–M4.5, straight
+after the availability engine and booking service (M3.4, M4.1, M4.2), because the old public
+form makes customers type a time instead of choosing a free one. The wizard needs only
+`AvailabilityService` and `BookingService`; the status history and calendar (M4.3–M4.5) don't
+block it. M4.7 (waitlist) is split off and follows M4.3–M4.5.
 
 ## Decisions (confirmed 2026-09-27)
 

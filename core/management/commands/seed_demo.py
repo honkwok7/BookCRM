@@ -26,6 +26,7 @@ from locations.services import create_location, ensure_default_location, set_loc
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
+from services.services import create_category, create_service
 from staff.models import StaffProfile
 from staff.services import add_offering, create_staff_profile
 from subscriptions.models import Plan, Subscription
@@ -43,6 +44,11 @@ ORGANIZATIONS = [
         "email": "hello@harmony.local",
         "plan": "professional",
         "staff_locations": {"massage@harmony.local": ["Main", "Downtown"]},
+        # Chiropractic is only offered at the main clinic; massage at both.
+        "service_locations": {
+            "Initial Chiropractic Assessment": ["Main"],
+            "Follow-up Chiropractic Visit": ["Main"],
+        },
         "locations": [
             (
                 "Downtown",
@@ -133,6 +139,7 @@ PLANS = [
     ("business", "Business", 149, 1490, 100, 500, 20000, 20, True),
 ]
 PASSWORD = "Demo12345!"
+CATEGORY_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ec4899"]
 PAST_OUTCOME_ACTIVITY = {
     Booking.Status.COMPLETED: Kind.APPOINTMENT_COMPLETED,
     Booking.Status.NO_SHOW: Kind.APPOINTMENT_NO_SHOW,
@@ -248,25 +255,32 @@ class Command(BaseCommand):
                     )
 
         services = []
-        for category_name, items in spec["categories"].items():
-            category, _ = ServiceCategory.objects.get_or_create(
+        service_locations = spec.get("service_locations", {})
+        for position, (category_name, items) in enumerate(spec["categories"].items()):
+            category = ServiceCategory.objects.filter(
+                organization=organization, name=category_name
+            ).first() or create_category(
                 organization=organization,
-                slug=category_name.lower().replace(" ", "-"),
-                defaults={"name": category_name},
+                name=category_name,
+                color=CATEGORY_COLORS[position % len(CATEGORY_COLORS)],
+                sort_order=position,
             )
             for name, minutes, price, provider_email in items:
-                service, _ = Service.objects.get_or_create(
-                    organization=organization,
-                    slug=name.lower().replace(" ", "-"),
-                    defaults={
-                        "name": name,
-                        "category": category,
-                        "duration_minutes": minutes,
-                        "price": price,
-                        "currency": spec["currency"],
-                        "buffer_after_minutes": 10,
-                    },
-                )
+                service = Service.objects.filter(organization=organization, name=name).first()
+                if service is None:
+                    service = create_service(
+                        organization=organization,
+                        name=name,
+                        category=category,
+                        duration_minutes=minutes,
+                        price=price,
+                        currency=spec["currency"],
+                        buffer_after_minutes=10,
+                        cancellation_policy="Please give at least 24 hours' notice.",
+                        locations=Location.objects.filter(
+                            organization=organization, name__in=service_locations.get(name, [])
+                        ),
+                    )
                 provider = staff_by_email[provider_email]
                 if not provider.offerings.filter(service=service).exists():
                     add_offering(staff=provider, service=service)  # at all their locations
