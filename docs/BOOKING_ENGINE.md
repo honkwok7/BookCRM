@@ -17,6 +17,41 @@ The API exposes these only as explicit actions (`cancel`, `reschedule`, `update_
 There is **no generic update or delete** on appointments, so every client (web, API,
 future AI agents) goes through the same rules.
 
+## Availability (`scheduling/availability.py`)
+
+`AvailabilityService(organization, service, location=None, public=False)` answers both "which
+times are free?" (`get_available_slots(start_date, end_date, staff=None)`) and "is this time
+free?" (`validate_slot(staff, start, ignore_booking=None)`), from the same calculation. The
+location defaults to the organization's default location; all times are that location's.
+
+A provider's free time on a date:
+
+1. their weekly hours for the weekday (`WeeklyAvailability` rows for this location, or rows
+   without a location, which apply at any location they work at);
+2. limited by `AvailabilityException` rows for the date (off all day, or only certain times);
+3. limited by the location's opening hours, when it has any;
+4. minus location closures and organization holidays (all day, or certain times);
+5. minus approved time off and active appointments. An appointment blocks its own time plus,
+   on each side, the larger of its service's buffer and the new service's buffer. Buffers only
+   separate appointments; they aren't needed at the edges of working hours;
+6. nothing on a day they already have `max_daily_appointments` appointments.
+
+A slot starts on a 15-minute grid on the location's wall clock and must fit entirely in free
+time, using the provider's own duration (`StaffServiceOffering.custom_duration_minutes`) when
+set. Only providers from `list_providers_for(service, location, public=)` are considered. Public
+callers are also held to the service's `min_notice_minutes` and `max_advance_days`; the team is
+only kept out of the past, and `validate_slot` accepts team times off the grid.
+
+Daylight-saving changes are handled by working in UTC instants: on a spring-forward day the
+missing hour has no slots, and on a fall-back day the repeated hour is offered twice (two
+distinct instants). Everything is loaded up front: a calculation uses at most `QUERY_BUDGET`
+(10) queries whatever the range and number of providers (tested with 10 providers over 30 days).
+
+Where it is used today: the public slot API, and validation of bookings made on the public page
+or through the API by customers (codes below). Team bookings are validated from M4.1, when
+`BookingService` calls `validate_slot`; until then they are only checked for overlaps, and use
+the service's own duration rather than the provider's custom one.
+
 ## Lifecycle
 
 | From | Allowed next statuses |
@@ -38,8 +73,11 @@ returns them as `{"detail": "...", "code": "..."}`.
 | Code | HTTP | Meaning |
 |---|---|---|
 | `in_past` | 400 | Start time is in the past |
+| `too_soon` | 400 | Online booking: inside the service's minimum notice |
+| `too_far` | 400 | Online booking: beyond how far ahead the service can be booked |
+| `not_offered` | 400 | The provider doesn't offer the service at this location (or isn't bookable online) |
 | `invalid_status` | 400 | Unknown status value |
-| `slot_unavailable` | 409 | The provider already has an active appointment overlapping this time |
+| `slot_unavailable` | 409 | The time isn't free: outside working or opening hours, closed, time off, or overlapping another appointment (with buffers) |
 | `invalid_transition` | 409 | The lifecycle doesn't allow the change (for example, cancelling a completed appointment) |
 
 ## Concurrency: current state and plan
@@ -60,5 +98,5 @@ Still planned:
 1. **M4.2:** a PostgreSQL exclusion constraint on (provider, time range including buffers) for
    active statuses, as a database-level guarantee that also covers writes outside the
    service. A violation maps to 409 `slot_unavailable`.
-2. **M4.1:** validation against availability, notice and advance limits, and buffers. Today
-   the engine doesn't check the provider's working hours.
+2. **M4.1:** `create_booking` and `reschedule_booking` call `validate_slot` for every caller,
+   and use the provider's own duration and price.

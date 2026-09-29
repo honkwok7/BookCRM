@@ -225,8 +225,12 @@ class StaffDetailView(StaffPageMixin, TemplateView):
 
     def context_availability(self, staff):
         periods: dict[int, list] = {day: [] for day in range(7)}
-        for slot in WeeklyAvailability.objects.filter(staff=staff, is_active=True):
-            periods[slot.day_of_week].append((slot.start_time, slot.end_time))
+        rows = WeeklyAvailability.objects.filter(staff=staff, is_active=True).select_related(
+            "location"
+        )
+        for row in rows:
+            where = row.location.name if row.location else "Any of their locations"
+            periods[row.day_of_week].append((row.start_time, row.end_time, where))
         week = [
             {"weekday": day, "label": label, "periods": sorted(periods[day])}
             for day, label in Weekday.choices

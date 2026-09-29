@@ -458,6 +458,7 @@ class PublicSlotTests(APITestCase):
         StaffServiceOffering.objects.create(
             organization=self.org, staff=self.staff, service=self.service
         )
+        self.staff.locations.set(self.org.locations.all())
         self.day = date.today() + timedelta(days=7)
         WeeklyAvailability.objects.create(
             organization=self.org,

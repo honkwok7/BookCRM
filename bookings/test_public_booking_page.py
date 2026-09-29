@@ -1,6 +1,6 @@
 """The server-rendered public booking page /book/<slug>/ (codebase review, 2026-09-28)."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.test import TestCase
@@ -30,6 +30,13 @@ class PublicBookingPageTests(TestCase):
         self.url = "/book/harmony/"
         self.start = datetime.combine(
             timezone.localdate() + timedelta(days=7), datetime.min.time().replace(hour=10)
+        )
+        f.WeeklyAvailabilityFactory(
+            organization=self.organization,
+            staff=self.staff,
+            day_of_week=self.start.weekday(),
+            start_time=time(9),
+            end_time=time(17),
         )
 
     def payload(self, **overrides):

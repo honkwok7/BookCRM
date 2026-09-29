@@ -961,6 +961,25 @@ The public wizard lists only services that are online-bookable at the chosen loc
 
 ### M3.4: AvailabilityService rewrite
 
+> **Status: done (2026-09-29, branch `m3.4-availability`).** See
+> [BOOKING_ENGINE.md](BOOKING_ENGINE.md#availability-schedulingavailabilitypy).
+> - `scheduling/availability.py`: `AvailabilityService` with `get_available_slots` (one
+>   provider or any, candidates per slot) and `validate_slot` sharing one calculation; batch
+>   loading within `QUERY_BUDGET` = 10 queries (tested: 10 providers × 30 days).
+> - `WeeklyAvailability.location` (nullable = any of their locations), backfilled to the
+>   default location by `scheduling/0003`. Several `AvailabilityException` rows per date were
+>   already allowed; they now combine (off all day wins; otherwise their times are the hours).
+> - Covers location opening hours, closures, holidays, time off, appointments with buffers
+>   (the larger buffer on each side), the daily appointment limit, provider durations,
+>   notice/advance limits for the public, and DST (tested both transitions).
+> - The public slot API uses it (any provider, location, date ranges), and the public booking
+>   page and self-service booking API validate the chosen time with it (409 when taken).
+>   The old `scheduling/services.py::generate_slots` (queries per slot) is removed.
+> - **Deferred to M4.1:** team bookings through `create_booking` calling `validate_slot`, and
+>   bookings using the provider's custom duration and price. There were no legacy interval
+>   tests left to port (the legacy apps were removed in M1.6); the interval helpers have
+>   their own tests.
+
 #### Objective
 A correct, fast, location-aware slot engine.
 

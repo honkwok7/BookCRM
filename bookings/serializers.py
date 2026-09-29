@@ -19,6 +19,7 @@ from organizations.tenancy import (
     requested_organization_slug,
     resolve_tenant,
 )
+from scheduling.availability import validate_slot
 from staff.selectors import provides
 
 
@@ -257,9 +258,15 @@ class BookingCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"detail": "Service or staff not found."})
         # Self-service bookings must use a provider who offers the service. The team is held
         # to the same rule by the booking service from M4.1.
-        if not is_team and not provides(staff_profile, service, public=True):
-            raise serializers.ValidationError(
-                {"staff": "This staff member doesn't offer the selected service."}
+        if not is_team:
+            if not provides(staff_profile, service, public=True):
+                raise serializers.ValidationError(
+                    {"staff": "This staff member doesn't offer the selected service."}
+                )
+            # Self-service bookings must use a free time that could be booked online (notice,
+            # booking window, hours, closures, time off, other appointments). Raises 400/409.
+            validate_slot(
+                organization, service, staff_profile, validated_data["start_datetime"], public=True
             )
 
         return create_booking(

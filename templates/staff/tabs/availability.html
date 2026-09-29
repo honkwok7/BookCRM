@@ -5,12 +5,16 @@
       {% for row in week %}
         <div class="flex justify-between gap-4 px-4 py-2.5 text-sm sm:px-6">
           <dt>{{ row.label }}</dt>
-          <dd class="text-right">{% include "locations/_periods.html" with periods=row.periods %}</dd>
+          <dd class="text-right">
+            {% for start, end, where in row.periods %}
+              <span class="block"><span class="whitespace-nowrap">{{ start|time:"H:i" }}–{{ end|time:"H:i" }}</span> <span class="text-slate-600">· {{ where }}</span></span>
+            {% empty %}<span class="text-slate-600">Not working</span>{% endfor %}
+          </dd>
         </div>
       {% endfor %}
     </dl>
   {% else %}
     {% include "components/empty_state.html" with title="No availability set" message="This person has no working hours yet, so no appointment times are offered." icon="clock" %}
   {% endif %}
-  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in {{ organization.timezone }}. Editing availability here, per location, comes with the availability update; until then it is managed through the API.</p>
+  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in each location's time zone. Weekly hours are edited through the API for now; an editor here comes with the reception screens.</p>
 </section>

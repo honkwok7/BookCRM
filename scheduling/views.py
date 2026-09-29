@@ -1,15 +1,18 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from bookings.selectors import bookable_services, bookable_staff
 from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
 from core.permissions import HasCapability
+from locations.models import Location
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import get_public_organization, requested_organization_slug
+from scheduling.availability import AvailabilityService
 from scheduling.models import (
     AvailabilityException,
     OrganizationHoliday,
@@ -22,10 +25,7 @@ from scheduling.serializers import (
     TimeOffSerializer,
     WeeklyAvailabilitySerializer,
 )
-from scheduling.services import generate_slots
-from services.models import Service
-from staff.models import StaffProfile
-from staff.selectors import provides
+from services.selectors import service_offered_at
 
 SCHEDULE_PERMISSION = HasCapability(read="staff.view", write="staff.manage")
 
@@ -88,43 +88,83 @@ class OrganizationHolidayViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet
 
 class SlotViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
+    MAX_DAYS = 31
 
     @action(detail=False, methods=["get"], url_path="available-slots")
     def available_slots(self, request):
+        """Free times for a service on the public booking page (no sign-in).
+
+        ``?organization=<slug>&service=<id>&date=YYYY-MM-DD`` plus optional ``staff`` (else any
+        provider), ``location`` (else the default location) and ``end_date`` (at most 31 days).
+        ``slots`` lists the start times in the location's time zone; ``availability`` adds who is
+        free at each. Only services bookable online and staff visible online are considered.
+        """
         # Public endpoint: the organization comes from the public booking slug, never a membership.
         org = get_public_organization(requested_organization_slug(request))
         if not org:
             return Response({"detail": "Organization not found"}, status=404)
 
-        service_id = request.query_params.get("service")
-        staff_id = request.query_params.get("staff")
-        date_value = request.query_params.get("date")
-        if not (service_id and staff_id and date_value):
-            return Response({"detail": "service, staff and date are required"}, status=400)
+        params = request.query_params
+        service_id, staff_id, location_id = (
+            params.get("service"),
+            params.get("staff"),
+            params.get("location"),
+        )
+        date_value = params.get("date")
+        if not (service_id and date_value):
+            return Response({"detail": "service and date are required"}, status=400)
 
         try:
-            date_obj = datetime.strptime(date_value, "%Y-%m-%d").date()
-            service = Service.objects.filter(
-                id=service_id, organization=org, is_active=True, is_public=True, is_archived=False
-            ).first()
-            staff_profile = StaffProfile.objects.filter(
-                id=staff_id,
-                organization=org,
-                is_active=True,
-                is_accepting_bookings=True,
-                online_booking_visible=True,
-            ).first()
+            start_date = datetime.strptime(date_value, "%Y-%m-%d").date()
+            end_date = datetime.strptime(params.get("end_date") or date_value, "%Y-%m-%d").date()
+            service = bookable_services(org, public=True).filter(id=service_id).first()
+            staff_profile = None
+            if staff_id:
+                staff_profile = bookable_staff(org, public=True).filter(id=staff_id).first()
+            location = None
+            if location_id:
+                location = Location.objects.filter(
+                    id=location_id, organization=org, is_active=True, booking_enabled=True
+                ).first()
         except ValueError, DjangoValidationError:
-            return Response({"detail": "Invalid service, staff or date"}, status=400)
+            return Response({"detail": "Invalid service, staff, location or date"}, status=400)
+        if not start_date <= end_date <= start_date + timedelta(days=self.MAX_DAYS - 1):
+            return Response(
+                {"detail": f"end_date must be within {self.MAX_DAYS} days of date"}, status=400
+            )
         if (
             service is None
-            or staff_profile is None
-            or not provides(staff_profile, service, public=True)
+            or (staff_id and staff_profile is None)
+            or (location_id and location is None)
         ):
-            # A pair where the provider doesn't offer the service answers like a missing one.
-            return Response({"detail": "Service or staff not found"}, status=404)
+            return Response({"detail": "Service, staff or location not found"}, status=404)
 
-        slots = generate_slots(
-            organization=org, service=service, staff_profile=staff_profile, date=date_obj
+        engine = AvailabilityService(org, service, location=location, public=True)
+        if not service_offered_at(service, engine.location):
+            return Response({"detail": "Service, staff or location not found"}, status=404)
+        if staff_profile is not None and not engine.providers(staff_profile):
+            # A provider who doesn't offer the service here answers like a missing one.
+            return Response({"detail": "Service, staff or location not found"}, status=404)
+        slots = engine.get_available_slots(start_date, end_date, staff=staff_profile)
+        zone = engine.zone
+        return Response(
+            {
+                "timezone": engine.location.timezone,
+                "location": str(engine.location.pk),
+                "slots": [slot.start.astimezone(zone).isoformat() for slot in slots],
+                "availability": [
+                    {
+                        "start": slot.start.astimezone(zone).isoformat(),
+                        "staff": [
+                            {
+                                "id": str(candidate.staff.pk),
+                                "name": candidate.staff.public_name,
+                                "end": candidate.end.astimezone(zone).isoformat(),
+                            }
+                            for candidate in slot.candidates
+                        ],
+                    }
+                    for slot in slots
+                ],
+            }
         )
-        return Response({"slots": [slot.isoformat() for slot in slots]})
