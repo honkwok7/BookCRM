@@ -6,7 +6,6 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase
-from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.test import APITestCase
 
@@ -17,6 +16,7 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
 from staff.models import StaffProfile
+from tests.factories import future, make_bookable
 
 User = get_user_model()
 
@@ -108,7 +108,7 @@ class TwoTenants(APITestCase):
             customer_name="Customer",
             customer_email=email,
             customer_phone="",
-            start_datetime=start or timezone.now() + timedelta(days=2),
+            start_datetime=start or future(2),
         )
 
 
@@ -212,6 +212,7 @@ class BookingApiTests(TwoTenants):
 
     def setUp(self):
         super().setUp()
+        make_bookable(self.staff_a, self.service_a)
         self.booking = self.book()
 
     def test_generic_update_and_delete_are_gone(self):
@@ -346,7 +347,7 @@ class BookingApiTests(TwoTenants):
             customer_name="Linked",
             customer_email="linked@example.test",
             customer_phone="",
-            start_datetime=timezone.now() + timedelta(days=4),
+            start_datetime=future(4),
             customer_user=customer_user,
         )
         self.client.force_authenticate(self.receptionist_a)

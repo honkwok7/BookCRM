@@ -198,8 +198,9 @@ class F4PublicPathsRequireAnOfferingTests(TestCase):
             },
             HTTP_X_ORGANIZATION_SLUG="glow",
         )
+        # Refused by the booking service itself (M4.1), for every caller.
         self.assertEqual(response.status_code, 400)
-        self.assertIn("staff", response.json())
+        self.assertEqual(response.json()["code"], "not_offered")
 
 
 class F5MirrorShowsOnlyValidProvidersTests(TestCase):

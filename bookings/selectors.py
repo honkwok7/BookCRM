@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from bookings.models import Booking
 from organizations.models import OrganizationRole
@@ -75,4 +75,26 @@ def bookings_for_customer_account(user) -> QuerySet[Booking]:
         return Booking.objects.none()
     return Booking.objects.select_related("organization", "service", "staff__user").filter(
         _own_customer_filter(user)
+    )
+
+
+def overlapping_bookings() -> QuerySet[Booking]:
+    """Active appointments that overlap another active appointment of the same staff member.
+
+    Should always be empty: the booking service refuses overlaps and, on PostgreSQL, the
+    ``booking_staff_no_overlap`` constraint makes them impossible. Used before adding that
+    constraint (``manage.py check_booking_overlaps``).
+    """
+    from bookings.services import ACTIVE_BOOKING_STATUSES
+
+    active = Booking.objects.filter(status__in=ACTIVE_BOOKING_STATUSES)
+    clash = active.filter(
+        staff_id=OuterRef("staff_id"),
+        start_datetime__lt=OuterRef("end_datetime"),
+        end_datetime__gt=OuterRef("start_datetime"),
+    ).exclude(pk=OuterRef("pk"))
+    return (
+        active.filter(Exists(clash))
+        .select_related("organization", "staff__user")
+        .order_by("organization__name", "staff_id", "start_datetime")
     )

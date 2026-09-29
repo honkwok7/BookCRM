@@ -290,9 +290,10 @@ class StatsAndSelectorTests(TestCase):
         self.organization = f.OrganizationFactory()
         self.staff = f.StaffProfileFactory(organization=self.organization)
         self.service = f.ServiceFactory(organization=self.organization, price=100)
+        f.make_bookable(self.staff, self.service)
 
     def test_stats_count_reschedules_once(self):
-        start = timezone.now() + timedelta(days=3)
+        start = f.future(3)
         booking = create_booking(
             organization=self.organization,
             service=self.service,
@@ -327,7 +328,8 @@ class StatsAndSelectorTests(TestCase):
             customer_name="Mary Ann Smith",
             customer_email="mary@example.test",
             customer_phone="",
-            start_datetime=timezone.now() + timedelta(days=2),
+            start_datetime=f.future(2),
+            source=Booking.Source.RECEPTION,
             notify=False,
         )
         customer = booking.customer

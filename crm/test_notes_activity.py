@@ -114,7 +114,8 @@ class ActivityEmissionTests(TestCase):
         self.actor = f.MembershipFactory(organization=self.organization).user
         self.staff = f.StaffProfileFactory(organization=self.organization)
         self.service = f.ServiceFactory(organization=self.organization)
-        self.start = timezone.now() + timedelta(days=3)
+        f.make_bookable(self.staff, self.service)
+        self.start = f.future(3)
 
     def book(self, **kwargs):
         return create_booking(

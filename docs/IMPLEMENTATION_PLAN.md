@@ -1028,6 +1028,20 @@ A 30-day range for 10 staff is computed in ≤ 10 queries.
 
 ### M4.1: BookingService consolidation
 
+> **Status: done (2026-09-29, branch `m4.1-booking-service`).** See
+> [BOOKING_ENGINE.md](BOOKING_ENGINE.md#one-entry-point).
+> - Kept as functions in `bookings/services.py` (no class): `create_booking`,
+>   `reschedule_booking`, `cancel_booking`, `change_booking_status`, plus
+>   `record_past_booking` for history and imports. Every caller (API, public page,
+>   `seed_demo`) uses them; a source scan test enforces it.
+> - `validate_slot` for every caller under the staff lock (probe P7 fixed), the provider's
+>   own duration and price, `Booking.location`/`source`/`created_by`/buffer snapshots,
+>   per-organization idempotency keys (field or `Idempotency-Key` header), the monthly plan
+>   limit (now counted per calendar month), the cancellation deadline for customers (the team
+>   can override), and a dynamic reference year.
+> - Reschedule keeps the cancel-and-link model (one transaction). Moving in place and the
+>   status workflow's `reason`/`source` history fields come with M4.3.
+
 #### Objective
 One validated booking engine for every entry point.
 
@@ -1077,6 +1091,19 @@ Additive plus a location backfill.
 No code outside `BookingService` writes `Booking.status`, `start_datetime` or `end_datetime`. A grep test enforces this.
 
 ### M4.2: Database-level conflict protection and concurrency tests
+
+> **Status: done (2026-09-29, same branch as M4.1).** See
+> [BOOKING_ENGINE.md](BOOKING_ENGINE.md#concurrency-and-the-no-overlap-guarantee).
+> - The exclusion constraint `booking_staff_no_overlap` is on the appointment's own
+>   `[start, end)`, not a `blocked_start/blocked_end` range with buffers: the gap between two
+>   appointments is the *larger* of their buffers, which per-row ranges would overstate (they
+>   add up). Buffers stay an engine rule under the lock, so no extra columns.
+> - Added with raw SQL in `bookings/0010` (PostgreSQL only; `btree_gist`), after an overlap
+>   pre-check that stops the migration with the offenders; `manage.py check_booking_overlaps`.
+> - The service maps a violation to 409 `slot_unavailable`. Tests: direct overlapping writes,
+>   back-to-back and inactive rows, and a lock-free two-connection race that only the
+>   constraint stops. The CI loop of 50 repeated race runs isn't set up; the races run once
+>   per CI build.
 
 #### Objective
 Guarantee that no double booking can occur.

@@ -2,7 +2,6 @@
 the invitation-email link built from the Host header (found while verifying F5)."""
 
 import importlib
-from datetime import timedelta
 from unittest import mock
 
 from django.apps import apps
@@ -196,7 +195,7 @@ class F6BookingTenantConsistencyTests(TestCase):
                         customer_name="Ada",
                         customer_email="ada@example.test",
                         customer_phone="",
-                        start_datetime=timezone.now() + timedelta(days=2),
+                        start_datetime=f.future(2),
                         notify=False,
                     )
         self.assertFalse(Booking.objects.exists())

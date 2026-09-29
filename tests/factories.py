@@ -298,3 +298,33 @@ class NotificationLogFactory(factory.django.DjangoModelFactory):
     organization = factory.SubFactory(OrganizationFactory)
     recipient_email = factory.Sequence(lambda n: f"notify{n}@example.test")
     notification_type = "booking_confirmation"
+
+
+def make_bookable(staff, *services, days=(0, 1, 2, 3, 4, 5, 6), start=time(0), end=time(23, 59)):
+    """Let ``staff`` be booked for ``services``: an offering for each (unless one exists) and
+    weekly hours on ``days`` (00:00-23:59 by default, any location), and the default location
+    if they work nowhere yet. For tests about booking
+    behaviour rather than availability rules; the booking service checks both."""
+    if not staff.locations.exists():  # created without the factory: works at the default
+        staff.locations.add(Location.objects.get(organization=staff.organization, is_default=True))
+    for service in services:
+        if not StaffServiceOffering.objects.filter(staff=staff, service=service).exists():
+            StaffServiceOfferingFactory(
+                organization=staff.organization, staff=staff, service=service
+            )
+    for day in days:
+        WeeklyAvailabilityFactory(
+            organization=staff.organization,
+            staff=staff,
+            day_of_week=day,
+            start_time=start,
+            end_time=end,
+        )
+    return staff
+
+
+def future(days=2, hour=10, minute=0):
+    """``hour:minute`` UTC, ``days`` from today: a booking time that is always in the future
+    and never crosses midnight (weekly hours are per day)."""
+    moment = timezone.now() + timedelta(days=days)
+    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0)

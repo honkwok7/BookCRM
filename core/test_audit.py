@@ -6,7 +6,6 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
-from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.test import APITestCase
 
@@ -31,6 +30,7 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from organizations.tenancy import suspend_organization
 from services.models import Service
 from staff.models import StaffProfile
+from tests.factories import future, make_bookable
 
 User = get_user_model()
 
@@ -225,6 +225,7 @@ class BookingServiceAuditTests(TestCase):
         service = Service.objects.create(
             organization=self.org, name="S", slug="s", price=10, duration_minutes=30
         )
+        make_bookable(staff, service)
         self.booking = create_booking(
             organization=self.org,
             service=service,
@@ -232,7 +233,7 @@ class BookingServiceAuditTests(TestCase):
             customer_name="C",
             customer_email="c@x.test",
             customer_phone="",
-            start_datetime=timezone.now() + timedelta(days=2),
+            start_datetime=future(2),
             actor=self.actor,
         )
 
@@ -253,7 +254,7 @@ class BookingServiceAuditTests(TestCase):
             customer_name="D",
             customer_email="d@x.test",
             customer_phone="",
-            start_datetime=timezone.now() + timedelta(days=5),
+            start_datetime=future(5),
             actor=self.actor,
         )
         cancel_booking(booking=cancel, actor=self.actor, reason="sick")

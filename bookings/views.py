@@ -13,6 +13,7 @@ from bookings.serializers import (
     BookingSerializer,
     BookingStatusSerializer,
     WaitlistEntrySerializer,
+    is_team_request,
 )
 from bookings.services import change_booking_status, reschedule_booking
 from core.api import AuditedModelViewSetMixin
@@ -82,6 +83,8 @@ class BookingViewSet(
             booking=booking,
             new_start=serializer.validated_data["start_datetime"],
             actor=request.user,
+            # A customer moving their own appointment: online-booking rules and deadline.
+            public=not is_team_request(request, booking.organization),
         )
         return self._respond(new_booking)
 

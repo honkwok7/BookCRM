@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.views import View
 
 from bookings.forms import PublicBookingForm
+from bookings.models import Booking
 from bookings.services import create_booking
 from core.exceptions import ConflictError, DomainError
 from organizations.tenancy import get_public_organization
@@ -50,6 +51,8 @@ class PublicBookingPageView(View):
                 organization=organization,
                 service=data["service"],
                 staff_profile=data["staff"],
+                source=Booking.Source.PUBLIC_BOOKING,
+                public=True,
                 customer_name=data["customer_name"],
                 customer_email=data["customer_email"],
                 customer_phone=data["customer_phone"],
