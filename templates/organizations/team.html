@@ -1,0 +1,39 @@
+{% extends "layouts/app.html" %}
+{% block title %}Team · {{ organization.name }}{% endblock %}
+{% block page_title %}Team{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Everyone with access to {{ organization.name }}.</p>{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" query=query search_label="Search by name, email or title" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Team members</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Joined</th></tr></thead>
+          <tbody>
+            {% for member in page_obj %}
+              <tr>
+                <td class="font-medium">{{ member.user.get_full_name|default:"—" }}{% if member.title %}<span class="block text-xs font-normal text-slate-600">{{ member.title }}</span>{% endif %}</td>
+                <td>{{ member.user.email }}</td>
+                <td>{% include "components/badge.html" with label=member.get_role_display level="brand" %}</td>
+                <td>{% if member.is_active %}{% include "components/badge.html" with label="Active" level="success" %}{% else %}{% include "components/badge.html" with label="Inactive" %}{% endif %}</td>
+                <td class="whitespace-nowrap text-slate-600">{{ member.created_at|date:"j M Y" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No matching team members" message="Try a different search or role." icon="search" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="No team members yet" icon="users" %}
+    {% endif %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% load static %}<!doctype html>
+{% comment %}Rendered without request context or database access: keep it self-contained.{% endcomment %}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Something went wrong</title>
+  <link rel="stylesheet" href="{% static 'dist/app.css' %}">
+</head>
+<body>
+  <main class="mx-auto max-w-lg px-4 py-16 text-center">
+    <p class="text-sm font-semibold text-brand-700">500</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight">Something went wrong</h1>
+    <p class="mt-3 text-slate-700">An unexpected error occurred. Please try again in a moment.</p>
+    <div class="mt-8"><a class="btn btn-primary" href="/">Go to the home page</a></div>
+  </main>
+</body>
+</html>

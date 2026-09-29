@@ -3,6 +3,7 @@ from pathlib import Path
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
@@ -62,7 +63,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "core.middleware.RequestAuditMiddleware",
+    "core.middleware.ResetTimezoneMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -77,6 +80,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.app_shell",
             ],
         },
     },
@@ -128,6 +132,9 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# static/src holds the Tailwind input; only the built CSS, the app JS and vendored libraries
+# are served (see core/management/commands/tailwind.py).
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
@@ -139,6 +146,17 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "login"
+
+# Product name shown in the UI and in account emails.
+SITE_NAME = env("SITE_NAME", default="BookCRM")
+
+# Web sign-in and password-reset limits (per client IP and per email address), on top of the
+# API's DRF throttles. Format: "<count>/<seconds>".
+WEB_LOGIN_RATE = env("WEB_LOGIN_RATE", default="10/900")
+WEB_PASSWORD_RESET_RATE = env("WEB_PASSWORD_RESET_RATE", default="5/3600")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -180,7 +198,7 @@ SIMPLE_JWT = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Schedula API",
+    "TITLE": "BookCRM API",
     "DESCRIPTION": "Multi-tenant appointment booking SaaS API",
     "VERSION": "1.0.0",
     "SWAGGER_UI_DIST": "SIDECAR",
@@ -202,6 +220,12 @@ SITE_URL = env("SITE_URL", default="http://localhost:8000").rstrip("/")
 APP_BASE_URL = env("APP_BASE_URL", default="http://localhost:8000")
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
+# Shared cache (rate-limit counters, DRF throttles). Without it each process counts alone.
+CACHE_URL = env("CACHE_URL", default="")
+if CACHE_URL:
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": CACHE_URL}
+    }
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -229,6 +253,24 @@ if TRUSTED_PROXY_COUNT:
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
+# htmx sends the CSRF token from the page (hx-headers), so JavaScript never reads the cookie.
+CSRF_COOKIE_HTTPONLY = True
+
+# Content Security Policy. Every script and stylesheet is self-hosted and nothing runs inline:
+# Alpine is the CSP build (no eval) and htmx is configured without eval or inline styles
+# (templates/base.html). The API docs pages need a looser policy (core/csp.py).
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF],
+    "style-src": [CSP.SELF],
+    "img-src": [CSP.SELF, "data:"],
+    "font-src": [CSP.SELF],
+    "connect-src": [CSP.SELF],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}
 
 LOGGING = {
     "version": 1,

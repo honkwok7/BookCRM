@@ -2,10 +2,12 @@ import logging
 from functools import partial
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from accounts.models import EmailVerificationToken
 from accounts.tasks import send_password_reset_email, send_verification_email
+from core.audit import AuditAction, record_audit
 
 logger = logging.getLogger(__name__)
 
@@ -43,3 +45,41 @@ def revoke_refresh_tokens(user) -> int:
         _, created = BlacklistedToken.objects.get_or_create(token=token)
         revoked += created
     return revoked
+
+
+def verify_email(token_value: str):
+    """Mark the token's account verified; return the user, or None for a bad/expired token."""
+    with transaction.atomic():
+        token = (
+            EmailVerificationToken.objects.select_for_update()
+            .select_related("user")
+            .filter(token=token_value)
+            .first()
+        )
+        if token is None or not token.is_valid:
+            return None
+        token.used_at = timezone.now()
+        token.save(update_fields=["used_at", "updated_at"])
+        user = token.user
+        user.email_verified = True
+        user.save(update_fields=["email_verified"])
+        record_audit(AuditAction.ACCOUNT_EMAIL_VERIFIED, actor=user, target=user)
+    return user
+
+
+@transaction.atomic
+def reset_password(user, new_password: str) -> None:
+    """Set a new password and sign the account out everywhere.
+
+    Web sessions end because Django ties them to the password hash; access tokens end through
+    SIMPLE_JWT ``CHECK_REVOKE_TOKEN``; refresh tokens are blacklisted here.
+    """
+    user.set_password(new_password)
+    user.save(update_fields=["password"])
+    revoked = revoke_refresh_tokens(user)
+    record_audit(
+        AuditAction.ACCOUNT_PASSWORD_RESET,
+        actor=user,
+        target=user,
+        metadata={"refresh_tokens_revoked": revoked},
+    )

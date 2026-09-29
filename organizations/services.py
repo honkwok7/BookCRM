@@ -86,3 +86,28 @@ def create_invitation(
     )
     transaction.on_commit(partial(_enqueue_invitation_email, str(invitation.pk)))
     return invitation
+
+
+@transaction.atomic
+def register_and_accept_invitation(
+    *, invitation: OrganizationInvitation, first_name: str, last_name: str, password: str
+) -> OrganizationMembership:
+    """Create the invited person's account and join the organization in one step.
+
+    The account uses the invitation's email, and following the emailed link proves the
+    mailbox, so the email is marked verified. If the invitation turns out to be used or
+    expired, ``accept_invitation`` raises and the new account is rolled back with it.
+    Raises ``IntegrityError`` when an account with that email already exists.
+    """
+    now = timezone.now()
+    with transaction.atomic():
+        user = User.objects.create_user(
+            email=invitation.email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            email_verified=True,
+            terms_accepted_at=now,
+            privacy_accepted_at=now,
+        )
+    return accept_invitation(invitation=invitation, user=user)

@@ -1,0 +1,38 @@
+{% extends "layouts/app.html" %}
+{% block title %}Audit log · {{ organization.name }}{% endblock %}
+{% block page_title %}Audit log{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Important changes in {{ organization.name }}, newest first. Entries can't be edited or deleted.</p>{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Audit log entries</caption>
+          <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Record</th></tr></thead>
+          <tbody>
+            {% for entry in page_obj %}
+              <tr>
+                <td class="whitespace-nowrap text-slate-600"><time datetime="{{ entry.created_at|date:'c' }}">{{ entry.created_at|date:"j M Y, H:i" }}</time></td>
+                <td>{% if entry.user %}{{ entry.user.get_full_name|default:entry.user.email }}{% else %}<span class="text-slate-600">{{ entry.get_actor_type_display }}</span>{% endif %}</td>
+                <td><code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{{ entry.action }}</code></td>
+                <td class="text-slate-600">{{ entry.object_type }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No entries for this action" icon="clipboard" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="Nothing recorded yet" message="Changes to customers, appointments and settings will appear here." icon="clipboard" %}
+    {% endif %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

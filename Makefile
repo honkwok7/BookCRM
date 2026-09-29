@@ -9,6 +9,12 @@ migrations:
 migrate:
 	$(PYTHON) manage.py migrate
 
+css:
+	$(PYTHON) manage.py tailwind build
+
+css-watch:
+	$(PYTHON) manage.py tailwind watch
+
 run:
 	$(PYTHON) manage.py runserver
 

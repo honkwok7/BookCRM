@@ -1,10 +1,10 @@
-{% extends 'base.html' %}
-{% block title %}Schedula Pricing{% endblock %}
+{% extends "layouts/public.html" %}
+{% block title %}{{ brand_name }} Pricing{% endblock %}
 {% block content %}
 <h1 class="text-3xl font-bold mb-6">Pricing</h1>
 <div class="grid md:grid-cols-3 gap-4">
-  <div class="bg-white border rounded p-6"><h2 class="font-bold">Free</h2><p>$0/mo</p></div>
-  <div class="bg-white border rounded p-6"><h2 class="font-bold">Professional</h2><p>$49/mo</p></div>
-  <div class="bg-white border rounded p-6"><h2 class="font-bold">Business</h2><p>$99/mo</p></div>
+  <div class="card card-body"><h2 class="font-bold">Free</h2><p>$0/mo</p></div>
+  <div class="card card-body"><h2 class="font-bold">Professional</h2><p>$49/mo</p></div>
+  <div class="card card-body"><h2 class="font-bold">Business</h2><p>$99/mo</p></div>
 </div>
 {% endblock %}

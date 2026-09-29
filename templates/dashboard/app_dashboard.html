@@ -1,0 +1,43 @@
+{% extends "layouts/app.html" %}
+{% block title %}Dashboard · {{ organization.name }}{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">{{ today|date:"l j F Y" }} · times in {{ zone }}</p>{% endblock %}
+{% block content %}
+{% if summary %}
+<section aria-labelledby="summary-heading" class="mb-6">
+  <h2 id="summary-heading" class="sr-only">Summary</h2>
+  <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card card-body"><dt class="text-sm text-slate-600">Appointments today</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.appointments_today }}</dd></div>
+    <div class="card card-body"><dt class="text-sm text-slate-600">This week</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.appointments_this_week }}</dd></div>
+    <div class="card card-body"><dt class="text-sm text-slate-600">Active customers</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.active_customers }}</dd></div>
+    <div class="card card-body"><dt class="text-sm text-slate-600">Active staff</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.active_staff }}</dd></div>
+  </dl>
+</section>
+{% endif %}
+
+<section class="card" aria-labelledby="today-heading">
+  <div class="card-header">
+    <h2 id="today-heading" class="card-title">{% if sees_all_appointments %}Today's appointments{% else %}Your appointments today{% endif %}</h2>
+  </div>
+  {% if appointments %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <thead><tr><th scope="col">Time</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">With</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          {% for appointment in appointments %}
+            <tr>
+              <td class="whitespace-nowrap font-medium">{{ appointment.start_datetime|time:"H:i" }}–{{ appointment.end_datetime|time:"H:i" }}</td>
+              <td>{{ appointment.customer_name }}</td>
+              <td>{{ appointment.service.name }}</td>
+              <td>{{ appointment.staff.user.get_full_name|default:appointment.staff.user.email }}</td>
+              <td>{% include "dashboard/status_badge.html" with status=appointment.status label=appointment.get_status_display %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No appointments today" icon="calendar" %}
+  {% endif %}
+</section>
+{% endblock %}

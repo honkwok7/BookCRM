@@ -1,0 +1,6 @@
+{% comment %}Appointment status as a badge. {% include "dashboard/status_badge.html" with status=b.status label=b.get_status_display %}{% endcomment %}
+{% if status == "confirmed" or status == "checked_in" or status == "in_progress" %}{% include "components/badge.html" with label=label level="brand" %}
+{% elif status == "completed" %}{% include "components/badge.html" with label=label level="success" %}
+{% elif status == "pending" %}{% include "components/badge.html" with label=label level="warning" %}
+{% elif status == "cancelled" or status == "no_show" or status == "rejected" %}{% include "components/badge.html" with label=label level="danger" %}
+{% else %}{% include "components/badge.html" with label=label %}{% endif %}

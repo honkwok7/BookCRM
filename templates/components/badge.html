@@ -1,0 +1,5 @@
+{% comment %}
+  {% include "components/badge.html" with label="Active" level="success" %}
+level: neutral (default), brand, success, warning, danger.
+{% endcomment %}
+<span class="badge badge-{{ level|default:'neutral' }}">{{ label }}</span>

@@ -1,0 +1,12 @@
+{% extends "layouts/public.html" %}
+{% comment %}Narrow centred card for sign-in and account pages.{% endcomment %}
+{% block main %}
+<div class="mx-auto w-full max-w-md px-4 py-10 sm:py-16">
+  <div class="card card-body">
+    <h1 class="mb-1 text-2xl font-bold tracking-tight">{% block heading %}{% endblock %}</h1>
+    {% block intro %}{% endblock %}
+    <div class="mt-6">{% block card %}{% endblock %}</div>
+  </div>
+  {% block below_card %}{% endblock %}
+</div>
+{% endblock %}

@@ -24,8 +24,15 @@ claimed; that would need a separate formal review.
 | CSRF, clickjacking (`DENY`), `nosniff`, auto-escaping templates | ✅ | Django defaults and settings |
 | `manage.py check --deploy` in CI | ❌ | Planned for M11.1 |
 | HSTS, secure cookies and SSL redirect enforced in production | ❌ | Configurable through env vars today; enforced in M11.1 |
-| Login and password-reset rate limiting | ✅ | Scoped throttles `login` / `password_reset` (`accounts/views.py`) |
-| Account lockout after repeated failures | ❌ | M2.5 (web session login) |
+| Login and password-reset rate limiting | ✅ | API: scoped throttles `login` / `password_reset` (`accounts/views.py`). Web: per client IP **and** per email (`WEB_LOGIN_RATE`, `WEB_PASSWORD_RESET_RATE`; `core/ratelimit.py`) |
+| Account lockout after repeated failures | ✅ (temporary) | Too many attempts on one email pause sign-in for that email for the rate window (default 10 per 15 minutes). There is no permanent lockout, which anyone could trigger against someone else's account |
+| Content Security Policy: only self-hosted scripts and styles, nothing inline, no `eval` (Alpine CSP build, htmx without eval) | ✅ | `SECURE_CSP` in `config/settings.py`; the API docs pages have their own looser policy (`core/csp.py`) |
+| No third-party scripts: htmx and Alpine vendored and checked against the npm registry's integrity hashes; Tailwind CLI pinned by SHA-256 | ✅ | `static/vendor/`, `core/management/commands/tailwind.py` |
+| Web pages enforce the same capabilities as the API; a hidden menu link is never the only protection (tested page by page) | ✅ | `core/web.py`, `core/navigation.py`, `tests/test_web_shell.py` |
+| Sign-out is POST only; `next` redirects are limited to this site | ✅ | `accounts/web_views.py`, `organizations/web_views.py` |
+| CSRF cookie is HttpOnly; htmx sends the token from the page | ✅ | `CSRF_COOKIE_HTTPONLY`, `templates/base.html` |
+| Emailed links need a click to act (email verification is a POST), so link scanners can't verify for the user | ✅ | `accounts/web_views.py` |
+| htmx keeps no page snapshots in `localStorage` (`historyCacheSize: 0`) | ✅ | `templates/base.html` |
 | Forwarded headers trusted only behind a configured proxy (`TRUSTED_PROXY_COUNT`) | ✅ | `config/settings.py`, [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Double-booking prevention under concurrency (staff-calendar lock, PostgreSQL race tests) | ✅ | `bookings/services.py`, `tests/test_booking_engine.py` |
 | Database-level exclusion constraint as a second guarantee | ❌ | M4.2 (see [BOOKING_ENGINE.md](BOOKING_ENGINE.md)) |

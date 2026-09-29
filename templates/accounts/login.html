@@ -1,0 +1,20 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Sign in · {{ brand_name }}{% endblock %}
+{% block heading %}Sign in{% endblock %}
+{% block intro %}<p class="text-sm text-slate-600">Welcome back. Sign in to manage your bookings and customers.</p>{% endblock %}
+{% block card %}
+{% if rate_limited %}
+  <div class="mb-4">{% include "components/alert.html" with level="error" message=rate_limited %}</div>
+{% endif %}
+{% include "components/form_errors.html" with form=form %}
+<form method="post" class="grid gap-4" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}">
+  {% include "components/field.html" with field=form.username %}
+  {% include "components/field.html" with field=form.password %}
+  <div class="flex items-center justify-end text-sm">
+    <a href="{% url 'password-reset' %}">Forgot your password?</a>
+  </div>
+  <button type="submit" class="btn btn-primary w-full">Sign in</button>
+</form>
+{% endblock %}

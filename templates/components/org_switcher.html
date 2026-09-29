@@ -1,0 +1,32 @@
+{% comment %}
+Current organization, and a menu to switch when the user belongs to several. Switching is a
+POST to /app/switch/<slug>/, which accepts only the user's own active memberships.
+{% endcomment %}
+{% if tenant %}
+  {% if memberships|length > 1 %}
+  <div x-data="dropdown" class="relative" @keydown.escape="close(true)" @click.outside="close(false)">
+    <button type="button" x-ref="button" class="btn-ghost btn" @click="toggle()" :aria-expanded="open" aria-haspopup="true">
+      {% include "components/icon.html" with name="building" %}
+      <span class="max-w-[12rem] truncate">{{ tenant.organization.name }}</span>
+      <span class="sr-only">, switch organization</span>
+      {% include "components/icon.html" with name="chevron-down" class="size-4" %}
+    </button>
+    <div x-show="open" x-cloak x-transition class="absolute left-0 z-40 mt-2 w-64 rounded-md bg-white py-1 shadow-lg ring-1 ring-slate-200">
+      <p class="px-4 py-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">Switch organization</p>
+      {% for membership in memberships %}
+        <form method="post" action="{% url 'switch-organization' membership.organization.slug %}">
+          {% csrf_token %}
+          <button type="submit" class="dropdown-item flex items-center justify-between gap-2"{% if membership.organization_id == tenant.organization.pk %} aria-current="true"{% endif %}>
+            <span class="truncate">{{ membership.organization.name }}</span>
+            {% if membership.organization_id == tenant.organization.pk %}{% include "components/icon.html" with name="check-circle" class="size-4 text-brand-600" %}{% endif %}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <p class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+    {% include "components/icon.html" with name="building" %}<span class="truncate">{{ tenant.organization.name }}</span>
+  </p>
+  {% endif %}
+{% endif %}

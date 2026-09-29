@@ -1,0 +1,13 @@
+{% comment %}
+A menu of links.
+  {% include "components/dropdown.html" with label="Actions" items=items %}
+items: a list of {"label", "url"}.
+{% endcomment %}
+<div x-data="dropdown" class="relative inline-block" @keydown.escape="close(true)" @click.outside="close(false)">
+  <button type="button" x-ref="button" class="btn btn-secondary" @click="toggle()" :aria-expanded="open" aria-haspopup="true">
+    {{ label }}{% include "components/icon.html" with name="chevron-down" class="size-4" %}
+  </button>
+  <div x-show="open" x-cloak x-transition class="absolute right-0 z-40 mt-2 w-56 rounded-md bg-white py-1 shadow-lg ring-1 ring-slate-200">
+    {% for item in items %}<a class="dropdown-item" href="{{ item.url }}">{{ item.label }}</a>{% endfor %}
+  </div>
+</div>

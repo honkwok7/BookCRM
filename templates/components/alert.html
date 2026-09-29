@@ -1,0 +1,8 @@
+{% comment %}
+  {% include "components/alert.html" with level="warning" title="Optional title" message="..." %}
+level: info (default), success, warning, error.
+{% endcomment %}
+<div class="alert alert-{{ level|default:'info' }}"{% if level == "error" %} role="alert"{% endif %}>
+  {% if level == "success" %}{% include "components/icon.html" with name="check-circle" %}{% elif level == "warning" or level == "error" %}{% include "components/icon.html" with name="warning" %}{% else %}{% include "components/icon.html" with name="info" %}{% endif %}
+  <div class="flex-1">{% if title %}<p class="font-semibold">{{ title }}</p>{% endif %}<p>{{ message }}</p></div>
+</div>

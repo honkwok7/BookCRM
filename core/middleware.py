@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from threading import local
 
+from django.utils import timezone
+
 _request_local = local()
 
 
@@ -21,3 +23,17 @@ class RequestAuditMiddleware:
             # Never let a finished request leak into later work on the same thread
             # (audit rows would otherwise be attributed to the wrong user).
             _request_local.request = None
+
+
+class ResetTimezoneMiddleware:
+    """Pages activate the organization's time zone; never let it leak into the next request
+    served by the same thread."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        try:
+            return self.get_response(request)
+        finally:
+            timezone.deactivate()

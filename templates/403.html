@@ -1,0 +1,27 @@
+{% extends "layouts/public.html" %}
+{% block title %}Access denied · {{ brand_name }}{% endblock %}
+{% block main %}
+<div class="mx-auto max-w-lg px-4 py-16 text-center">
+  <p class="text-sm font-semibold text-brand-700">403</p>
+  <h1 class="mt-2 text-3xl font-bold tracking-tight">Access denied</h1>
+  <p class="mt-3 text-slate-700">{{ exception|default:"You don't have permission to view this page." }}</p>
+  <div class="mt-8 flex flex-wrap justify-center gap-3">
+    {% if user.is_authenticated %}<a class="btn btn-primary" href="{% url 'home' %}">Go to your home page</a>{% else %}<a class="btn btn-primary" href="{% url 'login' %}">Sign in</a>{% endif %}
+  </div>
+  {% if memberships|length > 1 %}
+    <div class="card mt-10 text-left">
+      <div class="card-header"><h2 class="card-title">Switch organization</h2></div>
+      <ul class="divide-y divide-slate-100">
+        {% for membership in memberships %}
+          <li>
+            <form method="post" action="{% url 'switch-organization' membership.organization.slug %}">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item">{{ membership.organization.name }}</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
