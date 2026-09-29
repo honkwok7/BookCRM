@@ -1,0 +1,15 @@
+{% comment %}
+Search box in the app header. Typing fetches /app/search/ (htmx) into a dropdown; Enter opens
+the full results page. Results follow the same access rules as browsing (core/search.py).
+{% endcomment %}
+<div x-data="dropdown" class="relative hidden w-full max-w-sm md:block" @click.outside="close(false)" @keydown.escape="close(false)">
+  <form method="get" action="{% url 'app-search' %}" role="search">
+    <label for="header-search" class="sr-only">Search customers, appointments, staff and services</label>
+    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">{% include "components/icon.html" with name="search" class="size-4" %}</span>
+    <input id="header-search" type="search" name="q" placeholder="Search…" autocomplete="off" class="input pl-9"
+           hx-get="{% url 'app-search' %}" hx-trigger="input changed delay:250ms" hx-target="#header-search-results"
+           @input="open = true" @focus="open = true" aria-controls="header-search-results">
+  </form>
+  <div id="header-search-results" x-show="open" x-cloak class="absolute left-0 z-40 mt-2 max-h-[70vh] w-full overflow-y-auto rounded-md bg-white shadow-lg ring-1 ring-slate-200" aria-live="polite"><p class="px-4 py-3 text-sm text-slate-600">Type at least 2 characters.</p></div>
+</div>
+<a href="{% url 'app-search' %}" class="btn btn-ghost md:hidden"><span class="sr-only">Search</span>{% include "components/icon.html" with name="search" %}</a>

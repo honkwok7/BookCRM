@@ -8,6 +8,8 @@
 
 @source "../../templates";
 @source "../js";
+/* Tag colour dots (crm/templatetags/crm_tags.py PALETTE) */
+@source inline("bg-{red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose,slate}-500");
 
 @theme {
   --color-brand-50: oklch(0.97 0.02 265);

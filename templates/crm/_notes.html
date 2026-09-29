@@ -1,0 +1,62 @@
+{% comment %}
+Notes on a customer: the add form and the list (pinned first). Every action posts with htmx
+and gets this whole section back (hx-target="#notes", outerHTML).
+Visibility is decided by crm.selectors.notes_visible_to; the buttons by can_change_note.
+{% endcomment %}
+<div id="notes" class="grid gap-6">
+  {% if note_form %}
+    <form method="post" action="{% url 'crm-note-create' customer.pk %}" hx-post="{% url 'crm-note-create' customer.pk %}" hx-target="#notes" hx-swap="outerHTML" class="card card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      <h2 class="card-title">Add a note</h2>
+      {% include "components/form_errors.html" with form=note_form %}
+      {% include "components/field.html" with field=note_form.content %}
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "components/field.html" with field=note_form.note_type %}
+        {% include "components/field.html" with field=note_form.visibility %}
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        {% include "components/field.html" with field=note_form.pinned %}
+        <button type="submit" class="btn btn-primary">Add note</button>
+      </div>
+    </form>
+  {% endif %}
+
+  <section class="card" aria-label="Notes">
+    {% if notes %}
+      <ul class="divide-y divide-slate-100">
+        {% for item in notes %}
+          {% with note=item.note %}
+          <li class="grid gap-2 p-4 sm:px-6">
+            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              {% if note.pinned %}<span class="badge badge-brand gap-1">{% include "components/icon.html" with name="pin" class="size-3" %}Pinned</span>{% endif %}
+              {% if note.visibility == "internal" %}{% include "components/badge.html" with label="Internal" level="warning" %}{% else %}{% include "components/badge.html" with label="Visible to customer" %}{% endif %}
+              <span class="font-medium text-slate-700">{{ note.get_note_type_display }}</span>
+              <span>·</span>
+              <span>{{ note.author.get_full_name|default:note.author.email|default:"Unknown" }}</span>
+              <span>·</span>
+              <time datetime="{{ note.created_at|date:'c' }}">{{ note.created_at|date:"j M Y, H:i" }}</time>
+              {% if note.edited_at %}<span>(edited)</span>{% endif %}
+            </div>
+            <p class="text-sm whitespace-pre-line text-slate-900">{{ note.content }}</p>
+            {% if item.can_change %}
+              <div class="flex flex-wrap gap-2">
+                <a href="{% url 'crm-note-edit' customer.pk note.pk %}" class="btn btn-ghost btn-sm" hx-get="{% url 'crm-note-edit' customer.pk note.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit</a>
+                <form method="post" action="{% url 'crm-note-pin' customer.pk note.pk %}" hx-post="{% url 'crm-note-pin' customer.pk note.pk %}" hx-target="#notes" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="pin" class="size-4" %}{% if note.pinned %}Unpin{% else %}Pin{% endif %}</button>
+                </form>
+                <form method="post" action="{% url 'crm-note-delete' customer.pk note.pk %}" hx-post="{% url 'crm-note-delete' customer.pk note.pk %}" hx-target="#notes" hx-swap="outerHTML" hx-confirm="Delete this note? This can't be undone.">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-sm text-red-700">{% include "components/icon.html" with name="trash" class="size-4" %}Delete</button>
+                </form>
+              </div>
+            {% endif %}
+          </li>
+          {% endwith %}
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% include "components/empty_state.html" with title="No notes yet" icon="clipboard" %}
+    {% endif %}
+  </section>
+</div>

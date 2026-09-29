@@ -1,0 +1,25 @@
+<div class="card">
+  {% if not sees_all %}<p class="border-b border-slate-100 px-4 py-3 text-sm text-slate-600">Showing only your appointments with this customer.</p>{% endif %}
+  {% if page_obj.object_list %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <caption class="sr-only">Appointments</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Service</th><th scope="col">With</th><th scope="col">Reference</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          {% for appointment in page_obj %}
+            <tr>
+              <td class="whitespace-nowrap"><time datetime="{{ appointment.start_datetime|date:'c' }}">{{ appointment.start_datetime|date:"D j M Y, H:i" }}</time></td>
+              <td>{{ appointment.service.name }}</td>
+              <td>{{ appointment.staff.user.get_full_name|default:appointment.staff.user.email }}</td>
+              <td class="whitespace-nowrap text-slate-600">{{ appointment.reference }}</td>
+              <td>{% include "dashboard/status_badge.html" with status=appointment.status label=appointment.get_status_display %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "components/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "components/empty_state.html" with title="No appointments" icon="calendar" %}
+  {% endif %}
+</div>

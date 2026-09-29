@@ -83,3 +83,21 @@ def reset_password(user, new_password: str) -> None:
         target=user,
         metadata={"refresh_tokens_revoked": revoked},
     )
+
+
+@transaction.atomic
+def reset_password_with_token(*, user_id, token: str, new_password: str) -> bool:
+    """Use a password-reset link: returns False if the link is invalid, expired or used.
+
+    The account row is locked and the token checked again under the lock. The token is tied
+    to the password hash, so once one request has changed the password, a concurrent request
+    with the same link fails here instead of overwriting it.
+    """
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.tokens import default_token_generator
+
+    user = get_user_model().objects.select_for_update().filter(pk=user_id, is_active=True).first()
+    if user is None or not default_token_generator.check_token(user, token):
+        return False
+    reset_password(user, new_password)
+    return True

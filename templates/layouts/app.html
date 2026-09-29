@@ -27,7 +27,7 @@ Blocks: title, page_title, page_description, page_actions, content.
         <span class="sr-only">Open navigation</span>{% include "components/icon.html" with name="menu" %}
       </button>
       {% include "components/org_switcher.html" %}
-      <div class="flex-1"></div>
+      <div class="flex flex-1 shrink-0 justify-end md:shrink md:justify-center">{% include "components/header_search.html" %}</div>
       {% include "components/user_menu.html" %}
     </header>
 

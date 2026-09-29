@@ -363,6 +363,27 @@ def create_tag(*, organization, name: str, color: str = "", actor=None) -> Tag:
     return tag
 
 
+def get_or_create_tag(*, organization, name: str, actor=None) -> Tag:
+    """The organization's tag with this name's slug, created if it doesn't exist.
+
+    Safe under concurrency: if another request creates the same tag between the lookup and
+    the insert, the unique constraint refuses the second insert and the existing tag is used.
+    """
+    _, slug, _ = _tag_fields(name, "")
+    existing = _find_tag(organization, slug)
+    if existing is not None:
+        return existing
+    try:
+        with transaction.atomic():
+            return create_tag(organization=organization, name=name, actor=actor)
+    except IntegrityError, ConflictError:
+        return Tag.objects.get(organization=organization, slug=slug)
+
+
+def _find_tag(organization, slug) -> Tag | None:
+    return Tag.objects.filter(organization=organization, slug=slug).first()
+
+
 @transaction.atomic
 def update_tag(*, tag: Tag, name: str | None = None, color: str | None = None, actor=None) -> Tag:
     before = snapshot(tag)
@@ -506,6 +527,18 @@ def update_note(*, note: CustomerNote, actor=None, **fields) -> CustomerNote:
     changes.pop("edited_at", None)
     if changes:
         _audit_note(AuditAction.NOTE_UPDATED, note, actor, changes=changes)
+    if note.visibility != before["visibility"]:
+        # The timeline entry must follow the note: an entry about a note that is now internal
+        # must disappear for readers without customers.notes.private, and the reverse.
+        CustomerActivity.objects.filter(
+            customer_id=note.customer_id,
+            kind=Kind.NOTE_CREATED,
+            subject_type=CustomerNote._meta.label_lower,
+            subject_id=str(note.pk),
+        ).update(
+            internal=note.visibility == CustomerNote.Visibility.INTERNAL,
+            metadata={"note_type": note.note_type, "visibility": note.visibility},
+        )
     return note
 
 

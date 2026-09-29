@@ -1,0 +1,33 @@
+{% comment %}The customer's tags. With customers.manage, ticking a box saves at once (htmx) and this section is replaced.{% endcomment %}
+<section id="customer-tags" class="card" aria-labelledby="tags-heading">
+  <div class="card-header"><h2 id="tags-heading" class="card-title">Tags</h2></div>
+  <div class="grid gap-4 p-4 sm:p-6">
+    <div class="flex flex-wrap gap-1.5">
+      {% for tag in customer_tags %}{% include "crm/_tag_badge.html" %}{% empty %}<span class="text-sm text-slate-600">No tags</span>{% endfor %}
+    </div>
+    {% if tags_form %}
+      {% if tags_form.tags.field.queryset %}
+        <form method="post" action="{% url 'crm-customer-tags' customer.pk %}" hx-post="{% url 'crm-customer-tags' customer.pk %}" hx-trigger="change" hx-target="#customer-tags" hx-swap="outerHTML" class="border-t border-slate-100 pt-4">
+          {% csrf_token %}
+          <fieldset>
+            <legend class="mb-2 text-xs font-semibold tracking-wide text-slate-600 uppercase">Edit tags</legend>
+            <div class="grid gap-2">
+              {% for choice in tags_form.tags %}
+                <label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          <noscript><button type="submit" class="btn btn-secondary btn-sm mt-3">Save tags</button></noscript>
+        </form>
+      {% endif %}
+      <form method="post" action="{% url 'crm-customer-tags' customer.pk %}" hx-post="{% url 'crm-customer-tags' customer.pk %}" hx-target="#customer-tags" hx-swap="outerHTML" class="flex items-end gap-2 border-t border-slate-100 pt-4">
+        {% csrf_token %}
+        <div class="form-field flex-1">
+          <label for="new-tag-{{ customer.pk }}" class="form-label">New tag</label>
+          <input id="new-tag-{{ customer.pk }}" type="text" name="new_tag" maxlength="60" required placeholder="e.g. Prefers mornings" autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn-secondary">Add</button>
+      </form>
+    {% endif %}
+  </div>
+</section>

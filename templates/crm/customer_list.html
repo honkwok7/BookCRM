@@ -1,0 +1,58 @@
+{% extends "layouts/app.html" %}
+{% block title %}Customers · {{ organization.name }}{% endblock %}
+{% block page_title %}Customers{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">{% if can_manage %}Find, add and update customer records.{% else %}The customers you work with.{% endif %}</p>{% endblock %}
+{% block page_actions %}
+  {% if can_manage %}
+    <a href="{% url 'crm-customer-new' %}" class="btn btn-primary" hx-get="{% url 'crm-customer-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}New customer
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" query=query search_label="Search by name, email or phone" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Customers</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Contact</th><th scope="col">Tags</th><th scope="col">Last visit</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {% for customer in page_obj %}
+              <tr>
+                <td class="font-medium">
+                  <a href="{% url 'crm-customer-detail' customer.pk %}">{{ customer.display_name }}</a>
+                  {% if customer.preferred_name %}<span class="block text-xs font-normal text-slate-600">{{ customer.name }}</span>{% endif %}
+                  {% if customer.alerts %}<span class="mt-1 flex items-center gap-1 text-xs font-normal text-amber-800">{% include "components/icon.html" with name="warning" class="size-3.5" %}{{ customer.alerts }}</span>{% endif %}
+                </td>
+                <td class="text-slate-700">
+                  {% if customer.email %}<span class="block">{{ customer.email }}</span>{% endif %}
+                  {% if customer.phone %}<span class="block whitespace-nowrap">{{ customer.phone }}</span>{% endif %}
+                </td>
+                <td>
+                  <div class="flex flex-wrap gap-1">{% for tag in customer.tag_set.all %}{% include "crm/_tag_badge.html" %}{% empty %}<span class="text-slate-500">—</span>{% endfor %}</div>
+                </td>
+                <td class="whitespace-nowrap text-slate-700">{% if customer.last_visit %}<time datetime="{{ customer.last_visit|date:'c' }}">{{ customer.last_visit|date:"j M Y" }}</time>{% else %}<span class="text-slate-500">Never</span>{% endif %}</td>
+                <td>{% include "crm/_status_badge.html" %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No matching customers" message="Try another name, email, phone number or filter." icon="search" %}
+    {% elif can_manage %}
+      {% url 'crm-customer-new' as new_url %}
+      {% include "components/empty_state.html" with title="No customers yet" message="Customers are added when they book, or you can add them here." icon="users" action_url=new_url action_label="Add a customer" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="No customers yet" message="Customers assigned to you, or who book with you, appear here." icon="users" %}
+    {% endif %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

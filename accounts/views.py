@@ -20,7 +20,7 @@ from accounts.serializers import (
 from accounts.services import (
     queue_password_reset_email,
     queue_verification_email,
-    reset_password,
+    reset_password_with_token,
     verify_email,
 )
 from core.audit import client_ip
@@ -137,5 +137,13 @@ class PasswordResetConfirmView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reset_password(serializer.validated_data["user"], serializer.validated_data["new_password"])
+        changed = reset_password_with_token(
+            user_id=serializer.validated_data["user"].pk,
+            token=serializer.validated_data["token"],
+            new_password=serializer.validated_data["new_password"],
+        )
+        if not changed:  # the token was used by a concurrent request
+            return Response(
+                {"detail": "Invalid or expired reset token"}, status=status.HTTP_400_BAD_REQUEST
+            )
         return Response({"detail": "Password changed successfully"})

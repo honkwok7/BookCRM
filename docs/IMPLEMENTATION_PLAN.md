@@ -714,6 +714,42 @@ None.
 
 ### M2.6: CRM UI
 
+> **Status: done (2026-09-29, branch `m2.6-crm-ui`).**
+> - **Pages:** `/app/customers/` (search, status and tag filters, htmx paging, "New
+>   customer" dialog) and `/app/customers/<uuid>/<tab>/` with the tabs Overview,
+>   Appointments, Notes, Communications, Forms, Transactions and Activity. Each tab is its own
+>   URL; htmx swaps only the tab area.
+> - **Overview:** first, last and next visit, totals, cancellations, no-shows, alerts, tags,
+>   assigned and preferred providers, consent. "Spend to date" (completed appointments) is
+>   shown to `customers.view` holders, with a note that predicted lifetime value comes later.
+>   `customer_stats` gained `first_visit`.
+> - **Without a page reload:** create (dialog), edit (dialog), tag (tick boxes, or type a new
+>   tag, which is created or reused), and notes (add, edit in a dialog, pin, delete). Every
+>   form also works as a normal page without JavaScript. Form errors come back as 422 and are
+>   shown in place (htmx `responseHandling`).
+> - **Communications** lists the email and SMS timeline entries. **Forms** and
+>   **Transactions** are labelled placeholders (M6 forms; payments later).
+> - **Header search:** a search box in the app header (dropdown of matches, or a results
+>   page). The API's `/api/v1/search/` and the header share `core/search.py`.
+> - **One set of rules:** the checks that were inside the API permission classes moved to
+>   plain functions in `crm/permissions.py` (`can_browse_customers`, `can_write_notes`,
+>   `can_change_note`, ...), used by the API and the pages alike. The sidebar item uses the
+>   same function as the page (`NavItem.allow`).
+> - **Tag colours** are free hex values but the CSP forbids inline styles, so each tag shows
+>   the nearest colour of a fixed palette (`crm/templatetags/crm_tags.py`).
+> - **Fixed along the way:** a multi-line `{# #}` comment in `base.html` was printed into every
+>   page (now `{% comment %}`, with a test); the page dialog now closes after a swap
+>   (`HX-Trigger-After-Swap`); the phone header no longer overflows by 2px.
+> - **Review 3 (Codex, 2026-09-29), fixed in the same PR:** a note's timeline entry now
+>   follows visibility changes (F1); authors change their own internal notes only while still
+>   allowed to write them (F2); password reset is one locked, re-checked step (F3); adding the
+>   same new tag concurrently no longer errors (F4); deleting a note without JavaScript asks
+>   first (F5); the acceptance test now says it checks fragments, not the browser (F6). Tests:
+>   `tests/test_review_3_findings.py`.
+> - **Checked:** headless Chrome walkthrough of the receptionist flow (no CSP violations or
+>   script errors); Lighthouse accessibility and best practices 100 on the list, profile,
+>   notes and activity pages, mobile and desktop.
+
 #### Objective
 The customer list and the 360° profile.
 

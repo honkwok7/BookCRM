@@ -68,11 +68,17 @@ class TenantPageMixin(LoginRequiredMixin):
         if tenant.role not in TEAM_ROLES:
             raise PermissionDenied(NO_ACCESS_MESSAGE)
         require_capabilities(tenant, self.required_capabilities)
+        if not self.has_page_access(tenant):
+            raise PermissionDenied(NO_ACCESS_MESSAGE)
         self.tenant = tenant
         # Dates on the page render in the organization's time zone. The template renders after
         # dispatch returns; core.middleware.ResetTimezoneMiddleware deactivates it afterwards.
         timezone.activate(organization_zone(tenant.organization))
         return super().dispatch(request, *args, **kwargs)
+
+    def has_page_access(self, tenant: TenantContext) -> bool:
+        """Rules beyond ``required_capabilities`` (the sidebar uses the same function)."""
+        return True
 
     def get_context_data(self, **kwargs):
         return super().get_context_data(**kwargs) | {"organization": self.tenant.organization}
@@ -118,11 +124,17 @@ class HtmxPartialMixin:
         return response
 
 
-def htmx_trigger(response, event: str, detail=None):
-    """Add an HX-Trigger event, e.g. ``htmx_trigger(response, "toast", {"message": "Saved"})``."""
-    events = json.loads(response.headers.get("HX-Trigger", "{}") or "{}")
+def htmx_trigger(response, event: str, detail=None, *, after_swap: bool = False):
+    """Add an htmx event, e.g. ``htmx_trigger(response, "toast", {"message": "Saved"})``.
+
+    ``after_swap`` fires it once the response is swapped in (HX-Trigger-After-Swap). Use it for
+    events that change the page, like "modal:close": plain HX-Trigger events fire before the
+    swap, and closing the dialog first would detach the element that is being swapped.
+    """
+    header = "HX-Trigger-After-Swap" if after_swap else "HX-Trigger"
+    events = json.loads(response.headers.get(header, "{}") or "{}")
     events[event] = detail if detail is not None else True
-    response.headers["HX-Trigger"] = json.dumps(events)
+    response.headers[header] = json.dumps(events)
     return response
 
 
