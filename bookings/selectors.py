@@ -62,3 +62,12 @@ def bookings_visible_to(request) -> QuerySet[Booking]:
             return queryset.none()
         queryset = queryset.filter(organization=organization)
     return queryset.filter(_own_customer_filter(user))
+
+
+def bookings_for_customer_account(user) -> QuerySet[Booking]:
+    """Every booking that belongs to ``user`` as a customer, across organizations (portal)."""
+    if not user.is_authenticated:
+        return Booking.objects.none()
+    return Booking.objects.select_related("organization", "service", "staff__user").filter(
+        _own_customer_filter(user)
+    )

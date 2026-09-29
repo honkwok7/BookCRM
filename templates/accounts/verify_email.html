@@ -1,0 +1,15 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Verify your email · {{ brand_name }}{% endblock %}
+{% block heading %}{% if usable %}Verify your email{% else %}This link has expired{% endif %}{% endblock %}
+{% block card %}
+{% if usable %}
+  <p class="mb-6 text-sm text-slate-700">Confirm that this email address belongs to you.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary w-full">Verify my email</button>
+  </form>
+{% else %}
+  <p class="text-sm text-slate-700">The verification link is invalid, has already been used, or has expired. Sign in to request a new one.</p>
+  <a class="btn btn-primary mt-6 w-full" href="{% url 'login' %}">Sign in</a>
+{% endif %}
+{% endblock %}

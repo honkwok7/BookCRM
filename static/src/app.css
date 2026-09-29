@@ -1,0 +1,186 @@
+/* Tailwind input. Build: python manage.py tailwind build  ->  static/dist/app.css
+ *
+ * Scanned sources are listed explicitly so nothing outside the templates and the app JS can
+ * add classes. Components use the classes below (btn, card, badge, ...) so a style change is
+ * made once here; templates/components/ holds the markup that needs more than a class.
+ */
+@import "tailwindcss" source(none);
+
+@source "../../templates";
+@source "../js";
+
+@theme {
+  --color-brand-50: oklch(0.97 0.02 265);
+  --color-brand-100: oklch(0.93 0.04 265);
+  --color-brand-200: oklch(0.87 0.07 265);
+  --color-brand-500: oklch(0.58 0.19 265);
+  --color-brand-600: oklch(0.51 0.21 265);
+  --color-brand-700: oklch(0.45 0.2 265);
+  --color-brand-800: oklch(0.38 0.16 265);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+@custom-variant htmx-request (&.htmx-request, .htmx-request &);
+
+@layer base {
+  html {
+    @apply h-full antialiased;
+  }
+  body {
+    @apply min-h-full bg-slate-50 text-slate-900;
+  }
+  [x-cloak] {
+    display: none !important;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+  a {
+    @apply text-brand-700 underline-offset-2 hover:underline;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold
+      no-underline shadow-sm transition-colors hover:no-underline disabled:cursor-not-allowed
+      disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-brand-600 text-white hover:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply bg-white text-slate-800 ring-1 ring-slate-300 ring-inset hover:bg-slate-50;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-slate-700 shadow-none hover:bg-slate-100;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+
+  /* Surfaces */
+  .card {
+    @apply rounded-lg bg-white shadow-sm ring-1 ring-slate-200;
+  }
+  .card-body {
+    @apply p-4 sm:p-6;
+  }
+  .card-header {
+    @apply flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6;
+  }
+  .card-title {
+    @apply text-base font-semibold text-slate-900;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset;
+  }
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-700 ring-slate-300;
+  }
+  .badge-brand {
+    @apply bg-brand-50 text-brand-700 ring-brand-200;
+  }
+  .badge-success {
+    @apply bg-green-50 text-green-800 ring-green-600/30;
+  }
+  .badge-warning {
+    @apply bg-amber-50 text-amber-800 ring-amber-600/30;
+  }
+  .badge-danger {
+    @apply bg-red-50 text-red-800 ring-red-600/30;
+  }
+
+  /* Alerts (also used by toasts) */
+  .alert {
+    @apply flex items-start gap-3 rounded-md p-3 text-sm ring-1 ring-inset;
+  }
+  .alert-info {
+    @apply bg-sky-50 text-sky-900 ring-sky-600/30;
+  }
+  .alert-success {
+    @apply bg-green-50 text-green-900 ring-green-600/30;
+  }
+  .alert-warning {
+    @apply bg-amber-50 text-amber-900 ring-amber-600/30;
+  }
+  .alert-error {
+    @apply bg-red-50 text-red-900 ring-red-600/30;
+  }
+
+  /* Forms: widgets are styled here, so Python form classes never carry CSS classes. */
+  .form-field {
+    @apply grid gap-1.5;
+  }
+  .form-label {
+    @apply text-sm font-medium text-slate-800;
+  }
+  .form-help {
+    @apply text-xs text-slate-600;
+  }
+  .form-error {
+    @apply text-sm text-red-700;
+  }
+  .input,
+  .form-field :is(input:not([type="checkbox"], [type="radio"], [type="hidden"]), select, textarea) {
+    @apply block w-full rounded-md border-0 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm
+      ring-1 ring-slate-300 ring-inset placeholder:text-slate-500 focus:ring-2 focus:ring-brand-600
+      focus:outline-none;
+  }
+  .form-field :is(input, select, textarea)[aria-invalid="true"] {
+    @apply ring-red-500;
+  }
+  .form-field :is(input[type="checkbox"], input[type="radio"]) {
+    @apply size-4 rounded border-slate-300 text-brand-600 accent-brand-600;
+  }
+
+  /* Tables */
+  .table {
+    @apply min-w-full divide-y divide-slate-200 text-sm;
+  }
+  .table th {
+    @apply px-4 py-2.5 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase;
+  }
+  .table td {
+    @apply px-4 py-3 align-top text-slate-800;
+  }
+  .table tbody tr {
+    @apply border-t border-slate-100 hover:bg-slate-50;
+  }
+
+  /* Navigation */
+  .nav-link {
+    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-700
+      no-underline hover:bg-slate-100 hover:text-slate-900 hover:no-underline;
+  }
+  .nav-link[aria-current="page"] {
+    @apply bg-brand-50 text-brand-800;
+  }
+  .tab {
+    @apply border-b-2 border-transparent px-1 py-3 text-sm font-medium whitespace-nowrap
+      text-slate-600 no-underline hover:border-slate-300 hover:text-slate-800 hover:no-underline;
+  }
+  .tab[aria-selected="true"],
+  .tab[aria-current="page"] {
+    @apply border-brand-600 text-brand-700;
+  }
+  .dropdown-item {
+    @apply block w-full px-4 py-2 text-left text-sm text-slate-700 no-underline hover:bg-slate-100
+      hover:no-underline;
+  }
+
+  .htmx-indicator {
+    @apply opacity-0 transition-opacity;
+  }
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator {
+    @apply opacity-100;
+  }
+}

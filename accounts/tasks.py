@@ -19,7 +19,7 @@ def send_verification_email(self, *, token_id):
     url = f"{settings.SITE_URL}/verify-email/?token={token.token}"
     try:
         send_mail(
-            subject="Verify your Schedula account",
+            subject=f"Verify your {settings.SITE_NAME} account",
             message=f"Use this link to verify your email: {url}",
             from_email=None,
             recipient_list=[token.user.email],
@@ -35,7 +35,7 @@ def send_password_reset_email(self, *, user_id):
     url = f"{settings.SITE_URL}/reset-password/?uid={user.pk}&token={token}"
     try:
         send_mail(
-            subject="Reset your Schedula password",
+            subject=f"Reset your {settings.SITE_NAME} password",
             message=f"Use this link to reset your password: {url}",
             from_email=None,
             recipient_list=[user.email],

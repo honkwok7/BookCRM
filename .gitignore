@@ -189,3 +189,5 @@ django-appointment-system/
 
 # Dev artifacts
 *.sqlite3
+# Tailwind standalone CLI (downloaded by `manage.py tailwind`)
+.tailwind/

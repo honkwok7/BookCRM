@@ -1,0 +1,30 @@
+{% extends "layouts/app.html" %}
+{% block title %}My schedule · {{ organization.name }}{% endblock %}
+{% block page_title %}My schedule{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Your appointments for the next {{ days }} days · times in {{ zone }}</p>{% endblock %}
+{% block content %}
+<section class="card" aria-label="Upcoming appointments">
+  {% if not has_profile %}
+    {% include "components/empty_state.html" with title="You don't take appointments here" message="Appointments appear here once you have a staff profile in this organization." icon="calendar" %}
+  {% elif appointments %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          {% for appointment in appointments %}
+            <tr>
+              <td class="whitespace-nowrap">{{ appointment.start_datetime|date:"D j M" }}</td>
+              <td class="whitespace-nowrap font-medium">{{ appointment.start_datetime|time:"H:i" }}–{{ appointment.end_datetime|time:"H:i" }}</td>
+              <td>{{ appointment.customer_name }}</td>
+              <td>{{ appointment.service.name }}</td>
+              <td>{% include "dashboard/status_badge.html" with status=appointment.status label=appointment.get_status_display %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="Nothing booked" message="You have no appointments in the next week." icon="calendar" %}
+  {% endif %}
+</section>
+{% endblock %}

@@ -54,6 +54,10 @@ jobs:
         run: |
           python manage.py check
           python manage.py makemigrations --check --dry-run
+      - name: Stylesheet is up to date
+        run: |
+          python manage.py tailwind build
+          git diff --exit-code static/dist/app.css
       - name: Run tests
         run: pytest --cov=. --cov-report=term --cov-report=xml
       - name: Build Docker image

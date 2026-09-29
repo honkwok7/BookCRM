@@ -1,0 +1,99 @@
+{% extends "layouts/app.html" %}
+{% block title %}Components · {{ brand_name }}{% endblock %}
+{% block page_title %}Components{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">The UI kit in templates/components/ (development only).</p>{% endblock %}
+{% block page_actions %}
+  {% include "components/button.html" with label="Secondary" variant="secondary" %}
+  {% include "components/button.html" with label="Primary" icon="users" %}
+{% endblock %}
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-2">
+  <section class="card" aria-labelledby="buttons">
+    <div class="card-header"><h2 id="buttons" class="card-title">Buttons and badges</h2></div>
+    <div class="card-body grid gap-4">
+      <div class="flex flex-wrap gap-2">
+        {% include "components/button.html" with label="Primary" %}
+        {% include "components/button.html" with label="Secondary" variant="secondary" %}
+        {% include "components/button.html" with label="Danger" variant="danger" %}
+        {% include "components/button.html" with label="Ghost" variant="ghost" %}
+        {% include "components/button.html" with label="Small" size="sm" %}
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% include "components/badge.html" with label="Neutral" %}
+        {% include "components/badge.html" with label="Brand" level="brand" %}
+        {% include "components/badge.html" with label="Success" level="success" %}
+        {% include "components/badge.html" with label="Warning" level="warning" %}
+        {% include "components/badge.html" with label="Danger" level="danger" %}
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="alerts">
+    <div class="card-header"><h2 id="alerts" class="card-title">Alerts and toasts</h2></div>
+    <div class="card-body grid gap-3">
+      {% include "components/alert.html" with message="An informational message." %}
+      {% include "components/alert.html" with level="success" message="Saved." %}
+      {% include "components/alert.html" with level="warning" title="Heads up" message="This needs attention." %}
+      {% include "components/alert.html" with level="error" message="Something failed." %}
+      <div x-data>
+        <button type="button" class="btn btn-secondary" @click="$dispatch('toast', { message: 'Changes saved', level: 'success' })">Show a toast</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="forms">
+    <div class="card-header"><h2 id="forms" class="card-title">Form fields</h2></div>
+    <form class="card-body grid gap-4" novalidate>
+      <div class="form-field"><label for="demo-name" class="form-label">Name</label><input id="demo-name" type="text" aria-describedby="demo-name-help"><p id="demo-name-help" class="form-help">As it appears on the customer's ID.</p></div>
+      <div class="form-field"><label for="demo-email" class="form-label">Email</label><input id="demo-email" type="email" aria-invalid="true" aria-describedby="demo-email-error"><p id="demo-email-error" class="form-error">Enter a valid email address.</p></div>
+      <div class="form-field"><label for="demo-role" class="form-label">Role</label><select id="demo-role"><option>Manager</option><option>Staff</option></select></div>
+      <div class="form-field"><div class="flex items-start gap-2"><input id="demo-consent" type="checkbox"><label for="demo-consent" class="text-sm">Send appointment reminders</label></div></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="menus">
+    <div class="card-header"><h2 id="menus" class="card-title">Dropdown, modal and tabs</h2></div>
+    <div class="card-body grid gap-6">
+      <div class="flex flex-wrap gap-2">
+        {% include "components/dropdown.html" with label="Actions" items=demo_menu %}
+        <button type="button" class="btn btn-secondary" hx-get="{% url 'app-components' %}?modal=1" hx-target="#modal-body">Open modal</button>
+      </div>
+      <div x-data="tabs('first')">
+        <div class="-mb-px flex gap-6 border-b border-slate-200" role="tablist" aria-label="Demo tabs">
+          <button type="button" role="tab" class="tab" id="tab-first" aria-controls="panel-first" :aria-selected="isActive('first')" @click="select('first')">First</button>
+          <button type="button" role="tab" class="tab" id="tab-second" aria-controls="panel-second" :aria-selected="isActive('second')" @click="select('second')">Second</button>
+        </div>
+        <div id="panel-first" role="tabpanel" aria-labelledby="tab-first" class="pt-4 text-sm" x-show="isActive('first')">Content of the first tab.</div>
+        <div id="panel-second" role="tabpanel" aria-labelledby="tab-second" class="pt-4 text-sm" x-show="isActive('second')" x-cloak>Content of the second tab.</div>
+      </div>
+      {% include "components/tabs.html" with tabs=demo_tabs label="Link tabs" %}
+    </div>
+  </section>
+
+  <section class="card lg:col-span-2" aria-labelledby="tables">
+    <div class="card-header"><h2 id="tables" class="card-title">Filter bar, table, pagination and empty state</h2></div>
+    <div class="border-b border-slate-200 p-4">
+      {% include "components/filter_bar.html" with target="#demo-results" search_label="Search" filters=demo_filters %}
+    </div>
+    <div id="demo-results">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead><tr><th scope="col">Name</th><th scope="col">Status</th></tr></thead>
+          <tbody>{% for n in demo_page %}<tr><td>Row {{ n }}</td><td>{% include "components/badge.html" with label="Active" level="success" %}</td></tr>{% endfor %}</tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=demo_page %}
+    </div>
+    {% include "components/empty_state.html" with title="Nothing here yet" message="An empty list shows this, with an optional action." action_url="#" action_label="Add the first one" %}
+  </section>
+</div>
+{% endblock %}
+
+{% partialdef modal_demo %}
+<h2 id="modal-title" class="text-lg font-semibold">Modal dialog</h2>
+<p class="mt-2 text-sm text-slate-700">Loaded by htmx. Escape, the close button or a click outside closes it; focus stays inside while it's open.</p>
+<div class="mt-6 flex justify-end gap-2">
+  <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+  <button type="button" class="btn btn-primary" x-data @click="$dispatch('modal:close')">OK</button>
+</div>
+{% endpartialdef %}

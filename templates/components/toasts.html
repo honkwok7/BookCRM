@@ -1,0 +1,26 @@
+{% comment %}
+Toast stack. Django messages are passed as JSON (read by the "toasts" Alpine component in
+static/js/app.js); htmx responses add toasts with core.web.toast() (HX-Trigger: toast).
+Without JavaScript the messages are listed in the <noscript> block instead.
+{% endcomment %}
+{% with toasts=toast_messages %}
+{{ toasts|json_script:"initial-toasts" }}
+<div x-data="toasts" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end" role="status" aria-live="polite">
+  <template x-for="item in items" :key="item.id">
+    <div class="alert pointer-events-auto w-full max-w-sm shadow-lg" :class="classFor(item)" x-transition.opacity>
+      <p class="flex-1" x-text="item.message"></p>
+      <button type="button" class="-m-1 rounded p-1 hover:bg-black/5" @click="dismiss(item.id)">
+        <span class="sr-only">Dismiss</span>
+        {% include "components/icon.html" with name="x" class="size-4" %}
+      </button>
+    </div>
+  </template>
+</div>
+{% if toasts %}
+<noscript>
+  <div class="fixed inset-x-0 bottom-0 z-50 grid gap-2 p-4">
+    {% for toast in toasts %}<p class="alert alert-{{ toast.level }}">{{ toast.message }}</p>{% endfor %}
+  </div>
+</noscript>
+{% endif %}
+{% endwith %}

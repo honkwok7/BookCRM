@@ -1,0 +1,9 @@
+{% comment %}
+Search box. Inside components/filter_bar.html it refreshes the results as you type.
+  {% include "components/search.html" with name="q" value=query label="Search team members" %}
+{% endcomment %}
+<div class="relative w-full sm:max-w-xs">
+  <label for="search-{{ name|default:'q' }}" class="sr-only">{{ label|default:"Search" }}</label>
+  <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">{% include "components/icon.html" with name="search" class="size-4" %}</span>
+  <input id="search-{{ name|default:'q' }}" type="search" name="{{ name|default:'q' }}" value="{{ value|default:'' }}" placeholder="{{ placeholder|default:label|default:'Search' }}" autocomplete="off" class="input pl-9">
+</div>

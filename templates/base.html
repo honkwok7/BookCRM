@@ -1,34 +1,23 @@
-<!doctype html>
-<html lang="en" class="h-full">
+{% load static %}<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Schedula{% endblock %}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>{% block title %}{{ brand_name }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}{{ brand_name }}: appointment booking and customer management for service businesses.{% endblock %}">
+  {# No eval, no inline styles, no scripts from swapped content (CSP); no page snapshots in localStorage. #}
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "historyCacheSize": 0, "historyRestoreAsHxRequest": false}'>
+  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'dist/app.css' %}">
+  {# Deferred scripts run in order: app.js registers the Alpine components before Alpine starts. #}
+  <script defer src="{% static 'vendor/htmx-2.0.11.min.js' %}"></script>
+  <script defer src="{% static 'js/app.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine-focus-3.17.4.min.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine-csp-3.17.4.min.js' %}"></script>
 </head>
-<body class="h-full bg-slate-50 text-slate-900">
-  <header class="border-b bg-white">
-    <div class="mx-auto max-w-6xl p-4 flex items-center justify-between">
-      <a href="/" class="font-bold text-xl">Schedula</a>
-      <nav class="flex gap-4 text-sm">
-        <a href="/features/">Features</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/api/docs/">API Docs</a>
-      </nav>
-    </div>
-  </header>
-  <main class="mx-auto max-w-6xl p-6">
-    {% if messages %}
-      <div class="space-y-2 mb-4">
-        {% for message in messages %}
-          <div class="rounded border p-3 bg-white">{{ message }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-    {% block content %}{% endblock %}
-  </main>
+<body class="{% block body_class %}{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <a href="#main" class="sr-only z-50 rounded-md bg-white px-3 py-2 text-sm font-semibold shadow focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to main content</a>
+  {% block body %}{% endblock %}
+  {% include "components/toasts.html" %}
 </body>
 </html>

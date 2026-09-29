@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% comment %}
+The organization app (/app/, /staff/). The sidebar lists only what the member's capabilities
+allow (core/navigation.py); each page enforces the same capabilities on the server.
+Blocks: title, page_title, page_description, page_actions, content.
+{% endcomment %}
+{% block body %}
+<div x-data="shell" class="min-h-screen">
+  {# Off-canvas navigation below the lg breakpoint #}
+  <div x-show="sidebarOpen" x-cloak class="relative z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation" @keydown.escape.window="closeSidebar()">
+    <div class="fixed inset-0 bg-slate-900/50" x-show="sidebarOpen" x-transition.opacity @click="closeSidebar()"></div>
+    <div class="fixed inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-white shadow-xl" x-show="sidebarOpen" x-transition x-trap.noscroll="sidebarOpen">
+      <button type="button" class="btn-ghost btn absolute top-3 right-3" @click="closeSidebar()">
+        <span class="sr-only">Close navigation</span>{% include "components/icon.html" with name="x" %}
+      </button>
+      {% include "components/sidebar.html" %}
+    </div>
+  </div>
+
+  <aside class="hidden border-r border-slate-200 bg-white lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+    {% include "components/sidebar.html" %}
+  </aside>
+
+  <div class="lg:pl-64">
+    <header class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
+      <button type="button" class="btn-ghost btn -ml-2 lg:hidden" @click="openSidebar()">
+        <span class="sr-only">Open navigation</span>{% include "components/icon.html" with name="menu" %}
+      </button>
+      {% include "components/org_switcher.html" %}
+      <div class="flex-1"></div>
+      {% include "components/user_menu.html" %}
+    </header>
+
+    <main id="main" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900">{% block page_title %}{% endblock %}</h1>
+          {% block page_description %}{% endblock %}
+        </div>
+        <div class="flex flex-wrap gap-2">{% block page_actions %}{% endblock %}</div>
+      </div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% include "components/modal.html" %}
+</div>
+{% endblock %}

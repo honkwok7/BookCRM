@@ -1,0 +1,7 @@
+{% comment %}Errors that belong to the whole form. {% include "components/form_errors.html" with form=form %}{% endcomment %}
+{% if form.non_field_errors %}
+<div class="alert-error alert mb-4" role="alert">
+  {% include "components/icon.html" with name="warning" %}
+  <div>{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+</div>
+{% endif %}

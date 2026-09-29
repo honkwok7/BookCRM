@@ -13,13 +13,13 @@ from accounts.views import (
 )
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),
-    path("login/", LoginView.as_view(), name="login"),
-    path("logout/", LogoutView.as_view(), name="logout"),
-    path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
-    path("resend-verification/", ResendVerificationView.as_view(), name="resend-verification"),
-    path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
-    path("reset-password/", PasswordResetConfirmView.as_view(), name="reset-password"),
-    path("profile/", ProfileView.as_view(), name="profile"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("register/", RegisterView.as_view(), name="api-register"),
+    path("login/", LoginView.as_view(), name="api-login"),
+    path("logout/", LogoutView.as_view(), name="api-logout"),
+    path("verify-email/", VerifyEmailView.as_view(), name="api-verify-email"),
+    path("resend-verification/", ResendVerificationView.as_view(), name="api-resend-verification"),
+    path("forgot-password/", ForgotPasswordView.as_view(), name="api-forgot-password"),
+    path("reset-password/", PasswordResetConfirmView.as_view(), name="api-reset-password"),
+    path("profile/", ProfileView.as_view(), name="api-profile"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="api-token-refresh"),
 ]

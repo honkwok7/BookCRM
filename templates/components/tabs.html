@@ -1,0 +1,10 @@
+{% comment %}
+Page tabs as links: each tab is its own URL, so it can be bookmarked and shared.
+  {% include "components/tabs.html" with tabs=tabs label="Customer sections" %}
+tabs: a list of {"label", "url", "active"}.
+{% endcomment %}
+<nav class="-mb-px flex gap-6 overflow-x-auto border-b border-slate-200" aria-label="{{ label|default:'Sections' }}">
+  {% for tab in tabs %}
+    <a href="{{ tab.url }}" class="tab"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+  {% endfor %}
+</nav>

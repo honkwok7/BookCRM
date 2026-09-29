@@ -1,0 +1,23 @@
+{% if user.is_authenticated %}
+<div x-data="dropdown" class="relative" @keydown.escape="close(true)" @click.outside="close(false)">
+  <button type="button" x-ref="button" class="btn-ghost btn" @click="toggle()" :aria-expanded="open" aria-haspopup="true">
+    {% include "components/icon.html" with name="user" %}
+    <span class="hidden max-w-[14rem] truncate sm:inline">{{ user.get_full_name|default:user.email }}</span>
+    <span class="sr-only">Account menu</span>
+    {% include "components/icon.html" with name="chevron-down" class="size-4" %}
+  </button>
+  <div x-show="open" x-cloak x-transition class="absolute right-0 z-40 mt-2 w-64 rounded-md bg-white py-1 shadow-lg ring-1 ring-slate-200">
+    <div class="border-b border-slate-100 px-4 py-2">
+      <p class="truncate text-sm font-medium text-slate-900">{{ user.get_full_name|default:user.email }}</p>
+      <p class="truncate text-xs text-slate-600">{{ user.email }}</p>
+    </div>
+    {% if is_team_member %}<a class="dropdown-item" href="{% url 'app-dashboard' %}">Organization dashboard</a>{% endif %}
+    <a class="dropdown-item" href="{% url 'portal-home' %}">My appointments</a>
+    {% if user.is_superuser %}<a class="dropdown-item" href="{% url 'saas-dashboard' %}">Platform admin</a>{% endif %}
+    <form method="post" action="{% url 'logout' %}" class="border-t border-slate-100">
+      {% csrf_token %}
+      <button type="submit" class="dropdown-item flex items-center gap-2">{% include "components/icon.html" with name="logout" class="size-4" %}Sign out</button>
+    </form>
+  </div>
+</div>
+{% endif %}

@@ -1,0 +1,17 @@
+{% comment %}
+The page's dialog. Load content into it with htmx:
+  <button hx-get="{% url '...' %}" hx-target="#modal-body">Open</button>
+It opens after the swap. The loaded content should contain an element with id="modal-title".
+The server closes it with core.web.htmx_trigger(response, "modal:close").
+{% endcomment %}
+<div id="modal" x-data="modal" @keydown.escape.window="close()">
+  <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="fixed inset-0 bg-slate-900/50" x-show="open" x-transition.opacity @click="close()"></div>
+    <div class="card relative max-h-[90vh] w-full max-w-lg overflow-y-auto" x-show="open" x-transition x-trap.noscroll="open">
+      <button type="button" class="btn-ghost btn absolute top-2 right-2" @click="close()">
+        <span class="sr-only">Close</span>{% include "components/icon.html" with name="x" %}
+      </button>
+      <div id="modal-body" class="card-body"></div>
+    </div>
+  </div>
+</div>

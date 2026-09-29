@@ -1,0 +1,24 @@
+{% comment %}
+Search and filters for a list. It works without JavaScript (a plain GET form); with htmx,
+typing or changing a filter refreshes only the target and updates the address bar.
+  {% include "components/filter_bar.html" with target="#results" query=query search_label="Search" filters=filters %}
+Leave out search_label for filters only. filters: a list of {"name", "label", "value", "options": [(value, label), ...], "all_label"}.
+{% endcomment %}
+<form method="get" role="search" class="flex flex-col gap-3 sm:flex-row sm:items-center"
+      action="{{ request.path }}" hx-get="{{ request.path }}" hx-target="{{ target }}" hx-push-url="true"
+      hx-trigger="input changed delay:300ms from:find input[type=search], change from:find select, submit">
+  {% if search_label %}{% include "components/search.html" with name="q" value=query label=search_label %}{% endif %}
+  {% for filter in filters %}
+    <div>
+      <label for="filter-{{ filter.name }}" class="sr-only">{{ filter.label }}</label>
+      <select id="filter-{{ filter.name }}" name="{{ filter.name }}" class="input sm:w-auto">
+        <option value="">{{ filter.all_label|default:"All" }}</option>
+        {% for value, label in filter.options %}
+          <option value="{{ value }}"{% if value == filter.value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endfor %}
+  <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+  <span class="htmx-indicator text-sm text-slate-600" aria-hidden="true">Loading…</span>
+</form>

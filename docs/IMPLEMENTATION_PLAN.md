@@ -646,6 +646,32 @@ Search p95 under 100 ms on 50k seeded customers (PostgreSQL).
 
 ### M2.5: Web app shell, session auth, component library
 
+> **Status: done (2026-09-28, branch `m2.5-web-shell`).**
+> - **Pages:** `/login/`, `/logout/` (POST), `/password-reset/`, `/reset-password/` and
+>   `/verify-email/` (the links our emails already sent), `/accept-invitation/` (join, or
+>   create an account and join), `/home/` (role-based redirect), `/app/dashboard/`,
+>   `/staff/dashboard/`, `/portal/`, `/saas/`, `/app/switch/<slug>/`.
+> - **Beyond the plan, to exercise the shell:** a read-only Team page (`members.view`) and
+>   Audit log page (`audit.view`), both with search or filters and htmx pagination; a
+>   development-only component gallery at `/app/components/`.
+> - **Permissions:** pages use `TenantPageMixin.required_capabilities`; the sidebar
+>   (`core/navigation.py`) filters on the same capabilities, and a test checks that every
+>   link is shown exactly when its page returns 200 for each role.
+> - **Password reset** keeps our Celery email with `SITE_URL` links instead of Django's
+>   `PasswordResetView`, which builds links from the Host header.
+> - **Dashboard numbers:** "today", "this week" and "this month" are now calendar
+>   periods in the organization's time zone and leave out cancelled and rejected
+>   appointments. They were UTC dates, and the week and month counts included every later
+>   appointment too. Pages render dates in the organization's time zone.
+> - **Assets:** htmx 2.0.11, Alpine 3.17.4 (CSP build) with the focus plugin, Tailwind
+>   4.3.3 standalone CLI (`manage.py tailwind build`). Chart.js was dropped from the base
+>   template (unused); it will be vendored with the reports.
+> - **Renamed:** the API's URL names now start with `api-` (for example `api-login`), so
+>   the web pages can use `login`. Paths are unchanged. The product name is the `SITE_NAME`
+>   setting (default `BookCRM`).
+> - **Accessibility:** Lighthouse scored 100 for accessibility on the sign-in, dashboard
+>   and Team pages, on both mobile and desktop (headless Chrome, 2026-09-28).
+
 #### Objective
 The foundation for every UI area.
 

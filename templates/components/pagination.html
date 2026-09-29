@@ -1,0 +1,21 @@
+{% comment %}
+Pager for a Paginator page. Keeps the current filters in the URL; with a target, htmx swaps
+only that element and updates the address bar.
+  {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+{% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 px-4 py-3 text-sm" aria-label="Pagination">
+  <p class="text-slate-600">
+    Showing <span class="font-medium">{{ page_obj.start_index }}</span>–<span class="font-medium">{{ page_obj.end_index }}</span>
+    of <span class="font-medium">{{ page_obj.paginator.count }}</span>
+  </p>
+  <div class="flex gap-2">
+    {% if page_obj.has_previous %}
+      <a class="btn btn-secondary btn-sm" rel="prev" href="{% querystring page=page_obj.previous_page_number %}"{% if target %} hx-get="{% querystring page=page_obj.previous_page_number %}" hx-target="{{ target }}" hx-push-url="true"{% endif %}>Previous</a>
+    {% endif %}
+    {% if page_obj.has_next %}
+      <a class="btn btn-secondary btn-sm" rel="next" href="{% querystring page=page_obj.next_page_number %}"{% if target %} hx-get="{% querystring page=page_obj.next_page_number %}" hx-target="{{ target }}" hx-push-url="true"{% endif %}>Next</a>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

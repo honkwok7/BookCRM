@@ -1,12 +1,12 @@
-{% extends 'base.html' %}
-{% block title %}Schedula | Multi-tenant Appointment SaaS{% endblock %}
+{% extends "layouts/public.html" %}
+{% block title %}{{ brand_name }} | Multi-tenant Appointment SaaS{% endblock %}
 {% block content %}
 <section class="py-16">
   <h1 class="text-4xl font-extrabold mb-4">Run your appointment business with confidence</h1>
-  <p class="text-lg text-slate-600 max-w-3xl">Schedula is a multi-tenant booking SaaS with secure tenant isolation, role-based access, and a concurrency-safe booking engine.</p>
+  <p class="text-lg text-slate-600 max-w-3xl">{{ brand_name }} is a multi-tenant booking SaaS with secure tenant isolation, role-based access, and a concurrency-safe booking engine.</p>
   <div class="mt-8 flex gap-3">
-    <a class="px-4 py-2 bg-slate-900 text-white rounded" href="/pricing/">See pricing</a>
-    <a class="px-4 py-2 border rounded" href="/api/docs/">Explore API</a>
+    <a class="btn btn-primary" href="{% url 'login' %}">Sign in</a>
+    <a class="btn btn-secondary" href="{% url 'pricing' %}">See pricing</a>
   </div>
 </section>
 {% endblock %}

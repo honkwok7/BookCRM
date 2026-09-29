@@ -1,7 +1,4 @@
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
@@ -9,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from accounts.models import EmailVerificationToken, LoginHistory
+from accounts.models import LoginHistory
 from accounts.serializers import (
     CustomTokenObtainPairSerializer,
     EmailVerificationSerializer,
@@ -23,9 +20,10 @@ from accounts.serializers import (
 from accounts.services import (
     queue_password_reset_email,
     queue_verification_email,
-    revoke_refresh_tokens,
+    reset_password,
+    verify_email,
 )
-from core.audit import AuditAction, client_ip, record_audit
+from core.audit import client_ip
 
 User = get_user_model()
 
@@ -90,18 +88,10 @@ class VerifyEmailView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = EmailVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        token_value = serializer.validated_data["token"]
-        token = get_object_or_404(EmailVerificationToken, token=token_value)
-        if not token.is_valid:
+        if verify_email(serializer.validated_data["token"]) is None:
             return Response(
                 {"detail": "Token is invalid or expired"}, status=status.HTTP_400_BAD_REQUEST
             )
-
-        token.used_at = timezone.now()
-        token.save(update_fields=["used_at", "updated_at"])
-        token.user.email_verified = True
-        token.user.save(update_fields=["email_verified"])
-        record_audit(AuditAction.ACCOUNT_EMAIL_VERIFIED, actor=token.user, target=token.user)
         return Response({"detail": "Email verified"})
 
 
@@ -147,16 +137,5 @@ class PasswordResetConfirmView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
-        with transaction.atomic():
-            user.set_password(serializer.validated_data["new_password"])
-            user.save(update_fields=["password"])
-            # Sign out everywhere: whoever held the old password may hold a refresh token.
-            revoked = revoke_refresh_tokens(user)
-            record_audit(
-                AuditAction.ACCOUNT_PASSWORD_RESET,
-                actor=user,
-                target=user,
-                metadata={"refresh_tokens_revoked": revoked},
-            )
+        reset_password(serializer.validated_data["user"], serializer.validated_data["new_password"])
         return Response({"detail": "Password changed successfully"})

@@ -1,0 +1,11 @@
+{% comment %}
+A link or a button, styled as a button.
+  {% include "components/button.html" with label="New customer" href=url icon="users" %}
+  {% include "components/button.html" with label="Save" type="submit" %}
+variant: primary (default), secondary, danger, ghost. size: "sm" for small.
+{% endcomment %}
+{% if href %}
+<a href="{{ href }}" class="btn btn-{{ variant|default:'primary' }}{% if size == 'sm' %} btn-sm{% endif %}">{% if icon %}{% include "components/icon.html" with name=icon class="size-4" %}{% endif %}{{ label }}</a>
+{% else %}
+<button type="{{ type|default:'button' }}" class="btn btn-{{ variant|default:'primary' }}{% if size == 'sm' %} btn-sm{% endif %}">{% if icon %}{% include "components/icon.html" with name=icon class="size-4" %}{% endif %}{{ label }}</button>
+{% endif %}
