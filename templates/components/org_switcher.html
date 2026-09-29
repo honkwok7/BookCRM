@@ -4,10 +4,10 @@ POST to /app/switch/<slug>/, which accepts only the user's own active membership
 {% endcomment %}
 {% if tenant %}
   {% if memberships|length > 1 %}
-  <div x-data="dropdown" class="relative" @keydown.escape="close(true)" @click.outside="close(false)">
-    <button type="button" x-ref="button" class="btn-ghost btn" @click="toggle()" :aria-expanded="open" aria-haspopup="true">
+  <div x-data="dropdown" class="relative min-w-0" @keydown.escape="close(true)" @click.outside="close(false)">
+    <button type="button" x-ref="button" class="btn-ghost btn max-w-full" @click="toggle()" :aria-expanded="open" aria-haspopup="true">
       {% include "components/icon.html" with name="building" %}
-      <span class="max-w-[12rem] truncate">{{ tenant.organization.name }}</span>
+      <span class="min-w-0 truncate sm:max-w-[12rem]">{{ tenant.organization.name }}</span>
       <span class="sr-only">, switch organization</span>
       {% include "components/icon.html" with name="chevron-down" class="size-4" %}
     </button>
@@ -25,7 +25,7 @@ POST to /app/switch/<slug>/, which accepts only the user's own active membership
     </div>
   </div>
   {% else %}
-  <p class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+  <p class="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800">
     {% include "components/icon.html" with name="building" %}<span class="truncate">{{ tenant.organization.name }}</span>
   </p>
   {% endif %}

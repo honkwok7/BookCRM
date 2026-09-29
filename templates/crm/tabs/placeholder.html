@@ -1,0 +1,5 @@
+{% if tab == "forms" %}
+  {% include "components/empty_state.html" with title="Forms are not available yet" message="Intake and consent forms, and this customer's submissions, will appear here once the forms milestone (M6) is built." icon="clipboard" %}
+{% else %}
+  {% include "components/empty_state.html" with title="Transactions are not available yet" message="Payments are not recorded in the app yet. The Overview's spend to date is calculated from completed appointments." icon="clipboard" %}
+{% endif %}

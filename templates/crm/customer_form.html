@@ -1,0 +1,49 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+Add or edit a customer. Opened in the page dialog by htmx (the "form" partial), or as a full
+page without JavaScript. On success the server redirects to the profile (HX-Redirect).
+{% endcomment %}
+{% block title %}{% if customer %}Edit {{ customer.display_name }}{% else %}New customer{% endif %} · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if customer %}Edit {{ customer.display_name }}{% else %}New customer{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{% if customer %}Edit {{ customer.display_name }}{% else %}New customer{% endif %}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="-mt-4 text-sm text-slate-600">A first or last name, and an email or a phone number, are required.</p>
+  {% for title, fields in form.sections %}
+    <fieldset class="grid gap-4">
+      <legend class="mb-2 text-sm font-semibold text-slate-900">{{ title }}</legend>
+      <div class="grid gap-4 {% if title != 'Consent' %}sm:grid-cols-2{% endif %}">
+        {% for field in fields %}{% include "components/field.html" with field=field %}{% endfor %}
+      </div>
+    </fieldset>
+  {% endfor %}
+  {% if form.tags %}
+    <fieldset class="grid gap-2">
+      <legend class="mb-2 text-sm font-semibold text-slate-900">Tags</legend>
+      {% if form.tags.field.queryset %}
+        <div class="flex flex-wrap gap-x-5 gap-y-2">
+          {% for choice in form.tags %}
+            <label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-600">No tags exist yet.</p>
+      {% endif %}
+    </fieldset>
+  {% endif %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% if customer %}{% url 'crm-customer-detail' customer.pk %}{% else %}{% url 'crm-customer-list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if customer %}Save changes{% else %}Add customer{% endif %}</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

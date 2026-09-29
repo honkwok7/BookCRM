@@ -1,0 +1,25 @@
+{% extends "layouts/app.html" %}
+{% comment %}Edit a note: in the page dialog (htmx, the "form" partial) or as a full page.{% endcomment %}
+{% block title %}Edit note · {{ customer.display_name }}{% endblock %}
+{% block page_title %}Edit note on {{ customer.display_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+<form method="post" action="{% url 'crm-note-edit' customer.pk note.pk %}" hx-post="{% url 'crm-note-edit' customer.pk note.pk %}" hx-target="this" hx-swap="outerHTML" class="grid gap-4" novalidate>
+  <h2 id="modal-title" class="text-lg font-semibold">Edit note</h2>
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% include "components/field.html" with field=form.content %}
+  <div class="grid gap-4 sm:grid-cols-2">
+    {% include "components/field.html" with field=form.note_type %}
+    {% include "components/field.html" with field=form.visibility %}
+  </div>
+  {% include "components/field.html" with field=form.pinned %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    <a href="{% url 'crm-customer-tab' customer.pk 'notes' %}" class="btn btn-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary">Save note</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

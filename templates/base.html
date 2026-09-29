@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ brand_name }}{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}{{ brand_name }}: appointment booking and customer management for service businesses.{% endblock %}">
-  {# No eval, no inline styles, no scripts from swapped content (CSP); no page snapshots in localStorage. #}
-  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "historyCacheSize": 0, "historyRestoreAsHxRequest": false}'>
+  {% comment %}No eval, no inline styles, no scripts from swapped content (CSP); no page snapshots in localStorage.
+     422 responses (a form with errors) are swapped in like 200s; other errors show a toast.{% endcomment %}
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "historyCacheSize": 0, "historyRestoreAsHxRequest": false, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "422", "swap": true}, {"code": "[45]..", "swap": false, "error": true}]}'>
   <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'dist/app.css' %}">
   {# Deferred scripts run in order: app.js registers the Alpine components before Alpine starts. #}

@@ -124,8 +124,8 @@ API: `GET /api/v1/customers/{id}/timeline/` returns entries newest first, pagina
 - `customer_timeline(customer, include_internal=)`.
 - `list_customers(organization, search=, status=, tag=, include_anonymized=)`.
 - `customer_stats(customer)`: computed from appointments on every call, not stored as
-  counters. It returns total appointments, completed, cancelled, no-shows, upcoming, last
-  visit, next appointment and lifetime value (the total of completed appointment prices).
+  counters. It returns total appointments, completed, cancelled, no-shows, upcoming, first
+  visit, last visit, next appointment and lifetime value (the total of completed appointment prices).
   An appointment that was rescheduled counts once and is not counted as a cancellation.
 
 ## Who sees which customers
@@ -154,6 +154,24 @@ Merging needs `customers.manage`.
   | Name words | 76–87 ms |
   | Email fragment | 3 ms |
   | Phone | 3 ms |
+
+## Web screens
+
+`/app/customers/` and `/app/customers/<id>/<tab>/` (M2.6) read through the same selectors
+and write through the same services as the API, with the same rules from
+`crm/permissions.py`:
+
+| Action | Who |
+|---|---|
+| See the list and profiles | `customers.view` (all customers), providers (their own) |
+| Create, edit, tag | `customers.manage` |
+| Add notes | `customers.manage`, providers on their own customers; internal notes need `customers.notes.private` (providers may write their own) |
+| Edit, pin, delete a note | Its author, or `customers.notes.private` |
+| See spend to date | `customers.view` |
+
+A customer, note or tag of another organization, or one the user may not see, is a 404.
+Anonymized customers are read-only. A new tag typed on a profile is created, or reused if a
+tag with the same slug exists.
 
 ## API
 

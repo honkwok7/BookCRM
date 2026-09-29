@@ -1,0 +1,44 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+The customer profile. Each tab is its own URL; with htmx, clicking a tab swaps only the
+"tabs" partial (tab bar + panel) and updates the address bar.
+{% endcomment %}
+{% block title %}{{ customer.display_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ customer.display_name }}{% endblock %}
+{% block page_description %}
+<div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
+  {% include "crm/_status_badge.html" %}
+  {% if customer.preferred_name %}<span>{{ customer.name }}</span>{% endif %}
+  {% if customer.pronouns %}<span>{{ customer.pronouns }}</span>{% endif %}
+  {% if customer.email %}<a class="flex items-center gap-1" href="mailto:{{ customer.email }}">{% include "components/icon.html" with name="mail" class="size-4" %}{{ customer.email }}</a>{% endif %}
+  {% if customer.phone %}<a class="flex items-center gap-1" href="tel:{{ customer.phone }}">{% include "components/icon.html" with name="phone" class="size-4" %}{{ customer.phone }}</a>{% endif %}
+</div>
+{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'crm-customer-list' %}" class="btn btn-secondary">All customers</a>
+  {% if can_manage %}
+    <a href="{% url 'crm-customer-edit' customer.pk %}" class="btn btn-primary" hx-get="{% url 'crm-customer-edit' customer.pk %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="pencil" class="size-4" %}Edit
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if customer.alerts %}
+  <div class="mb-6">{% include "components/alert.html" with level="warning" title="Alert" message=customer.alerts %}</div>
+{% endif %}
+{% if customer.status == "anonymized" %}
+  <div class="mb-6">{% include "components/alert.html" with level="info" message="This customer was anonymized. Their personal details were removed; appointments are kept for reporting." %}</div>
+{% endif %}
+<div id="customer-tabs">
+{% partialdef tabs inline %}
+  <nav class="-mb-px flex gap-6 overflow-x-auto border-b border-slate-200" aria-label="Customer sections">
+    {% for item in tabs %}
+      <a href="{{ item.url }}" class="tab"{% if item.active %} aria-current="page"{% endif %} hx-get="{{ item.url }}" hx-target="#customer-tabs" hx-push-url="true">{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+  <section class="pt-6" aria-label="{% for item in tabs %}{% if item.active %}{{ item.label }}{% endif %}{% endfor %}">
+    {% include tab_template %}
+  </section>
+{% endpartialdef %}
+</div>
+{% endblock %}

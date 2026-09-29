@@ -503,6 +503,27 @@ class SecurityHeaderTests(TestCase):
                     self.assertTrue(source.startswith(settings.STATIC_URL), source)
                 self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)(?![^>]*application/json)")
 
+    def test_pages_show_no_template_comment_markup(self):
+        # {# #} comments are single-line; a multi-line one is printed into the page.
+        for url_name in ("landing", "login"):
+            with self.subTest(page=url_name):
+                self.assertNotContains(self.client.get(reverse(url_name)), "{#")
+
+    def test_every_referenced_static_file_exists(self):
+        # A file missing from the checkout (e.g. ignored by .gitignore) fails here in CI.
+        from django.contrib.staticfiles import finders
+
+        for path in (
+            "dist/app.css",
+            "js/app.js",
+            "favicon.svg",
+            "vendor/htmx-2.0.11.min.js",
+            "vendor/alpine-csp-3.17.4.min.js",
+            "vendor/alpine-focus-3.17.4.min.js",
+        ):
+            with self.subTest(path=path):
+                self.assertIsNotNone(finders.find(path))
+
     def test_no_template_references_a_cdn(self):
         root = Path(settings.BASE_DIR) / "templates"
         for template in root.rglob("*.html"):

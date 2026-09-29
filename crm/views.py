@@ -13,7 +13,7 @@ from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from crm.models import CustomerNote, Tag
-from crm.permissions import CustomerAccess, NoteAccess
+from crm.permissions import CustomerAccess, NoteAccess, can_change_note
 from crm.selectors import (
     can_read_internal_notes,
     customer_timeline,
@@ -32,6 +32,7 @@ from crm.serializers import (
 )
 from crm.services import anonymize_customer, delete_note, delete_tag, merge_customers
 from organizations.selectors import scope_queryset_by_organization
+from organizations.tenancy import resolve_tenant
 from staff.models import StaffProfile
 
 
@@ -218,7 +219,7 @@ class CustomerNoteViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         return notes_visible_to(self.request)
 
     def _check_can_change(self, note):
-        if note.author_id != self.request.user.pk and not can_read_internal_notes(self.request):
+        if not can_change_note(resolve_tenant(self.request), self.request.user, note):
             raise PermissionDenied("Only the author can change this note.")
 
     def perform_create(self, serializer):

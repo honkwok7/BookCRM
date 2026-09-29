@@ -1,0 +1,66 @@
+{% load crm_tags %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="grid gap-6 lg:col-span-2">
+    <section class="card" aria-labelledby="visits-heading">
+      <div class="card-header"><h2 id="visits-heading" class="card-title">Visits</h2></div>
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-5 p-4 sm:grid-cols-3 sm:p-6">
+        <div><dt class="text-sm text-slate-600">First visit</dt><dd class="mt-1 font-medium">{% if stats.first_visit %}{{ stats.first_visit|date:"j M Y" }}{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-sm text-slate-600">Last visit</dt><dd class="mt-1 font-medium">{% if stats.last_visit %}{{ stats.last_visit|date:"j M Y" }}{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-sm text-slate-600">Next appointment</dt><dd class="mt-1 font-medium">{% if stats.next_appointment %}{{ stats.next_appointment|date:"j M Y, H:i" }}{% else %}None booked{% endif %}</dd></div>
+        <div><dt class="text-sm text-slate-600">Appointments</dt><dd class="mt-1 text-2xl font-semibold">{{ stats.total_appointments }}</dd></div>
+        <div><dt class="text-sm text-slate-600">Completed</dt><dd class="mt-1 text-2xl font-semibold">{{ stats.completed }}</dd></div>
+        <div><dt class="text-sm text-slate-600">Upcoming</dt><dd class="mt-1 text-2xl font-semibold">{{ stats.upcoming }}</dd></div>
+        <div><dt class="text-sm text-slate-600">Cancelled</dt><dd class="mt-1 text-2xl font-semibold">{{ stats.cancelled }}</dd></div>
+        <div><dt class="text-sm text-slate-600">No-shows</dt><dd class="mt-1 text-2xl font-semibold{% if stats.no_shows %} text-red-700{% endif %}">{{ stats.no_shows }}</dd></div>
+        {% if show_spend %}
+        <div>
+          <dt class="text-sm text-slate-600">Spend to date</dt>
+          <dd class="mt-1 text-2xl font-semibold">{{ stats.lifetime_value|floatformat:2 }} <span class="text-sm font-normal text-slate-600">{{ organization.currency }}</span></dd>
+        </div>
+        {% endif %}
+      </dl>
+      {% if show_spend %}
+        <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Spend to date is the total price of completed appointments. A predicted customer lifetime value is not calculated yet; it arrives with the reports milestone.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="details-heading">
+      <div class="card-header"><h2 id="details-heading" class="card-title">Details</h2></div>
+      <dl class="grid gap-x-6 gap-y-4 p-4 sm:grid-cols-2 sm:p-6 text-sm">
+        <div><dt class="text-slate-600">Other phone</dt><dd class="mt-0.5">{{ customer.secondary_phone|default:"—" }}</dd></div>
+        <div><dt class="text-slate-600">Birthday</dt><dd class="mt-0.5">{{ customer.birthday|date:"j F Y"|default:"—" }}</dd></div>
+        <div class="sm:col-span-2"><dt class="text-slate-600">Address</dt><dd class="mt-0.5">
+          {% if customer.address_line1 or customer.city %}
+            {{ customer.address_line1 }}{% if customer.address_line2 %}, {{ customer.address_line2 }}{% endif %}<br>
+            {{ customer.city }}{% if customer.region %}, {{ customer.region }}{% endif %} {{ customer.postal_code }} {{ customer.country }}
+          {% else %}—{% endif %}
+        </dd></div>
+        <div><dt class="text-slate-600">Preferred contact</dt><dd class="mt-0.5">{{ customer.get_preferred_contact_method_display|default:"No preference" }}</dd></div>
+        <div><dt class="text-slate-600">Source</dt><dd class="mt-0.5">{{ customer.get_source_display|default:"—" }}</dd></div>
+        <div><dt class="text-slate-600">Customer since</dt><dd class="mt-0.5">{{ customer.created_at|date:"j M Y" }}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <div class="grid content-start gap-6">
+    {% include "crm/_tags.html" %}
+
+    <section class="card" aria-labelledby="staff-heading">
+      <div class="card-header"><h2 id="staff-heading" class="card-title">Providers</h2></div>
+      <dl class="grid gap-4 p-4 text-sm sm:p-6">
+        <div><dt class="text-slate-600">Assigned</dt><dd class="mt-0.5 font-medium">{% if customer.assigned_staff %}{{ customer.assigned_staff.user.get_full_name|default:customer.assigned_staff.user.email }}{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-slate-600">Preferred</dt><dd class="mt-0.5 font-medium">{% if customer.preferred_staff %}{{ customer.preferred_staff.user.get_full_name|default:customer.preferred_staff.user.email }}{% else %}—{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="consent-heading">
+      <div class="card-header"><h2 id="consent-heading" class="card-title">Consent</h2></div>
+      <ul class="grid gap-2 p-4 text-sm sm:p-6">
+        <li class="flex justify-between gap-2"><span>Appointment emails</span>{% if customer.email_consent %}{% include "components/badge.html" with label="Yes" level="success" %}{% else %}{% include "components/badge.html" with label="No" %}{% endif %}</li>
+        <li class="flex justify-between gap-2"><span>Text messages</span>{% if customer.sms_consent %}{% include "components/badge.html" with label="Yes" level="success" %}{% else %}{% include "components/badge.html" with label="No" %}{% endif %}</li>
+        <li class="flex justify-between gap-2"><span>Marketing</span>{% if customer.marketing_consent %}{% include "components/badge.html" with label="Yes" level="success" %}{% else %}{% include "components/badge.html" with label="No" %}{% endif %}</li>
+      </ul>
+      {% if customer.consent_updated_at %}<p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Last changed {{ customer.consent_updated_at|date:"j M Y" }}</p>{% endif %}
+    </section>
+  </div>
+</div>

@@ -1,0 +1,19 @@
+<section class="card" aria-label="Activity">
+  {% if entries %}
+    <ol class="divide-y divide-slate-100">
+      {% for row in entries %}
+        <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm sm:px-6">
+          <div>
+            <span class="font-medium text-slate-900">{{ row.label }}</span>{% if row.detail %} <span class="text-slate-700">· {{ row.detail }}</span>{% endif %}
+            {% if row.entry.internal %} {% include "components/badge.html" with label="Internal" level="warning" %}{% endif %}
+            {% if row.actor %}<span class="block text-xs text-slate-600">by {{ row.actor }}</span>{% endif %}
+          </div>
+          <time class="text-xs whitespace-nowrap text-slate-600" datetime="{{ row.entry.occurred_at|date:'c' }}">{{ row.entry.occurred_at|date:"j M Y, H:i" }}</time>
+        </li>
+      {% endfor %}
+    </ol>
+    {% include "components/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "components/empty_state.html" with title=empty_title|default:"No activity yet" icon="clipboard" %}
+  {% endif %}
+</section>

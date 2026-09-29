@@ -141,6 +141,7 @@ def customer_stats(customer: Customer) -> dict:
         cancelled=Count("id", filter=Q(status=Booking.Status.CANCELLED, moved=False)),
         no_shows=Count("id", filter=Q(status=Booking.Status.NO_SHOW)),
         upcoming=Count("id", filter=upcoming),
+        first_visit=Min("start_datetime", filter=completed),
         last_visit=Max("start_datetime", filter=completed),
         next_appointment=Min("start_datetime", filter=upcoming),
         lifetime_value=Sum("price_snapshot", filter=completed),

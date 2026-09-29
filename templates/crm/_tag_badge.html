@@ -1,0 +1,2 @@
+{% load crm_tags %}{% comment %}A customer tag. Tag colours are chosen by users, so the badge uses a fixed readable style with a small colour dot (no inline styles under the CSP).{% endcomment %}
+<span class="badge badge-neutral gap-1.5"><span class="size-2 rounded-full {{ tag|tag_dot_class }}" aria-hidden="true"></span>{{ tag.name }}</span>

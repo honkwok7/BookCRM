@@ -11,6 +11,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# ...but the built stylesheet is committed (manage.py tailwind build)
+!static/dist/
 downloads/
 eggs/
 .eggs/

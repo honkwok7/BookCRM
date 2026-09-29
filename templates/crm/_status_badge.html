@@ -1,0 +1,1 @@
+{% if customer.status == "active" %}{% include "components/badge.html" with label=customer.get_status_display level="success" %}{% elif customer.status == "anonymized" %}{% include "components/badge.html" with label=customer.get_status_display level="danger" %}{% else %}{% include "components/badge.html" with label=customer.get_status_display %}{% endif %}

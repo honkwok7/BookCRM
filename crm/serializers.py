@@ -4,10 +4,9 @@ from rest_framework.exceptions import PermissionDenied
 from bookings.models import Customer
 from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
 from crm.models import CustomerActivity, CustomerNote, Tag
+from crm.permissions import can_write_internal_notes
 from crm.selectors import customers_visible_to
 from crm.services import create_note, create_tag, update_note, update_tag
-from organizations.models import OrganizationRole
-from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import resolve_tenant
 
@@ -37,15 +36,6 @@ class TagSummarySerializer(serializers.ModelSerializer):
         model = Tag
         fields = ("id", "name", "slug", "color")
         read_only_fields = fields
-
-
-def _can_write_internal_notes(request) -> bool:
-    # Capability holders, and providers for their own notes (which only they and capability
-    # holders can then read; see crm.selectors.notes_visible_to).
-    tenant = resolve_tenant(request)
-    return tenant is not None and (
-        tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE) or tenant.role == OrganizationRole.STAFF
-    )
 
 
 class CustomerNoteSerializer(TenantScopedModelSerializer):
@@ -84,8 +74,8 @@ class CustomerNoteSerializer(TenantScopedModelSerializer):
         return customer
 
     def validate_visibility(self, visibility):
-        if visibility == CustomerNote.Visibility.INTERNAL and not _can_write_internal_notes(
-            self.context["request"]
+        if visibility == CustomerNote.Visibility.INTERNAL and not can_write_internal_notes(
+            resolve_tenant(self.context["request"])
         ):
             raise PermissionDenied("Internal notes need the customers.notes.private permission.")
         return visibility

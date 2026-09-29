@@ -56,6 +56,7 @@ jobs:
           python manage.py makemigrations --check --dry-run
       - name: Stylesheet is up to date
         run: |
+          git ls-files --error-unmatch static/dist/app.css
           python manage.py tailwind build
           git diff --exit-code static/dist/app.css
       - name: Run tests
