@@ -9,6 +9,7 @@ below and the web pages (crm/web_views.py), so both apply the same rules.
 
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from crm.models import CustomerNote
 from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from organizations.tenancy import resolve_tenant
@@ -41,10 +42,17 @@ def can_write_internal_notes(tenant) -> bool:
 
 
 def can_change_note(tenant, user, note) -> bool:
-    """A note can be edited or deleted by its author, or by ``customers.notes.private``."""
-    return tenant is not None and (
-        note.author_id == user.pk or tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE)
-    )
+    """Edit, pin or delete a note: ``customers.notes.private``, or its author. An author may
+    change their own *internal* note only while still allowed to write internal notes: a
+    provider who became a receptionist, or lost the capability, keeps read access to what they
+    wrote but can no longer change it."""
+    if tenant is None:
+        return False
+    if tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE):
+        return True
+    if note.author_id != user.pk:
+        return False
+    return note.visibility != CustomerNote.Visibility.INTERNAL or can_write_internal_notes(tenant)
 
 
 class CustomerAccess(BasePermission):

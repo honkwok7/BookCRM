@@ -400,10 +400,14 @@ class HeaderSearchTests(CrmWebTestCase):
 
 
 class ReceptionistAcceptanceTests(CrmWebTestCase):
-    """M2.6 acceptance: a receptionist can find, create, tag and annotate a customer without
-    a full page reload (every step is an htmx request answered with a fragment)."""
+    """M2.6 acceptance, server side: every step of find, create, tag and annotate is an htmx
+    request answered with a page fragment (or an HX-Redirect), never a full page.
 
-    def test_find_create_tag_and_annotate(self):
+    That the browser really swaps these fragments without reloading was checked with a
+    headless Chrome walkthrough (docs/IMPLEMENTATION_PLAN.md, M2.6); this test cannot see the
+    browser side (targets, swaps, history)."""
+
+    def test_each_step_answers_with_a_fragment(self):
         self.client.force_login(self.receptionist)
         found = self.client.get(reverse("crm-customer-list"), {"q": "Lovelace"}, headers=HTMX)
         self.assertContains(found, "Ada Lovelace")

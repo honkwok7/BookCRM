@@ -31,6 +31,7 @@ claimed; that would need a separate formal review.
 | Web pages enforce the same capabilities as the API; a hidden menu link is never the only protection (tested page by page) | ✅ | `core/web.py`, `core/navigation.py`, `tests/test_web_shell.py` |
 | Sign-out is POST only; `next` redirects are limited to this site | ✅ | `accounts/web_views.py`, `organizations/web_views.py` |
 | CSRF cookie is HttpOnly; htmx sends the token from the page | ✅ | `CSRF_COOKIE_HTTPONLY`, `templates/base.html` |
+| A password-reset link works once even under concurrent use: the account row is locked and the token re-checked under the lock (PostgreSQL race test) | ✅ | `accounts/services.py` (`reset_password_with_token`), `tests/test_review_3_findings.py` |
 | Emailed links need a click to act (email verification is a POST), so link scanners can't verify for the user | ✅ | `accounts/web_views.py` |
 | htmx keeps no page snapshots in `localStorage` (`historyCacheSize: 0`) | ✅ | `templates/base.html` |
 | Forwarded headers trusted only behind a configured proxy (`TRUSTED_PROXY_COUNT`) | ✅ | `config/settings.py`, [DEPLOYMENT.md](DEPLOYMENT.md) |

@@ -19,7 +19,11 @@ from django.views.generic import FormView
 
 from accounts.forms import EmailAuthenticationForm, NewPasswordForm, PasswordResetRequestForm
 from accounts.models import EmailVerificationToken, LoginHistory
-from accounts.services import queue_password_reset_email, reset_password, verify_email
+from accounts.services import (
+    queue_password_reset_email,
+    reset_password_with_token,
+    verify_email,
+)
 from core import ratelimit
 from core.audit import client_ip
 
@@ -124,7 +128,13 @@ class PasswordResetConfirmView(View):
         form = NewPasswordForm(request.POST, user=user)
         if not form.is_valid():
             return render(request, self.template_name, {"form": form}, status=400)
-        reset_password(user, form.cleaned_data["new_password1"])
+        changed = reset_password_with_token(
+            user_id=user.pk,
+            token=request.GET.get("token", ""),
+            new_password=form.cleaned_data["new_password1"],
+        )
+        if not changed:  # the link was used by a concurrent request
+            return render(request, self.template_name, {"form": None}, status=400)
         messages.success(request, "Your password has been changed. Please sign in.")
         return redirect("login")
 

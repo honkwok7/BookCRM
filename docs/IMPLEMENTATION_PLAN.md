@@ -740,6 +740,12 @@ None.
 > - **Fixed along the way:** a multi-line `{# #}` comment in `base.html` was printed into every
 >   page (now `{% comment %}`, with a test); the page dialog now closes after a swap
 >   (`HX-Trigger-After-Swap`); the phone header no longer overflows by 2px.
+> - **Review 3 (Codex, 2026-09-29), fixed in the same PR:** a note's timeline entry now
+>   follows visibility changes (F1); authors change their own internal notes only while still
+>   allowed to write them (F2); password reset is one locked, re-checked step (F3); adding the
+>   same new tag concurrently no longer errors (F4); deleting a note without JavaScript asks
+>   first (F5); the acceptance test now says it checks fragments, not the browser (F6). Tests:
+>   `tests/test_review_3_findings.py`.
 > - **Checked:** headless Chrome walkthrough of the receptionist flow (no CSP violations or
 >   script errors); Lighthouse accessibility and best practices 100 on the list, profile,
 >   notes and activity pages, mobile and desktop.

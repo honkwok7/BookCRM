@@ -17,7 +17,6 @@ from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.utils.text import slugify
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -34,7 +33,7 @@ from core.web import (
     toast,
 )
 from crm.forms import CustomerForm, CustomerTagsForm, NoteForm
-from crm.models import CustomerActivity, CustomerNote, Tag
+from crm.models import CustomerActivity, CustomerNote
 from crm.permissions import (
     can_browse_customers,
     can_change_note,
@@ -56,8 +55,8 @@ from crm.services import (
     add_customer_tag,
     create_customer,
     create_note,
-    create_tag,
     delete_note,
+    get_or_create_tag,
     set_customer_tags,
     update_customer,
     update_note,
@@ -414,9 +413,9 @@ class CustomerTagsView(CustomerManageMixin, View):
         return toast(response, message)
 
     def add_new_tag(self, customer, name) -> str:
-        organization = self.tenant.organization
-        existing = Tag.objects.filter(organization=organization, slug=slugify(name)[:80]).first()
-        tag = existing or create_tag(organization=organization, name=name, actor=self.request.user)
+        tag = get_or_create_tag(
+            organization=self.tenant.organization, name=name, actor=self.request.user
+        )
         add_customer_tag(customer=customer, tag=tag, actor=self.request.user)
         return f"Tagged “{tag.name}”."
 
@@ -500,8 +499,7 @@ class NoteEditView(NoteMixin, View):
         customer = self.get_customer(pk)
         note = self.get_note(customer, note_pk)
         form = NoteForm(
-            allow_internal=can_write_internal_notes(self.tenant)
-            or note.visibility == CustomerNote.Visibility.INTERNAL,
+            allow_internal=can_write_internal_notes(self.tenant),
             initial={
                 "content": note.content,
                 "note_type": note.note_type,
@@ -514,13 +512,9 @@ class NoteEditView(NoteMixin, View):
     def post(self, request, pk, note_pk):
         customer = self.get_customer(pk)
         note = self.get_note(customer, note_pk)
-        # Keeping an internal note internal is always allowed; making a note internal needs
-        # the same permission as writing one.
-        allow_internal = (
-            can_write_internal_notes(self.tenant)
-            or note.visibility == CustomerNote.Visibility.INTERNAL
-        )
-        form = NoteForm(request.POST, allow_internal=allow_internal)
+        # can_change_note (in get_note) already refused internal notes to members who may not
+        # write them, so the choice offered here is simply what the member may write.
+        form = NoteForm(request.POST, allow_internal=can_write_internal_notes(self.tenant))
         if form.is_valid():
             try:
                 update_note(note=note, actor=request.user, **form.cleaned_data)
@@ -538,9 +532,24 @@ class NoteEditView(NoteMixin, View):
 
 
 class NoteDeleteView(NoteMixin, View):
+    """htmx asks for confirmation in the browser (hx-confirm). Without JavaScript the button
+    leads to a confirmation page first; only its "Delete" button (confirmed=yes) deletes."""
+
+    template_name = "crm/note_confirm_delete.html"
+
+    def confirm_page(self, customer, note):
+        context = {"customer": customer, "note": note, "organization": customer.organization}
+        return render(self.request, self.template_name, context)
+
+    def get(self, request, pk, note_pk):
+        customer = self.get_customer(pk)
+        return self.confirm_page(customer, self.get_note(customer, note_pk))
+
     def post(self, request, pk, note_pk):
         customer = self.get_customer(pk)
         note = self.get_note(customer, note_pk)
+        if not is_htmx(request) and request.POST.get("confirmed") != "yes":
+            return self.confirm_page(customer, note)
         delete_note(note=note, actor=request.user)
         return self.notes_response(customer, "Note deleted.")
 

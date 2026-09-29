@@ -1,0 +1,16 @@
+{% extends "layouts/app.html" %}
+{% comment %}Confirmation before deleting a note, for browsers without JavaScript (htmx asks in the browser instead).{% endcomment %}
+{% block title %}Delete note · {{ customer.display_name }}{% endblock %}
+{% block page_title %}Delete this note?{% endblock %}
+{% block content %}
+<div class="card card-body grid max-w-2xl gap-4">
+  <p class="text-sm text-slate-700">This note on {{ customer.display_name }} will be deleted. This can't be undone.</p>
+  <blockquote class="rounded-md bg-slate-50 p-3 text-sm whitespace-pre-line text-slate-900">{{ note.content }}</blockquote>
+  <form method="post" action="{% url 'crm-note-delete' customer.pk note.pk %}" class="flex justify-end gap-2">
+    {% csrf_token %}
+    <input type="hidden" name="confirmed" value="yes">
+    <a href="{% url 'crm-customer-tab' customer.pk 'notes' %}" class="btn btn-secondary">Cancel</a>
+    <button type="submit" class="btn btn-danger">Delete note</button>
+  </form>
+</div>
+{% endblock %}
