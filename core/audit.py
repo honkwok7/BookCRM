@@ -71,6 +71,13 @@ class AuditAction(StrEnum):
     STAFF_CREATED = "staff.created"
     STAFF_UPDATED = "staff.updated"
     STAFF_DELETED = "staff.deleted"
+    LOCATION_CREATED = "location.created"
+    LOCATION_UPDATED = "location.updated"
+    LOCATION_DELETED = "location.deleted"
+    LOCATION_HOURS_UPDATED = "location.hours_updated"
+    LOCATION_CLOSURE_CREATED = "location_closure.created"
+    LOCATION_CLOSURE_UPDATED = "location_closure.updated"
+    LOCATION_CLOSURE_DELETED = "location_closure.deleted"
     # Scheduling
     AVAILABILITY_CREATED = "availability.created"
     AVAILABILITY_UPDATED = "availability.updated"

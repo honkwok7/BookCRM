@@ -788,6 +788,25 @@ A receptionist can find, create, tag and annotate a customer without a full page
 
 ### M3.1: Locations
 
+> **Status: done (2026-09-29, branch `m3.1-locations`).** See [LOCATIONS.md](LOCATIONS.md).
+> - **Models:** `Location` (with `is_default`, one per organization, always active),
+>   `LocationHours` (up to two periods a day) and `LocationClosure` (a date range, all day or
+>   between two times each day). Each row stores `organization` for scoping without joins.
+> - **Default location:** created as "Main" for every existing organization by migration
+>   `locations/0002`, and for new organizations by a `post_save` signal, so no code path can
+>   create an organization without one.
+> - **Plan limit:** the plan gained `maximum_locations` (default 1; the demo plans allow 1, 3
+>   and 20). It counts active locations and is checked through `enforce_plan_limit`, with the
+>   organization row locked. A full `FEATURE_MULTI_LOCATION` entitlement model is M8.1.
+> - **New capability `locations.view`** for every team role; `locations.manage` stays with
+>   owners and managers.
+> - **API:** `/api/v1/locations/` (plus `hours` and `make-default` actions) and
+>   `/api/v1/location-closures/`, both covered by the tenant isolation suite.
+> - **UI:** `/app/locations/` list and a location page with an hours editor and closures, in the
+>   sidebar under Organization.
+> - **Deviation:** web URL names are prefixed `app-location-…`, because the API router already
+>   uses `location-list` and `location-detail`.
+
 #### Objective
 Multi-location organizations.
 

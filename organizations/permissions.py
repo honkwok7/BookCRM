@@ -23,6 +23,7 @@ class Capability(StrEnum):
     STAFF_MANAGE = "staff.manage"
     SERVICES_VIEW = "services.view"
     SERVICES_MANAGE = "services.manage"
+    LOCATIONS_VIEW = "locations.view"
     LOCATIONS_MANAGE = "locations.manage"
     APPOINTMENTS_VIEW_ALL = "appointments.view_all"
     APPOINTMENTS_MANAGE = "appointments.manage"
@@ -49,7 +50,8 @@ CAPABILITY_DESCRIPTIONS: dict[Capability, str] = {
     Capability.STAFF_MANAGE: "Create and edit staff profiles, availability and time off",
     Capability.SERVICES_VIEW: "View services and categories",
     Capability.SERVICES_MANAGE: "Create and edit services and categories",
-    Capability.LOCATIONS_MANAGE: "Create and edit locations",
+    Capability.LOCATIONS_VIEW: "View locations, their opening hours and closures",
+    Capability.LOCATIONS_MANAGE: "Create and edit locations, opening hours and closures",
     Capability.APPOINTMENTS_VIEW_ALL: "View every appointment (otherwise only one's own)",
     Capability.APPOINTMENTS_MANAGE: "Book, reschedule, cancel and change appointment status",
     Capability.CUSTOMERS_VIEW: "View customer records",
@@ -82,6 +84,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
             Capability.ORGANIZATION_VIEW,
             Capability.STAFF_VIEW,
             Capability.SERVICES_VIEW,
+            Capability.LOCATIONS_VIEW,
             Capability.APPOINTMENTS_VIEW_ALL,
             Capability.APPOINTMENTS_MANAGE,
             Capability.CUSTOMERS_VIEW,
@@ -95,6 +98,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
             Capability.ORGANIZATION_VIEW,
             Capability.STAFF_VIEW,
             Capability.SERVICES_VIEW,
+            Capability.LOCATIONS_VIEW,
             Capability.APPOINTMENTS_MANAGE,
         }
     ),

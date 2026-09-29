@@ -5,6 +5,7 @@ from api.search import GlobalSearchView
 from bookings.views import BookingViewSet, WaitlistViewSet
 from core.audit_api import AuditLogViewSet
 from crm.views import CustomerNoteViewSet, CustomerViewSet, TagViewSet
+from locations.views import LocationClosureViewSet, LocationViewSet
 from scheduling.views import (
     AvailabilityExceptionViewSet,
     OrganizationHolidayViewSet,
@@ -19,6 +20,8 @@ router = DefaultRouter()
 router.register("services", ServiceViewSet, basename="service")
 router.register("service-categories", ServiceCategoryViewSet, basename="service-category")
 router.register("staff", StaffProfileViewSet, basename="staff")
+router.register("locations", LocationViewSet, basename="location")
+router.register("location-closures", LocationClosureViewSet, basename="location-closure")
 router.register("availability/weekly", WeeklyAvailabilityViewSet, basename="availability-weekly")
 router.register(
     "availability/exceptions", AvailabilityExceptionViewSet, basename="availability-exceptions"

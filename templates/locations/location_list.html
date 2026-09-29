@@ -1,0 +1,48 @@
+{% extends "layouts/app.html" %}
+{% block title %}Locations · {{ organization.name }}{% endblock %}
+{% block page_title %}Locations{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Where you see customers, with each location's opening hours and closures.</p>{% endblock %}
+{% block page_actions %}
+  {% if can_manage and not at_limit %}
+    <a href="{% url 'app-location-new' %}" class="btn btn-primary" hx-get="{% url 'app-location-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}New location
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if can_manage and limit is not None %}
+  <p class="mb-4 text-sm text-slate-700">
+    {{ active_count }} of {{ limit }} active location{{ limit|pluralize }} on your plan.
+    {% if at_limit %}To add another, deactivate a location or upgrade your plan.{% endif %}
+  </p>
+{% endif %}
+<div class="card">
+  <div class="overflow-x-auto">
+    <table class="table">
+      <caption class="sr-only">Locations</caption>
+      <thead><tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Open today</th><th scope="col">Time zone</th><th scope="col">Online booking</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          {% with location=row.location %}
+          <tr>
+            <td class="font-medium">
+              <a href="{% url 'app-location-detail' location.pk %}">{{ location.name }}</a>
+              {% if location.is_default or not location.is_active %}
+                <span class="mt-1 flex flex-wrap gap-1">
+                  {% if location.is_default %}{% include "components/badge.html" with label="Default" level="brand" %}{% endif %}
+                  {% if not location.is_active %}{% include "components/badge.html" with label="Inactive" %}{% endif %}
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-slate-700">{% for line in location.address_lines %}<span class="block">{{ line }}</span>{% empty %}<span class="text-slate-600">—</span>{% endfor %}</td>
+            <td class="text-slate-700">{% if row.has_hours %}{% include "locations/_periods.html" with periods=row.today.periods %}{% else %}<span class="text-slate-600">Hours not set</span>{% endif %}</td>
+            <td class="whitespace-nowrap text-slate-700">{{ location.timezone }}</td>
+            <td>{% if location.booking_enabled and location.is_active %}{% include "components/badge.html" with label="On" level="success" %}{% else %}{% include "components/badge.html" with label="Off" %}{% endif %}</td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

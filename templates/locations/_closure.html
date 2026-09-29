@@ -1,0 +1,14 @@
+<li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm sm:px-6">
+  <div>
+    <span class="font-medium text-slate-900">
+      {{ closure.start_date|date:"D j M Y" }}{% if closure.end_date != closure.start_date %} – {{ closure.end_date|date:"D j M Y" }}{% endif %}
+    </span>
+    <span class="block text-slate-700">{% if closure.all_day %}Closed all day{% else %}Closed {{ closure.start_time|time:"H:i" }}–{{ closure.end_time|time:"H:i" }}{% endif %}{% if closure.reason %} · {{ closure.reason }}{% endif %}</span>
+  </div>
+  {% if can_manage and not past %}
+    <form method="post" action="{% url 'app-location-closure-delete' location.pk closure.pk %}" hx-post="{% url 'app-location-closure-delete' location.pk closure.pk %}" hx-confirm="Remove this closure?">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary">{% include "components/icon.html" with name="trash" class="size-4" %}Remove<span class="sr-only"> the closure starting {{ closure.start_date|date:"j M Y" }}</span></button>
+    </form>
+  {% endif %}
+</li>

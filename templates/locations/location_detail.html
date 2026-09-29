@@ -1,0 +1,86 @@
+{% extends "layouts/app.html" %}
+{% block title %}{{ location.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ location.name }}{% endblock %}
+{% block page_description %}
+<div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
+  {% if location.is_default %}{% include "components/badge.html" with label="Default location" level="brand" %}{% endif %}
+  {% if location.is_active %}{% include "components/badge.html" with label="Active" level="success" %}{% else %}{% include "components/badge.html" with label="Inactive" %}{% endif %}
+  {% if location.phone %}<a class="flex items-center gap-1" href="tel:{{ location.phone }}">{% include "components/icon.html" with name="phone" class="size-4" %}{{ location.phone }}</a>{% endif %}
+  {% if location.email %}<a class="flex items-center gap-1" href="mailto:{{ location.email }}">{% include "components/icon.html" with name="mail" class="size-4" %}{{ location.email }}</a>{% endif %}
+</div>
+{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'app-location-list' %}" class="btn btn-secondary">All locations</a>
+  {% if can_manage %}
+    {% if not location.is_default and location.is_active %}
+      <form method="post" action="{% url 'app-location-make-default' location.pk %}" hx-post="{% url 'app-location-make-default' location.pk %}" hx-confirm="Make {{ location.name }} the default location?">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary">Make default</button>
+      </form>
+    {% endif %}
+    <a href="{% url 'app-location-edit' location.pk %}" class="btn btn-primary" hx-get="{% url 'app-location-edit' location.pk %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="pencil" class="size-4" %}Edit
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if not location.is_active %}
+  <div class="mb-6">{% include "components/alert.html" with level="info" message="This location is inactive. It is hidden from booking and doesn't count towards your plan's limit." %}</div>
+{% endif %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="grid content-start gap-6 lg:col-span-2">
+    <section class="card" aria-labelledby="hours-heading">
+      <div class="card-header flex flex-wrap items-center justify-between gap-2">
+        <h2 id="hours-heading" class="card-title">Opening hours</h2>
+        {% if can_manage %}<a href="{% url 'app-location-hours' location.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-location-hours' location.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="clock" class="size-4" %}Edit hours</a>{% endif %}
+      </div>
+      {% if has_hours %}
+        <dl class="divide-y divide-slate-100">
+          {% for row in week %}
+            <div class="flex justify-between gap-4 px-4 py-2.5 text-sm sm:px-6{% if row.weekday == today_weekday %} bg-slate-50 font-medium{% endif %}">
+              <dt>{{ row.label }}{% if row.weekday == today_weekday %} <span class="text-xs font-normal text-slate-600">(today)</span>{% endif %}</dt>
+              <dd class="text-right">{% include "locations/_periods.html" with periods=row.periods %}</dd>
+            </div>
+          {% endfor %}
+        </dl>
+        <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in {{ location.timezone }}.</p>
+      {% else %}
+        {% include "components/empty_state.html" with title="Opening hours not set" message="Until they are set, this location doesn't limit when appointments can be booked: each provider's own availability does." icon="clock" %}
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="closures-heading">
+      <div class="card-header flex flex-wrap items-center justify-between gap-2">
+        <h2 id="closures-heading" class="card-title">Closures</h2>
+        {% if can_manage %}<a href="{% url 'app-location-closure-new' location.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-location-closure-new' location.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="plus" class="size-4" %}Add closure</a>{% endif %}
+      </div>
+      {% if upcoming_closures %}
+        <ul class="divide-y divide-slate-100">
+          {% for closure in upcoming_closures %}{% include "locations/_closure.html" %}{% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with title="No upcoming closures" message="Holidays, renovations and other days this location is closed appear here." icon="calendar" %}
+      {% endif %}
+      {% if past_closures %}
+        <details class="border-t border-slate-200">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700 sm:px-6">Recent past closures</summary>
+          <ul class="divide-y divide-slate-100">
+            {% for closure in past_closures %}{% include "locations/_closure.html" with past=True %}{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="grid content-start gap-6">
+    <section class="card" aria-labelledby="details-heading">
+      <div class="card-header"><h2 id="details-heading" class="card-title">Details</h2></div>
+      <dl class="grid gap-4 p-4 text-sm sm:p-6">
+        <div><dt class="text-slate-600">Address</dt><dd class="mt-0.5">{% for line in location.address_lines %}<span class="block">{{ line }}</span>{% empty %}—{% endfor %}</dd></div>
+        <div><dt class="text-slate-600">Time zone</dt><dd class="mt-0.5">{{ location.timezone }}</dd></div>
+        <div><dt class="text-slate-600">Online booking</dt><dd class="mt-0.5">{% if location.booking_enabled %}On{% else %}Off{% endif %}</dd></div>
+      </dl>
+    </section>
+  </div>
+</div>
+{% endblock %}

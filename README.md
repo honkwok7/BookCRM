@@ -40,6 +40,7 @@ See:
 - `docs/ARCHITECTURE.md`
 - `docs/BOOKING_ENGINE.md`
 - `docs/CRM.md`
+- `docs/LOCATIONS.md`
 - `docs/API.md`
 
 ## Multi-tenant architecture
