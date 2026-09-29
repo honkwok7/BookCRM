@@ -41,7 +41,7 @@ class PublicBookingPageView(View):
         with timezone.override(ZoneInfo(organization.timezone)):
             valid = form.is_valid()
         if not valid:
-            return self._render(request, organization, form, status=400)
+            return self._render(request, organization, form, status=409 if form.conflict else 400)
 
         data = form.cleaned_data
         user = request.user if request.user.is_authenticated else None

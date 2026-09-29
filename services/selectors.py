@@ -33,7 +33,8 @@ def service_offered_at(service: Service, location) -> bool:
         service._prefetched_objects_cache
     ):
         return not locations or any(item.pk == location.pk for item in locations)
-    return not locations.exists() or locations.filter(pk=location.pk).exists()
+    ids = list(locations.values_list("pk", flat=True))  # one query
+    return not ids or location.pk in ids
 
 
 def services_bookable_at(organization, location=None, *, public: bool):

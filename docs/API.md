@@ -40,7 +40,15 @@ Base path: `/api/v1/`
 - `/api/v1/availability/exceptions/`
 - `/api/v1/availability/time-off/`
 - `/api/v1/availability/holidays/`
-- `/api/v1/availability/slots/available-slots/`
+- `GET /api/v1/availability/slots/available-slots/` (public, no sign-in):
+  `?organization=<slug>&service=<id>&date=YYYY-MM-DD`, optional `staff` (else any provider),
+  `location` (else the default location) and `end_date` (at most 31 days). Returns `timezone`,
+  `location`, `slots` (start times in the location's time zone) and `availability` (each start
+  with the providers free then, by public name, and when each would finish). Only services
+  bookable online and staff visible online count; an unknown or hidden service, provider or
+  location is 404. See [BOOKING_ENGINE.md](BOOKING_ENGINE.md#availability-schedulingavailabilitypy).
+- `/api/v1/availability/weekly/` rows take an optional `location` (empty = any location the
+  person works at).
 
 ## Locations
 Read: `locations.view`. Write: `locations.manage`. Rules and error codes are in

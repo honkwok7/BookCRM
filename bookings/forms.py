@@ -1,6 +1,8 @@
 from django import forms
 
 from bookings.selectors import bookable_services, bookable_staff
+from core.exceptions import ConflictError, DomainError
+from scheduling.availability import validate_slot
 from staff.selectors import provides
 
 
@@ -29,6 +31,8 @@ class PublicBookingForm(forms.Form):
 
     def __init__(self, *args, organization, **kwargs):
         super().__init__(*args, **kwargs)
+        self.organization = organization
+        self.conflict = False  # the time was taken (409) rather than invalid (400)
         self.fields["service"].queryset = bookable_services(organization, public=True)
         self.fields["staff"].queryset = bookable_staff(organization)
         for field in self.fields.values():
@@ -41,4 +45,12 @@ class PublicBookingForm(forms.Form):
             self.add_error(
                 "staff", f"{staff.public_name} doesn't offer {service.name}. Choose someone else."
             )
+        elif service is not None and staff is not None and data.get("start_datetime"):
+            try:
+                validate_slot(
+                    self.organization, service, staff, data["start_datetime"], public=True
+                )
+            except DomainError as error:
+                self.conflict = isinstance(error, ConflictError)
+                self.add_error("start_datetime", error.message)
         return data

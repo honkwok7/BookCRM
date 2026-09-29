@@ -85,6 +85,18 @@ class StaffProfileFactory(factory.django.DjangoModelFactory):
     user = factory.SubFactory(UserFactory)
     job_title = "Therapist"
 
+    @factory.post_generation
+    def locations(self, create, extracted, **kwargs):
+        """Like create_staff_profile: the default location unless ``locations=[...]``."""
+        if not create:
+            return
+        if extracted is not None:
+            self.locations.set(extracted)
+        else:
+            self.locations.set(
+                Location.objects.filter(organization=self.organization, is_default=True)
+            )
+
 
 class StaffServiceOfferingFactory(factory.django.DjangoModelFactory):
     """``staff`` offers ``service`` at all their locations."""

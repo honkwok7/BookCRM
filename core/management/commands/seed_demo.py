@@ -44,6 +44,8 @@ ORGANIZATIONS = [
         "email": "hello@harmony.local",
         "plan": "professional",
         "staff_locations": {"massage@harmony.local": ["Main", "Downtown"]},
+        # Maya works at Downtown on Thursdays and Fridays.
+        "staff_hours": {"massage@harmony.local": {3: "Downtown", 4: "Downtown"}},
         # Chiropractic is only offered at the main clinic; massage at both.
         "service_locations": {
             "Initial Chiropractic Assessment": ["Main"],
@@ -245,14 +247,21 @@ class Command(BaseCommand):
                         ),
                     )
                 staff_by_email[email] = profile
-                for day in range(5):  # Monday-Friday, 09:00-17:00 local time
-                    WeeklyAvailability.objects.get_or_create(
-                        organization=organization,
-                        staff=profile,
-                        day_of_week=day,
-                        start_time=time(9),
-                        end_time=time(17),
-                    )
+                # Monday-Friday, 09:00-17:00, at the location given for that weekday (default:
+                # the main location). Only for someone who has no weekly hours yet.
+                if not profile.weekly_availabilities.exists():
+                    days = spec.get("staff_hours", {}).get(email, {})
+                    for day in range(5):
+                        WeeklyAvailability.objects.create(
+                            organization=organization,
+                            staff=profile,
+                            location=Location.objects.get(
+                                organization=organization, name=days.get(day, "Main")
+                            ),
+                            day_of_week=day,
+                            start_time=time(9),
+                            end_time=time(17),
+                        )
 
         services = []
         service_locations = spec.get("service_locations", {})

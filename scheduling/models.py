@@ -11,6 +11,14 @@ class WeeklyAvailability(BaseUUIDModel):
     staff = models.ForeignKey(
         "staff.StaffProfile", on_delete=models.CASCADE, related_name="weekly_availabilities"
     )
+    # Where these hours apply. Empty: at any location the person works at.
+    location = models.ForeignKey(
+        "locations.Location",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="weekly_availabilities",
+    )
     day_of_week = models.PositiveSmallIntegerField()
     start_time = models.TimeField()
     end_time = models.TimeField()
@@ -31,6 +39,10 @@ class WeeklyAvailability(BaseUUIDModel):
 
 
 class AvailabilityException(BaseUUIDModel):
+    """A change to one person's hours on one date. ``unavailable_all_day``: off that day.
+    Otherwise the rows for a date (there may be several) are the only times they work that
+    day, within their usual weekly hours."""
+
     organization = models.ForeignKey(
         "organizations.Organization",
         on_delete=models.CASCADE,
