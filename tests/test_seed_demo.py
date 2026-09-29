@@ -55,3 +55,18 @@ class UserUsernameTests(TestCase):
         second, _ = User.objects.get_or_create(email="b@example.test")
         self.assertTrue(first.username and second.username)
         self.assertNotEqual(first.username, second.username)
+
+
+class SeedDemoBookingTests(TestCase):
+    def test_every_customer_gets_an_upcoming_appointment_through_the_booking_service(self):
+        call_command("seed_demo", stdout=StringIO())
+        harmony = Organization.objects.get(slug="harmony-wellness")
+        upcoming = Booking.objects.filter(organization=harmony, status=Booking.Status.CONFIRMED)
+        self.assertEqual(
+            upcoming.values("customer").distinct().count(),
+            Customer.objects.filter(organization=harmony).count(),
+        )
+        self.assertEqual(set(upcoming.values_list("source", flat=True)), {"reception"})
+        self.assertFalse(upcoming.filter(location__isnull=True).exists())
+        past = Booking.objects.filter(organization=harmony, source=Booking.Source.IMPORT)
+        self.assertTrue(past.exists())

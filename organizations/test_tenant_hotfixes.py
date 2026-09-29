@@ -1,12 +1,10 @@
 """M0 regression tests for critical tenant leaks (P1-P3, P9 in docs/CURRENT_STATE_ANALYSIS.md)."""
 
 import json
-from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from bookings.models import WaitlistEntry
@@ -16,6 +14,7 @@ from notifications.tasks import send_templated_email
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
 from services.models import Service
 from staff.models import StaffProfile
+from tests.factories import future, make_bookable
 
 User = get_user_model()
 
@@ -151,6 +150,7 @@ class OrganizationEditTests(TenantFixtureMixin, APITestCase):
 
 class BookingNotificationDispatchTests(TenantFixtureMixin, APITestCase):
     def _book(self):
+        make_bookable(self.staff_b, self.service_b)
         return create_booking(
             organization=self.org_b,
             service=self.service_b,
@@ -158,7 +158,7 @@ class BookingNotificationDispatchTests(TenantFixtureMixin, APITestCase):
             customer_name="Carol",
             customer_email="carol@b.test",
             customer_phone="",
-            start_datetime=timezone.now() + timedelta(days=1),
+            start_datetime=future(1),
         )
 
     @mock.patch("notifications.services.send_templated_email.delay")

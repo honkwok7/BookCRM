@@ -8,7 +8,8 @@
 - PostgreSQL race tests: two real connections, one ordered after the other by a gated lock and
   an observed ``pg_blocking_pids`` wait. Exactly one side wins; the other gets a clean 409.
 
-Working-hours and slot-grid validation inside ``create_booking`` is M4.1 (``validate_slot``).
+Since M4.1 ``create_booking`` also runs the availability engine (``validate_slot``); these
+fixtures make the provider bookable around the clock so the interval rules are what's tested.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -53,6 +54,7 @@ class BookingFixtures:
         ).user
         self.staff = f.StaffProfileFactory(organization=self.organization)
         self.service = f.ServiceFactory(organization=self.organization, duration_minutes=60)
+        f.make_bookable(self.staff, self.service)
         self.base = base_time()
 
     def at(self, minutes):
@@ -124,7 +126,7 @@ class IntervalRuleTests(BookingFixtures, TestCase):
                 Booking.objects.update(status=Status.CONFIRMED)
 
     def test_other_staff_member_is_not_blocked(self):
-        other = f.StaffProfileFactory(organization=self.organization)
+        other = f.make_bookable(f.StaffProfileFactory(organization=self.organization), self.service)
         self.book(0, staff=other)
 
     def test_past_start_refused(self):

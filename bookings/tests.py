@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from bookings.models import Booking
@@ -9,6 +8,7 @@ from bookings.services import create_booking
 from organizations.models import Organization
 from services.models import Service
 from staff.models import StaffProfile
+from tests.factories import future, make_bookable
 
 User = get_user_model()
 
@@ -42,9 +42,11 @@ class BookingServiceTests(APITestCase):
             currency="USD",
             duration_minutes=30,
         )
+        make_bookable(self.staff1, self.service1)
+        make_bookable(self.staff2, self.service2)
 
     def test_prevent_double_booking_same_slot(self):
-        start = timezone.now() + timedelta(days=1)
+        start = future(1)
         create_booking(
             organization=self.org1,
             service=self.service1,
@@ -66,7 +68,7 @@ class BookingServiceTests(APITestCase):
             )
 
     def test_tenant_isolation_between_orgs(self):
-        start = timezone.now() + timedelta(days=1)
+        start = future(1)
         booking1 = create_booking(
             organization=self.org1,
             service=self.service1,

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from core.models import BaseUUIDModel
 
@@ -200,11 +201,43 @@ class Booking(BaseUUIDModel):
         PAID = "paid", "Paid"
         REFUNDED = "refunded", "Refunded"
 
+    class Source(models.TextChoices):
+        """Where the booking was made (reporting, and later per-source rules)."""
+
+        PUBLIC_BOOKING = "public_booking", "Online booking page"
+        CUSTOMER_PORTAL = "customer_portal", "Customer portal"
+        RECEPTION = "reception", "Reception"
+        STAFF = "staff", "Staff"
+        API = "api", "API"
+        AI_AGENT = "ai_agent", "AI agent"
+        IMPORT = "import", "Import"
+        ADMIN = "admin", "Admin"
+
     public_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     reference = models.CharField(max_length=20, unique=True, db_index=True)
     organization = models.ForeignKey(
         "organizations.Organization", on_delete=models.CASCADE, related_name="bookings"
     )
+    # Nullable only for rows older than M4.1 that the backfill couldn't place; the booking
+    # service always sets it.
+    location = models.ForeignKey(
+        "locations.Location",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bookings",
+    )
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.STAFF)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_bookings",
+    )
+    # A client-chosen key: repeating a create with the same key returns the first booking
+    # instead of making a second one (retries after a timeout, double clicks, AI agents).
+    idempotency_key = models.CharField(max_length=64, blank=True)
     customer = models.ForeignKey(
         Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings"
     )
@@ -227,6 +260,9 @@ class Booking(BaseUUIDModel):
     )
     price_snapshot = models.DecimalField(max_digits=12, decimal_places=2)
     duration_snapshot_minutes = models.PositiveIntegerField()
+    # The service's buffers when booked, so later edits to the service don't move them.
+    buffer_before_minutes = models.PositiveIntegerField(default=0)
+    buffer_after_minutes = models.PositiveIntegerField(default=0)
     customer_notes = models.TextField(blank=True)
     internal_notes = models.TextField(blank=True)
     cancellation_reason = models.TextField(blank=True)
@@ -243,16 +279,27 @@ class Booking(BaseUUIDModel):
     )
 
     class Meta:
+        # PostgreSQL also has the exclusion constraint ``booking_staff_no_overlap`` (added by
+        # migration 0010, outside Django's model state): no two active bookings of one staff
+        # member may overlap, whatever code path writes them.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                condition=~Q(idempotency_key=""),
+                name="booking_unique_idempotency_key_per_org",
+            ),
+        ]
         indexes = [
             models.Index(fields=["organization", "start_datetime", "status"]),
             models.Index(fields=["organization", "customer_email"]),
             models.Index(fields=["organization", "staff", "start_datetime"]),
+            models.Index(fields=["organization", "location", "start_datetime"]),
         ]
 
     @staticmethod
     def generate_reference(year: int | None = None) -> str:
         suffix = "".join(random.choices(string.digits, k=6))
-        year = year or 2026
+        year = year or timezone.now().year
         return f"SCH-{year}-{suffix}"
 
     def __str__(self) -> str:

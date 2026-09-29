@@ -7,7 +7,6 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
-from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from bookings.models import Booking
@@ -32,6 +31,7 @@ from organizations.tenancy import (
 from scheduling.models import WeeklyAvailability
 from services.models import Service
 from staff.models import StaffProfile, StaffServiceOffering
+from tests.factories import future, make_bookable
 
 User = get_user_model()
 
@@ -359,7 +359,9 @@ class BookingVisibilityTests(TwoTenantMixin, APITestCase):
         self.service = Service.objects.create(
             organization=self.org_a, name="Massage", slug="massage", price=50, duration_minutes=60
         )
-        start = timezone.now() + timedelta(days=2)
+        make_bookable(self.provider, self.service)
+        make_bookable(self.other_provider, self.service)
+        start = future(2)
         self.own = self.book(self.provider, start, "victim@example.test")
         self.others = self.book(self.other_provider, start, "someone@example.test")
 
@@ -407,7 +409,7 @@ class BookingVisibilityTests(TwoTenantMixin, APITestCase):
 
     def test_team_booking_does_not_link_customer_to_team_member(self):
         receptionist = self.as_role(OrganizationRole.RECEPTIONIST)
-        start = (timezone.now() + timedelta(days=3)).isoformat()
+        start = future(3).isoformat()
         response = self.client.post(
             "/api/v1/bookings/",
             {

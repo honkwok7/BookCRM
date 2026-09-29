@@ -1,3 +1,7 @@
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from bookings.models import Booking
 from locations.models import Location
 from services.models import Service
@@ -26,6 +30,12 @@ def enforce_plan_limit(organization, limit_type: str):
             raise ValueError("Location limit reached for your subscription plan")
 
     if limit_type == "bookings":
-        count = Booking.objects.filter(organization=organization).count()
+        # Bookings made this calendar month (the organization's time zone), whatever their
+        # status: a cancelled booking still used the allowance.
+        now = timezone.now().astimezone(ZoneInfo(organization.timezone))
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        count = Booking.objects.filter(
+            organization=organization, created_at__gte=month_start
+        ).count()
         if count >= plan.maximum_monthly_bookings:
             raise ValueError("Monthly booking limit reached for your subscription plan")

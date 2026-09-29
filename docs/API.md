@@ -67,7 +67,14 @@ Read: `locations.view`. Write: `locations.manage`. Rules and error codes are in
 
 ## Bookings (appointments) and customers
 - `GET/POST /api/v1/bookings/`, `GET /api/v1/bookings/{id}/`. There is **no** PUT, PATCH or DELETE (405).
-- `POST /api/v1/bookings/{id}/cancel/` `{"reason": "..."}`
+  - `POST` takes `service`, `staff`, `start_datetime`, customer details, and optionally
+    `location` (default: the default location) and `idempotency_key` (or an `Idempotency-Key`
+    header: a retry returns the first booking). Every booking is checked against the
+    provider's availability (409 `slot_unavailable` outside it; 400 `not_offered` when they
+    don't offer the service there). Customers are also held to the online notice and window.
+  - Responses include `location`; the team view adds `source`, `created_by` and the
+    buffer snapshots.
+- `POST /api/v1/bookings/{id}/cancel/` `{"reason": "..."}` (customers: 400 `past_cancellation_deadline` inside the service's deadline)
 - `POST /api/v1/bookings/{id}/reschedule/` `{"start_datetime": "..."}` returns the **new** appointment
 - `POST /api/v1/bookings/{id}/update_status/` `{"status": "...", "note": "..."}` (needs `appointments.manage`)
 - `/api/v1/customers/`

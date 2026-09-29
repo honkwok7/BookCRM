@@ -12,6 +12,8 @@ from crm.models import Tag
 from crm.selectors import customer_stats
 from crm.serializers import TagSummarySerializer
 from crm.services import create_customer, set_customer_tags, update_customer
+from locations.models import Location
+from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import (
@@ -19,8 +21,6 @@ from organizations.tenancy import (
     requested_organization_slug,
     resolve_tenant,
 )
-from scheduling.availability import validate_slot
-from staff.selectors import provides
 
 
 class CustomerSerializer(TenantScopedModelSerializer):
@@ -161,6 +161,7 @@ BOOKING_CUSTOMER_FIELDS = (
     "public_uuid",
     "reference",
     "organization",
+    "location",
     "service",
     "staff",
     "start_datetime",
@@ -197,7 +198,16 @@ class BookingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = (*BOOKING_CUSTOMER_FIELDS, "customer", "internal_notes", "cancelled_by")
+        fields = (
+            *BOOKING_CUSTOMER_FIELDS,
+            "customer",
+            "source",
+            "created_by",
+            "buffer_before_minutes",
+            "buffer_after_minutes",
+            "internal_notes",
+            "cancelled_by",
+        )
         read_only_fields = fields
 
 
@@ -210,15 +220,29 @@ class BookingRescheduleSerializer(serializers.Serializer):
     start_datetime = serializers.DateTimeField()
 
 
+def is_team_request(request, organization=None) -> bool:
+    """The user acts as a team member of the booking's organization (not as its customer)."""
+    tenant = resolve_tenant(request)
+    if tenant is None or tenant.role == OrganizationRole.CUSTOMER:
+        return False
+    return organization is None or tenant.organization.pk == organization.pk
+
+
 class BookingCreateSerializer(serializers.Serializer):
     service = serializers.UUIDField()
     staff = serializers.UUIDField()
+    location = serializers.UUIDField(required=False, allow_null=True)
     start_datetime = serializers.DateTimeField()
     customer_name = serializers.CharField(max_length=255)
     customer_email = serializers.EmailField()
     customer_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     customer_timezone = serializers.CharField(max_length=64, required=False, default="UTC")
     customer_notes = serializers.CharField(required=False, allow_blank=True)
+    # Also accepted as the ``Idempotency-Key`` header: a retry with the same key returns the
+    # booking made the first time instead of a second one.
+    idempotency_key = serializers.CharField(
+        max_length=64, required=False, allow_blank=True, default=""
+    )
 
     def validate_customer_timezone(self, value):
         if value not in available_timezones():
@@ -256,23 +280,24 @@ class BookingCreateSerializer(serializers.Serializer):
         )
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
-        # Self-service bookings must use a provider who offers the service. The team is held
-        # to the same rule by the booking service from M4.1.
-        if not is_team:
-            if not provides(staff_profile, service, public=True):
-                raise serializers.ValidationError(
-                    {"staff": "This staff member doesn't offer the selected service."}
-                )
-            # Self-service bookings must use a free time that could be booked online (notice,
-            # booking window, hours, closures, time off, other appointments). Raises 400/409.
-            validate_slot(
-                organization, service, staff_profile, validated_data["start_datetime"], public=True
-            )
+        location = None
+        if validated_data.get("location"):
+            locations = Location.objects.filter(organization=organization, is_active=True)
+            if not is_team:
+                locations = locations.filter(booking_enabled=True)
+            location = locations.filter(id=validated_data["location"]).first()
+            if location is None:
+                raise serializers.ValidationError({"location": "Location not found."})
 
+        # The booking service checks the rest for every caller: the provider offers the
+        # service there, the time is free (and, for customers, bookable online).
         return create_booking(
             organization=organization,
             service=service,
             staff_profile=staff_profile,
+            location=location,
+            source=Booking.Source.API if is_team else Booking.Source.CUSTOMER_PORTAL,
+            public=not is_team,
             customer_name=validated_data["customer_name"],
             customer_email=validated_data["customer_email"],
             customer_phone=validated_data.get("customer_phone", ""),
@@ -281,6 +306,9 @@ class BookingCreateSerializer(serializers.Serializer):
             customer_notes=validated_data.get("customer_notes", ""),
             actor=request.user,
             customer_user=customer_user,
+            idempotency_key=(
+                validated_data.get("idempotency_key") or request.headers.get("Idempotency-Key", "")
+            )[:64],
         )
 
 
@@ -289,11 +317,14 @@ class BookingCancelSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         booking = self.context["booking"]
-        actor = (
-            self.context["request"].user if self.context["request"].user.is_authenticated else None
-        )
+        request = self.context["request"]
+        actor = request.user if request.user.is_authenticated else None
         return cancel_booking(
-            booking=booking, actor=actor, reason=self.validated_data.get("reason", "")
+            booking=booking,
+            actor=actor,
+            reason=self.validated_data.get("reason", ""),
+            # A customer cancelling their own appointment is held to the deadline.
+            enforce_deadline=not is_team_request(request, booking.organization),
         )
 
 

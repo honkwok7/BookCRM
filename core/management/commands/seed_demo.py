@@ -1,8 +1,8 @@
 """Demo data for local development: ``python manage.py seed_demo``.
 
 Idempotent: safe to run repeatedly. Future appointments go through the real booking service
-(same validation as the API) with notifications off; a handful of *past* appointments are
-written directly because the booking service rightly refuses times in the past.
+(same validation as the API, so each lands on a free time) with notifications off; past
+appointments go through ``record_past_booking`` (the service refuses to book the past).
 
 Two organizations demonstrate tenant isolation, including one customer email that exists in
 both. Locations (Downtown / North York) arrive with M3.1.
@@ -17,13 +17,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from bookings.models import Booking, Customer
-from bookings.services import create_booking
+from bookings.services import create_booking, record_past_booking
 from crm.activity import Kind, booking_metadata, record_activity
 from crm.models import CustomerNote, Tag
 from crm.services import add_customer_tag, create_customer, create_note, create_tag
 from locations.models import Location
 from locations.services import create_location, ensure_default_location, set_location_hours
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
+from scheduling.availability import AvailabilityService
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
 from services.services import create_category, create_service
@@ -363,9 +364,24 @@ class Command(BaseCommand):
                 day += timedelta(days=1)
             return datetime.combine(day, time(hour), tzinfo=tz)
 
-        # Upcoming: through the booking service (validation, history, audit; no emails).
+        # Upcoming: through the booking service (validation, history, audit; no emails). Each
+        # appointment takes the provider's first free time from its preferred day and hour.
         for index, customer in enumerate(customers):
             service, provider = services[index % len(services)]
+            preferred = weekday_at(1 + index // 2, 10 + 2 * (index % 3))
+            engine = AvailabilityService(organization, service)
+            slot = next(
+                (
+                    slot
+                    for slot in engine.get_available_slots(
+                        preferred.date(), preferred.date() + timedelta(days=14), staff=provider
+                    )
+                    if slot.start >= preferred
+                ),
+                None,
+            )
+            if slot is None:
+                continue
             create_booking(
                 organization=organization,
                 service=service,
@@ -373,12 +389,14 @@ class Command(BaseCommand):
                 customer_name=customer.name,
                 customer_email=customer.email,
                 customer_phone=customer.phone,
-                start_datetime=weekday_at(1 + index // 2, 10 + 2 * (index % 3)),
+                start_datetime=slot.start,
                 customer_timezone=organization.timezone,
+                source=Booking.Source.RECEPTION,
+                customer=customer,
                 notify=False,
             )
 
-        # History: written directly (the service refuses past times) with final statuses.
+        # History: past appointments with final statuses.
         outcomes = [Booking.Status.COMPLETED, Booking.Status.COMPLETED, Booking.Status.NO_SHOW]
         outcomes += [Booking.Status.CANCELLED]
         for index, customer in enumerate(customers):
@@ -386,22 +404,14 @@ class Command(BaseCommand):
             start = weekday_at(-14 + index, 11) if index < 14 else weekday_at(-3, 11)
             if start >= timezone.now():
                 continue
-            booking = Booking.objects.create(
-                reference=f"SCH-{start.year}-{9000 + index:06d}-{organization.slug[:3]}"[:20],
+            booking = record_past_booking(
                 organization=organization,
-                customer=customer,
-                customer_name=customer.name,
-                customer_email=customer.email,
-                customer_phone=customer.phone,
                 service=service,
-                staff=provider,
+                staff_profile=provider,
+                customer=customer,
                 start_datetime=start,
-                end_datetime=start + timedelta(minutes=service.duration_minutes),
-                organization_timezone=organization.timezone,
-                customer_timezone=organization.timezone,
-                price_snapshot=service.price,
-                duration_snapshot_minutes=service.duration_minutes,
                 status=outcomes[index % len(outcomes)],
+                reference=f"SCH-{start.year}-{9000 + index:06d}-{organization.slug[:3]}"[:20],
             )
             # Timeline entries the booking service would have written at the time.
             record_activity(
