@@ -9,15 +9,30 @@ from bookings.models import (
 )
 
 
+class ReadOnlyAdmin(admin.ModelAdmin):
+    """Inspection only: these records change through services (bookings.services,
+    crm.services), which enforce tenant consistency, locking, lifecycle rules and auditing.
+    Editing them here would bypass all of that."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
+class CustomerAdmin(ReadOnlyAdmin):
     list_display = ("name", "email", "phone", "organization", "status")
     list_filter = ("organization", "status")
     search_fields = ("name", "preferred_name", "email", "phone")
 
 
 @admin.register(Booking)
-class BookingAdmin(admin.ModelAdmin):
+class BookingAdmin(ReadOnlyAdmin):
     list_display = (
         "reference",
         "organization",
@@ -29,29 +44,18 @@ class BookingAdmin(admin.ModelAdmin):
     )
     list_filter = ("organization", "status", "payment_status")
     search_fields = ("reference", "customer_name", "customer_email")
-    readonly_fields = ("reference", "public_uuid", "created_at", "updated_at")
-    autocomplete_fields = (
-        "organization",
-        "customer",
-        "service",
-        "staff",
-        "cancelled_by",
-        "rescheduled_from",
-    )
 
 
 @admin.register(BookingStatusHistory)
-class BookingStatusHistoryAdmin(admin.ModelAdmin):
+class BookingStatusHistoryAdmin(ReadOnlyAdmin):
     list_display = ("booking", "old_status", "new_status", "changed_by", "created_at")
     list_filter = ("new_status",)
-    autocomplete_fields = ("booking", "changed_by")
 
 
 @admin.register(BookingActivityLog)
-class BookingActivityLogAdmin(admin.ModelAdmin):
+class BookingActivityLogAdmin(ReadOnlyAdmin):
     list_display = ("booking", "organization", "actor", "action", "created_at")
     list_filter = ("organization", "action")
-    autocomplete_fields = ("booking", "organization", "actor")
 
 
 @admin.register(WaitlistEntry)

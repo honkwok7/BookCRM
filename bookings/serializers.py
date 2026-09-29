@@ -25,6 +25,7 @@ class CustomerSerializer(TenantScopedModelSerializer):
     """Team view of a CRM customer. Writes go through ``crm.services`` (checks + audit)."""
 
     display_name = serializers.CharField(read_only=True)
+    last_visit = serializers.SerializerMethodField()
     tags = TagSummarySerializer(source="tag_set", many=True, read_only=True)
     # Setting tag_ids replaces the customer's tags (each change audited); tenant-scoped ids.
     tag_ids = TenantPrimaryKeyRelatedField(
@@ -39,6 +40,7 @@ class CustomerSerializer(TenantScopedModelSerializer):
             "user",
             "status",
             "display_name",
+            "last_visit",
             "name",
             "first_name",
             "last_name",
@@ -65,7 +67,6 @@ class CustomerSerializer(TenantScopedModelSerializer):
             "consent_updated_at",
             "source",
             "alerts",
-            "notes",
             "tags",
             "tag_ids",
             "created_by",
@@ -100,6 +101,12 @@ class CustomerSerializer(TenantScopedModelSerializer):
         if value == Customer.Status.ANONYMIZED:
             raise serializers.ValidationError("Customers are anonymized with a separate action.")
         return value
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_last_visit(self, customer):
+        # Annotated by the customer list (latest completed appointment); None elsewhere.
+        value = getattr(customer, "last_visit", None)
+        return serializers.DateTimeField().to_representation(value) if value else None
 
     @staticmethod
     def _split_full_name(validated_data):

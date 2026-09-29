@@ -3,12 +3,17 @@ from datetime import timedelta
 
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 from core.models import BaseUUIDModel
 
 
 class CustomUserManager(UserManager):
+    def get_by_natural_key(self, username):
+        # Login by email ignores case ("Sam@X.test" signs in the account "sam@x.test").
+        return self.get(email__iexact=username)
+
     def _create_user(self, email, password, **extra_fields):
         if not email:
             raise ValueError("Email must be provided")
@@ -46,6 +51,11 @@ class User(AbstractUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.UniqueConstraint(Lower("email"), name="user_email_unique_ignoring_case")
+        ]
+
     objects = CustomUserManager()
 
     @staticmethod
@@ -54,6 +64,8 @@ class User(AbstractUser):
         return f"{(email or 'user').split('@')[0][:120]}-{secrets.token_hex(3)}"
 
     def save(self, *args, **kwargs):
+        # One mailbox, one account: emails are stored lower-case (see Meta.constraints).
+        self.email = (self.email or "").strip().lower()
         if not self.username:
             self.username = self.generate_username(self.email)
         super().save(*args, **kwargs)

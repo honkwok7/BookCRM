@@ -178,9 +178,9 @@ class ServiceTests(TestCase):
 class MergeTests(TestCase):
     def setUp(self):
         self.organization = f.OrganizationFactory()
-        self.target = f.CustomerFactory(organization=self.organization, city="", notes="A")
+        self.target = f.CustomerFactory(organization=self.organization, city="")
         self.duplicate = f.CustomerFactory(
-            organization=self.organization, city="Toronto", notes="B", marketing_consent=True
+            organization=self.organization, city="Toronto", marketing_consent=True
         )
         self.booking = f.BookingFactory(organization=self.organization, customer=self.duplicate)
 
@@ -190,7 +190,8 @@ class MergeTests(TestCase):
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.customer, merged)
         self.assertEqual(merged.city, "Toronto")
-        self.assertEqual(merged.notes, "A\n\nB")
+        # Notes are CustomerNote rows since review fix F1; merging moves them
+        # (crm/test_notes_activity.py).
         self.assertFalse(merged.marketing_consent)  # consent is never copied
         entry = AuditLog.objects.get(action="customer.merged")
         self.assertEqual(entry.metadata["appointments_moved"], 1)

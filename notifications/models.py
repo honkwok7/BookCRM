@@ -10,6 +10,7 @@ class NotificationLog(BaseUUIDModel):
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
+        SENDING = "sending", "Sending"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
 

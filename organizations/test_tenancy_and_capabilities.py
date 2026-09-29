@@ -245,7 +245,13 @@ class RoleEndpointMatrixTests(TwoTenantMixin, APITestCase):
         (
             "get",
             "/api/v1/customers/",
-            {"manager": 200, "receptionist": 200, "staff": 403, "customer": 403},
+            # Staff (providers) may list, scoped to their own customers (M2.4).
+            {"manager": 200, "receptionist": 200, "staff": 200, "customer": 403},
+        ),
+        (
+            "post",
+            "/api/v1/customers/",
+            {"receptionist": 400, "staff": 403, "customer": 403},  # 400: empty payload
         ),
         ("get", "/api/v1/waitlist/", {"receptionist": 200, "staff": 403, "customer": 403}),
         (

@@ -153,17 +153,34 @@ class TenantIsolationSuite(TestCase):
             self.assert_unchanged(obj, before)
 
     def test_custom_actions_on_other_tenant_object_fail(self):
+        """Every extra action, with every HTTP method it actually declares, is exercised."""
+        exercised = 0
         for prefix, viewset, basename in api_resources():
             obj = self.b_objects[basename]
             before = self.db_state(obj)
             for extra in viewset.get_extra_actions():
-                if not extra.detail:
-                    continue
-                url = f"/api/v1/{prefix}/{obj.pk}/{extra.url_path}/"
-                with self.subTest(resource=basename, action=extra.url_path):
-                    response = self.client.post(url, {"status": "completed"}, format="json")
-                    self.assertIn(response.status_code, NOT_ALLOWED)
+                for method in extra.mapping:
+                    if extra.detail:
+                        # B's object through A's session: must look like it doesn't exist.
+                        url = f"/api/v1/{prefix}/{obj.pk}/{extra.url_path}/"
+                        # No payload on GET: it would become (validated) filter parameters.
+                        payload = (
+                            None if method == "get" else {"status": "completed", "confirm": True}
+                        )
+                        with self.subTest(resource=basename, action=extra.url_path, m=method):
+                            response = getattr(self.client, method)(url, payload, format="json")
+                            self.assertIn(response.status_code, {403, 404})
+                    else:
+                        # Collection actions (e.g. search): never any of B's data.
+                        url = f"/api/v1/{prefix}/{extra.url_path}/"
+                        with self.subTest(resource=basename, action=extra.url_path, m=method):
+                            response = getattr(self.client, method)(
+                                url, {"q": SECRET, "search": SECRET}
+                            )
+                            self.assertNotIn(SECRET, response.content.decode())
+                    exercised += 1
             self.assert_unchanged(obj, before)
+        self.assertGreater(exercised, 0)
 
     def test_other_tenant_objects_survive_the_attack(self):
         self.test_update_and_delete_other_tenant_object_fail()
@@ -208,6 +225,38 @@ class TenantIsolationSuite(TestCase):
             with_b.json()["staff"][0].replace(str(b_staff.pk), "ID"),
             with_missing.json()["staff"][0].replace(str(missing), "ID"),
         )
+
+    def test_search_never_returns_other_tenant_data(self):
+        # B's booking reference and customer name are searchable text too.
+        b_booking = self.b_objects["booking"]
+        for query in (SECRET, b_booking.reference):
+            with self.subTest(endpoint="global", query=query):
+                response = self.client.get("/api/v1/search/", {"q": query})
+                self.assertEqual(response.status_code, 200)
+                results = response.json()["results"]
+                self.assertTrue(all(rows == [] for rows in results.values()), results)
+            with self.subTest(endpoint="customers", query=query):
+                response = self.client.get("/api/v1/customers/search/", {"q": query})
+                self.assertEqual(response.json(), [])
+        for url in ("/api/v1/search/", "/api/v1/customers/search/"):
+            with self.subTest(url=url, check="header"):
+                response = self.client.get(
+                    url, {"q": SECRET}, HTTP_X_ORGANIZATION_SLUG=self.org_b.slug
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_other_tenant_customer_detail_actions_are_404(self):
+        b_customer = self.b_objects["customer"]
+        for path in ("timeline", "notes", "appointments"):
+            with self.subTest(action=path):
+                response = self.client.get(f"/api/v1/customers/{b_customer.pk}/{path}/")
+                self.assertEqual(response.status_code, 404)
+        own = f.CustomerFactory(organization=self.org_a)
+        response = self.client.post(
+            f"/api/v1/customers/{own.pk}/merge/", {"duplicate": str(b_customer.pk)}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Customer.objects.filter(pk=b_customer.pk).exists())
 
     def test_other_tenant_customer_timeline_is_404(self):
         b_customer = self.b_objects["customer"]

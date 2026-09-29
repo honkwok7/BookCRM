@@ -52,10 +52,11 @@ PII_FIELDS = (
 )
 
 # Fields callers may set through create_customer/update_customer. Tags are assigned with the
-# tag functions below; the legacy ``tags`` JSON is read-only.
+# tag functions below; the legacy ``tags`` JSON and ``notes`` text are read-only (notes live in
+# CustomerNote, where customers.notes.private applies).
 EDITABLE_FIELDS = frozenset(
     {
-        *(field for field in PII_FIELDS if field not in ("name", "tags")),
+        *(field for field in PII_FIELDS if field not in ("name", "tags", "notes")),
         *CONSENT_FIELDS,
         "status",
         "preferred_language",
@@ -240,12 +241,10 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         )
 
     before = snapshot(target)
-    for field in EDITABLE_FIELDS - set(CONSENT_FIELDS) - {"status", "notes"}:
+    for field in EDITABLE_FIELDS - set(CONSENT_FIELDS) - {"status"}:
         if not getattr(target, field) and getattr(duplicate, field):
             setattr(target, field, getattr(duplicate, field))
     target.user_id = target.user_id or duplicate.user_id
-    if duplicate.notes:
-        target.notes = "\n\n".join(filter(None, [target.notes, duplicate.notes]))
     target_tags = set(target.customer_tags.values_list("tag_id", flat=True))
     duplicate.customer_tags.exclude(tag_id__in=target_tags).update(customer=target)
 
@@ -318,7 +317,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
         activity.metadata.pop("reason")
         activity.save(update_fields=["metadata"])
     NotificationLog.objects.filter(related_booking__in=bookings).update(
-        recipient_email="", recipient=None
+        recipient_email="", recipient=None, failure_reason=""
     )
     if old_email:
         WaitlistEntry.objects.filter(

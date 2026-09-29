@@ -7,15 +7,18 @@ claimed; that would need a separate formal review.
 
 | Control | Status | Where |
 |---|---|---|
-| Email-first custom user; password validators on registration and reset; emails unique ignoring case | ✅ | `accounts/serializers.py`, `AUTH_PASSWORD_VALIDATORS` |
-| Password reset signs the user out everywhere (refresh tokens blacklisted) | ✅ | `accounts/services.py` |
-| Account emails via Celery after commit; links built from `SITE_URL`, never the Host header | ✅ | `accounts/tasks.py` |
+| Email-first custom user; password validators on registration and reset | ✅ | `accounts/serializers.py`, `AUTH_PASSWORD_VALIDATORS` |
+| One account per mailbox: emails stored lower-case, unique index on `LOWER(email)`, login ignores case | ✅ | `accounts/models.py`, migration `accounts/0005` |
+| Password reset signs the user out everywhere: refresh tokens are blacklisted, and access tokens carry a password fingerprint (`CHECK_REVOKE_TOKEN`) so they stop working at once | ✅ | `accounts/services.py`, `SIMPLE_JWT` |
+| Account and invitation emails via Celery after commit; links built from `SITE_URL`, never the Host header | ✅ | `accounts/tasks.py`, `organizations/tasks.py` |
+| Invitations never change an existing member's role, and each is used once (row lock) | ✅ | `organizations/services.py` |
+| Django admin shows bookings and customers read-only: changes go through the services (tenant checks, locking, audit) | ✅ | `bookings/admin.py` |
 | JWT rotation + blacklist | ✅ | `SIMPLE_JWT` |
 | Tenant isolation: membership-backed tenant resolution, no superuser bypass | ✅ | `organizations/tenancy.py`, [MULTI_TENANCY.md](MULTI_TENANCY.md) |
 | Capability-based authorization on every tenant endpoint | ✅ | `organizations/permissions.py`, [PERMISSIONS.md](PERMISSIONS.md) |
 | One authorization model (memberships + capabilities); the legacy global `User.role` is removed | ✅ | M1.6 |
 | Relation fields limited to the tenant's own rows; no `fields="__all__"` | ✅ | `core/api.py`, `core/test_api_contract.py` |
-| Appointment changes only through the booking service | ✅ | `bookings/services.py` |
+| Appointment changes only through the booking service, which itself refuses another organization's service, staff or customer | ✅ | `bookings/services.py` |
 | Audit logging of important actions (append-only, scrubbed) | ✅ | `core/audit.py`, see below |
 | Environment-based config; refuses the default `SECRET_KEY` when `DEBUG` is off | ✅ | `config/settings.py` |
 | CSRF, clickjacking (`DENY`), `nosniff`, auto-escaping templates | ✅ | Django defaults and settings |

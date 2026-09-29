@@ -1,6 +1,7 @@
 # M2.2: copy the legacy Customer.tags JSON strings into crm.Tag / crm.CustomerTag.
 # One Tag per distinct slug per organization; the first spelling seen becomes its name.
-# The JSON field is left untouched (read-only until M11.3). Reversing removes all tags.
+# The JSON field is left untouched (read-only until M11.3). Reversing is a no-op: tags
+# created after the backfill are indistinguishable and must never be deleted.
 
 from django.db import migrations
 from django.utils.text import slugify
@@ -25,11 +26,6 @@ def backfill(apps, schema_editor):
             )
 
 
-def remove_all(apps, schema_editor):
-    apps.get_model("crm", "CustomerTag").objects.all().delete()
-    apps.get_model("crm", "Tag").objects.all().delete()
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("crm", "0001_initial"),
@@ -37,5 +33,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(backfill, remove_all),
+        migrations.RunPython(backfill, migrations.RunPython.noop),
     ]

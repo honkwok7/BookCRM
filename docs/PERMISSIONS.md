@@ -38,6 +38,7 @@ Rules that sit outside the matrix:
 | `customers.view` | ✅ | ✅ | ✅ | – | – | View customer records |
 | `customers.manage` | ✅ | ✅ | ✅ | – | – | Create and edit customer records |
 | `customers.notes.private` | ✅ | ✅ | – | – | – | Read and write internal customer notes |
+| `customers.erase` | ✅ | ✅ | – | – | – | Delete or anonymize customer records (irreversible) |
 | `waitlist.manage` | ✅ | ✅ | ✅ | – | – | View and manage the waitlist |
 | `reports.view` | ✅ | ✅ | – | – | – | View dashboards and reports |
 | `communications.manage` | ✅ | – | – | – | – | Edit notification templates and reminders |

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -10,6 +10,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from accounts.services import queue_verification_email
 
 User = get_user_model()
+DUPLICATE_EMAIL = "A user with this email already exists."
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -31,9 +32,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
     def validate_email(self, email):
-        # Unique regardless of case: "Sam@x.test" and "sam@x.test" are one mailbox.
+        # Unique regardless of case: "Sam@x.test" and "sam@x.test" are one mailbox. The
+        # database constraint (user_email_unique_ignoring_case) settles concurrent requests.
+        email = email.strip().lower()
         if User.objects.filter(email__iexact=email).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
+            raise serializers.ValidationError(DUPLICATE_EMAIL)
         return email
 
     def validate(self, attrs):
@@ -55,7 +58,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop("accept_terms")
         validated_data.pop("accept_privacy")
         password = validated_data.pop("password")
-        user = User.objects.create_user(password=password, **validated_data)
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(password=password, **validated_data)
+        except IntegrityError as error:  # lost a race with a concurrent registration
+            raise serializers.ValidationError({"email": [DUPLICATE_EMAIL]}) from error
         now = timezone.now()
         user.terms_accepted_at = now
         user.privacy_accepted_at = now

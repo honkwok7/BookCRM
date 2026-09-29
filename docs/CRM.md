@@ -71,17 +71,23 @@ API:
 
 | Visibility | Who can read it | Who can write it |
 |---|---|---|
-| `internal` (the default) | Team members with `customers.notes.private` (owner and manager by default; it can be granted to others) | The same |
-| `customer_visible` | Anyone with `customers.view`, and the customer themselves (portal, M5) | Anyone with `customers.manage` |
+| `internal` (the default) | Team members with `customers.notes.private` (owner and manager by default; it can be granted to others), and the note's author | The same, plus providers (their own notes) |
+| `customer_visible` | Anyone who can see the customer, and the customer themselves (portal, M5) | Anyone with `customers.manage`, plus providers on their own customers |
 
-- **Enforcement:** visibility is enforced in the selectors (`team_notes`,
-  `notes_for_customer`). Without the capability, an internal note answers 404, as if it
-  didn't exist.
+- **Enforcement:** visibility is enforced in the selectors (`notes_visible_to`,
+  `notes_for_customer`). A note the caller may not read answers 404, as if it didn't exist.
+- **Providers** (staff role) read and write notes only on their own customers (see "Who
+  sees which customers"). They read customer-visible notes and the notes they wrote
+  themselves.
 - **Editing and deleting:** allowed for the author, or anyone holding
   `customers.notes.private`. Changing the text sets `edited_at`. The audit log records that
   the content changed, never the text itself.
 - **Anonymized and merged customers:** anonymization deletes a customer's notes, and merging
   moves the duplicate's notes to the kept record.
+- **The old `Customer.notes` text** was readable by anyone who could see the customer.
+  Migration `crm/0005` moved it into internal notes, and the API no longer exposes or
+  accepts it (the column is removed in M11.3). `alerts`, the short front-desk warning such
+  as "uses a wheelchair", stays visible to everyone who can see the customer, on purpose.
 
 API: `/api/v1/customer-notes/`, filterable with `?customer=`, `?visibility=`,
 `?note_type=` and `?pinned=`.
@@ -110,20 +116,68 @@ API: `GET /api/v1/customers/{id}/timeline/` returns entries newest first, pagina
 
 ## Reads (`crm/selectors.py`)
 
+- `customers_visible_to(request)`, `notes_visible_to(request)`: the access rules below.
+- `search_filter(customers, query)`: phone-aware search (see "Search").
 - `get_customer_for_org(organization, id)`
 - `list_tags(organization)`: tags with their customer counts.
 - `team_notes(organization, include_internal=, customer=)`, `notes_for_customer(customer)`.
 - `customer_timeline(customer, include_internal=)`.
-- `list_customers(organization, search=, status=, tag=, include_anonymized=)`: every search word
-  must match a first name, last name, preferred name, email or phone.
+- `list_customers(organization, search=, status=, tag=, include_anonymized=)`.
 - `customer_stats(customer)`: computed from appointments on every call, not stored as
   counters. It returns total appointments, completed, cancelled, no-shows, upcoming, last
   visit, next appointment and lifetime value (the total of completed appointment prices).
   An appointment that was rescheduled counts once and is not counted as a cancellation.
 
-## API (`/api/v1/customers/`)
+## Who sees which customers
 
-Needs `customers.view` to read and `customers.manage` to write. Retrieving a single customer
-includes `stats`. You can filter with `?status=` and search with `?search=`. Clients may send a
-full `name` instead of `first_name`/`last_name`; it is split with the same rule. Merge and
-anonymize endpoints, and the full CRM search API, arrive in M2.4.
+| Caller | Customers | Can change them |
+|---|---|---|
+| `customers.view` (owner, manager, receptionist) | All of the organization | With `customers.manage` |
+| Provider (staff role) | Assigned to them, or with whom they have or had an appointment | No (read-only) |
+| Anyone else | None | No |
+
+Deleting and anonymizing need `customers.erase` (owner and manager). Both are irreversible.
+Merging needs `customers.manage`.
+
+## Search
+
+- **Phone numbers** match in any format: "(416) 555-0101", "416-555-0101", "+1 416 555
+  0101" and "5550101" all find "+14165550101". An 11-digit number starting with 1 also finds
+  the same number stored without the country code. Each customer stores a digits-only copy
+  of their phone numbers (`phone_search`) for this.
+- **Words:** every word must match a first, last or preferred name, or the email.
+- **Speed (PostgreSQL):** trigram indexes (migration `bookings/0007`, `pg_trgm`) keep this
+  fast. `python manage.py benchmark_customer_search` measured, at 50,000 customers:
+
+  | Query | p95 |
+  |---|---|
+  | Name words | 76–87 ms |
+  | Email fragment | 3 ms |
+  | Phone | 3 ms |
+
+## API
+
+`/api/v1/customers/`:
+
+- **Filters:** `?search=`, `?status=`, `?tag=`, `?assigned_staff=`, `?preferred_staff=`,
+  `?staff=` (assigned, preferred or ever booked with), `?last_visit_before=` /
+  `?last_visit_after=` (dates), and `?never_visited=true`. `?ordering=` accepts
+  `last_name`, `first_name`, `created_at` and `last_visit`.
+- **Fields:** each row includes `last_visit`, the latest completed appointment. Retrieving a
+  single customer adds `stats`.
+- **Name shortcut:** clients may send a full `name` instead of `first_name`/`last_name`; it
+  is split with the same rule.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /customers/search/?q=` | Quick lookup, at most 20 matches, excludes anonymized customers |
+| `GET /customers/{id}/timeline/` | History, newest first (paginated) |
+| `GET /customers/{id}/notes/` | Notes the caller may read, pinned first |
+| `GET /customers/{id}/appointments/` | Appointments the caller may see, newest first |
+| `POST /customers/{id}/merge/` `{"duplicate": id}` | Fold a duplicate into this customer |
+| `POST /customers/{id}/anonymize/` `{"confirm": true}` | Irreversible; needs `customers.erase` |
+
+`GET /api/v1/search/?q=&limit=5` (maximum 20 per section) searches the whole organization:
+customers, appointments (by reference or customer name), staff and services. Each section
+uses the same access rules as browsing. Staff and services appear only with `staff.view` /
+`services.view`.

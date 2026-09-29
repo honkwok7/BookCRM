@@ -96,6 +96,12 @@ def create_booking(
     details (used by reschedule). ``activity_kind``: the timeline entry to record, or None when
     the caller records its own.
     """
+    # Tenant consistency is the service's job, not only the API serializer's: any caller
+    # (web, admin action, integration, AI agent) gets the same refusal.
+    if service.organization_id != organization.pk or staff_profile.organization_id != (
+        organization.pk
+    ):
+        raise DomainError("Service or staff not found", code="not_found")
     if customer is not None and customer.organization_id != organization.pk:
         raise DomainError("Customer not found", code="not_found")
     if start_datetime <= timezone.now():

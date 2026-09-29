@@ -1,9 +1,12 @@
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from core.api import TenantScopedModelSerializer
+from bookings.models import Customer
+from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
 from crm.models import CustomerActivity, CustomerNote, Tag
+from crm.selectors import customers_visible_to
 from crm.services import create_note, create_tag, update_note, update_tag
+from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
 from organizations.tenancy import resolve_tenant
@@ -36,9 +39,13 @@ class TagSummarySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-def _can_use_internal_notes(request) -> bool:
+def _can_write_internal_notes(request) -> bool:
+    # Capability holders, and providers for their own notes (which only they and capability
+    # holders can then read; see crm.selectors.notes_visible_to).
     tenant = resolve_tenant(request)
-    return tenant is not None and tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE)
+    return tenant is not None and (
+        tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE) or tenant.role == OrganizationRole.STAFF
+    )
 
 
 class CustomerNoteSerializer(TenantScopedModelSerializer):
@@ -69,10 +76,15 @@ class CustomerNoteSerializer(TenantScopedModelSerializer):
     def validate_customer(self, customer):
         if self.instance is not None and customer != self.instance.customer:
             raise serializers.ValidationError("A note cannot be moved to another customer.")
+        if not customers_visible_to(self.context["request"]).filter(pk=customer.pk).exists():
+            # Same message as an unknown id: a provider can't probe other customers.
+            raise serializers.ValidationError(
+                f'Invalid pk "{customer.pk}" - object does not exist.'
+            )
         return customer
 
     def validate_visibility(self, visibility):
-        if visibility == CustomerNote.Visibility.INTERNAL and not _can_use_internal_notes(
+        if visibility == CustomerNote.Visibility.INTERNAL and not _can_write_internal_notes(
             self.context["request"]
         ):
             raise PermissionDenied("Internal notes need the customers.notes.private permission.")
@@ -115,3 +127,28 @@ class CustomerActivitySerializer(serializers.ModelSerializer):
     def get_actor_name(self, activity) -> str:
         actor = activity.actor
         return (actor.get_full_name() or actor.email) if actor else ""
+
+
+class CustomerMergeSerializer(serializers.Serializer):
+    # The duplicate is folded into the customer in the URL; tenant-scoped like every relation.
+    duplicate = TenantPrimaryKeyRelatedField(queryset=Customer.objects.all())
+
+
+class CustomerAnonymizeSerializer(serializers.Serializer):
+    confirm = serializers.BooleanField()
+
+    def validate_confirm(self, value):
+        if value is not True:
+            raise serializers.ValidationError(
+                "Anonymization is irreversible; send confirm=true to proceed."
+            )
+        return value
+
+
+class CustomerSearchResultSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Customer
+        fields = ("id", "display_name", "email", "phone", "status")
+        read_only_fields = fields
