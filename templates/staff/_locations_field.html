@@ -1,0 +1,12 @@
+<fieldset class="grid gap-2">
+  <legend class="mb-2 text-sm font-semibold text-slate-900">{{ field.label }}</legend>
+  {% if field.help_text %}<p class="-mt-1 text-sm text-slate-600">{{ field.help_text }}</p>{% endif %}
+  <div class="flex flex-wrap gap-x-5 gap-y-2">
+    {% for choice in field %}
+      <label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>
+    {% empty %}
+      <p class="text-sm text-slate-600">There are no active locations.</p>
+    {% endfor %}
+  </div>
+  {% if field.errors %}{% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}{% endif %}
+</fieldset>

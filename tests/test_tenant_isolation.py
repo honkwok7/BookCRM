@@ -35,6 +35,9 @@ B_OBJECT_FACTORIES = {
     "service": lambda org, mark: f.ServiceFactory(organization=org, name=f"{mark} massage"),
     "service-category": lambda org, mark: f.ServiceCategoryFactory(organization=org, name=mark),
     "staff": lambda org, mark: f.StaffProfileFactory(organization=org, job_title=mark),
+    "staff-offering": lambda org, mark: f.StaffServiceOfferingFactory(
+        organization=org, service__name=f"{mark} facial"
+    ),
     "location": lambda org, mark: f.LocationFactory(organization=org, name=f"{mark} studio"),
     "location-closure": lambda org, mark: f.LocationClosureFactory(organization=org, reason=mark),
     "availability-weekly": lambda org, mark: f.WeeklyAvailabilityFactory(organization=org),

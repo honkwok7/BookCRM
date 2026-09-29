@@ -14,12 +14,13 @@ from scheduling.views import (
     WeeklyAvailabilityViewSet,
 )
 from services.views import ServiceCategoryViewSet, ServiceViewSet
-from staff.views import StaffProfileViewSet
+from staff.views import StaffProfileViewSet, StaffServiceOfferingViewSet
 
 router = DefaultRouter()
 router.register("services", ServiceViewSet, basename="service")
 router.register("service-categories", ServiceCategoryViewSet, basename="service-category")
 router.register("staff", StaffProfileViewSet, basename="staff")
+router.register("staff-offerings", StaffServiceOfferingViewSet, basename="staff-offering")
 router.register("locations", LocationViewSet, basename="location")
 router.register("location-closures", LocationClosureViewSet, basename="location-closure")
 router.register("availability/weekly", WeeklyAvailabilityViewSet, basename="availability-weekly")

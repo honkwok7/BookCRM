@@ -1,0 +1,20 @@
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card lg:col-span-2" aria-labelledby="profile-heading">
+    <div class="card-header"><h2 id="profile-heading" class="card-title">Profile</h2></div>
+    <dl class="grid gap-x-6 gap-y-4 p-4 text-sm sm:grid-cols-2 sm:p-6">
+      <div><dt class="text-slate-600">Name shown to customers</dt><dd class="mt-0.5 font-medium">{{ staff.public_name }}</dd></div>
+      <div><dt class="text-slate-600">Full name</dt><dd class="mt-0.5">{{ staff.full_name }}</dd></div>
+      <div><dt class="text-slate-600">Job title</dt><dd class="mt-0.5">{{ staff.job_title|default:"—" }}</dd></div>
+      <div><dt class="text-slate-600">Provider type</dt><dd class="mt-0.5">{{ staff.provider_type|default:"—" }}</dd></div>
+      <div class="sm:col-span-2"><dt class="text-slate-600">Bio</dt><dd class="mt-0.5 whitespace-pre-line">{{ staff.bio|default:"—" }}</dd></div>
+    </dl>
+  </section>
+  <section class="card content-start" aria-labelledby="booking-heading">
+    <div class="card-header"><h2 id="booking-heading" class="card-title">Booking</h2></div>
+    <ul class="grid gap-2 p-4 text-sm sm:p-6">
+      <li class="flex justify-between gap-2"><span>Accepting new appointments</span>{% if staff.is_accepting_bookings %}{% include "components/badge.html" with label="Yes" level="success" %}{% else %}{% include "components/badge.html" with label="No" %}{% endif %}</li>
+      <li class="flex justify-between gap-2"><span>Bookable online</span>{% if staff.online_booking_visible %}{% include "components/badge.html" with label="Yes" level="success" %}{% else %}{% include "components/badge.html" with label="Team only" %}{% endif %}</li>
+      <li class="flex justify-between gap-2"><span>Most appointments a day</span><span class="font-medium">{{ staff.max_daily_appointments|default:"No limit" }}</span></li>
+    </ul>
+  </section>
+</div>

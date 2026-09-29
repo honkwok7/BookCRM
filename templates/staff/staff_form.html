@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% block title %}Edit {{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Edit {{ staff.public_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+{% include "staff/_form_shell.html" with title="Edit "|add:staff.public_name submit="Save changes" fields_template="staff/_profile_fields.html" %}
+{% endpartialdef %}
+</div>
+{% endblock %}

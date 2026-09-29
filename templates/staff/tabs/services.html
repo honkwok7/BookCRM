@@ -1,0 +1,28 @@
+<section class="card" aria-labelledby="services-heading">
+  <div class="card-header flex flex-wrap items-center justify-between gap-2">
+    <h2 id="services-heading" class="card-title">Services they offer</h2>
+    {% if can_manage %}<a href="{% url 'app-staff-services' staff.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-staff-services' staff.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit services</a>{% endif %}
+  </div>
+  {% if rows %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <caption class="sr-only">Services offered by {{ staff.public_name }}</caption>
+        <thead><tr><th scope="col">Service</th><th scope="col">Where</th><th scope="col">Duration</th><th scope="col">Price</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="font-medium">{{ row.service.name }}{% if not row.active %} {% include "components/badge.html" with label="Paused" %}{% endif %}</td>
+              <td class="text-slate-700">{% if row.where is None %}All their locations{% else %}{{ row.where|join:", " }}{% endif %}</td>
+              <td class="whitespace-nowrap text-slate-700">{{ row.duration }} min</td>
+              <td class="whitespace-nowrap text-slate-700">{{ row.price|floatformat:2 }} {{ row.service.currency }}{% if row.custom %} <span class="text-xs text-slate-600">(their own)</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif not location_count %}
+    {% include "components/empty_state.html" with title="No locations yet" message="Choose where this person works first; services are offered at their locations." icon="map-pin" %}
+  {% else %}
+    {% include "components/empty_state.html" with title="No services yet" message="Customers can only book this person for services they offer." icon="clipboard" %}
+  {% endif %}
+</section>

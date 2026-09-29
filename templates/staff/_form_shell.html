@@ -1,0 +1,19 @@
+{% comment %}
+The shared frame of a staff form: title (in the dialog), CSRF token, form errors and the
+Cancel/Save buttons. The page includes it with the fields as `fields_template`.
+  {% include "staff/_form_shell.html" with title="Edit profile" submit="Save changes" fields_template="staff/_profile_fields.html" %}
+{% endcomment %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{{ title }}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% include fields_template %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% if staff %}{% url 'app-staff-detail' staff.pk %}{% else %}{% url 'app-staff-list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{{ submit }}</button>
+  </div>
+</form>

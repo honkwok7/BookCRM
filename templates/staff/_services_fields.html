@@ -1,0 +1,38 @@
+{% if not form.locations %}
+  {% include "components/alert.html" with level="info" message="Choose where this person works first: services are offered at their locations." %}
+{% elif not form.services %}
+  {% include "components/alert.html" with level="info" message="There are no services yet." %}
+{% else %}
+  <p class="-mt-2 text-sm text-slate-600">
+    {% if form.locations|length > 1 %}Tick where they offer each service. Ticking every location also covers locations they're added to later.{% else %}Tick the services they offer.{% endif %}
+    Leave duration and price empty to use the service's own.
+  </p>
+  <div class="grid gap-3">
+    {% for row in form.rows %}
+      <fieldset class="grid gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-start">
+        <legend class="sr-only">{{ row.service.name }}</legend>
+        <div class="grid gap-1">
+          <span class="text-sm font-semibold text-slate-900">{{ row.service.name }}{% if not row.service.is_active %} <span class="font-normal text-slate-600">(inactive)</span>{% endif %}</span>
+          <span class="text-xs text-slate-600">{% if row.service.category %}{{ row.service.category.name }} · {% endif %}{{ row.service.duration_minutes }} min · {{ row.service.price|floatformat:2 }} {{ row.service.currency }}</span>
+          <div class="mt-1 flex flex-wrap gap-x-5 gap-y-2">
+            {% for box in row.boxes %}
+              <label class="flex items-center gap-2 text-sm">{{ box.field }}{% if form.locations|length > 1 %}{{ box.location.name }}{% else %}Offers it{% endif %}</label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:w-64">
+          <div class="form-field">
+            <label for="{{ row.duration.id_for_label }}" class="form-label text-xs">Their minutes<span class="sr-only"> for {{ row.service.name }}</span></label>
+            {{ row.duration }}
+            {% for error in row.duration.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+          </div>
+          <div class="form-field">
+            <label for="{{ row.price.id_for_label }}" class="form-label text-xs">Their price<span class="sr-only"> for {{ row.service.name }}</span></label>
+            {{ row.price }}
+            {% for error in row.price.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+      </fieldset>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -107,7 +107,11 @@ class SlotViewSet(viewsets.ViewSet):
                 id=service_id, organization=org, is_active=True, is_public=True, is_archived=False
             ).first()
             staff_profile = StaffProfile.objects.filter(
-                id=staff_id, organization=org, is_active=True, is_accepting_bookings=True
+                id=staff_id,
+                organization=org,
+                is_active=True,
+                is_accepting_bookings=True,
+                online_booking_visible=True,
             ).first()
         except ValueError, DjangoValidationError:
             return Response({"detail": "Invalid service, staff or date"}, status=400)

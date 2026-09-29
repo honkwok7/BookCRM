@@ -29,7 +29,7 @@ from scheduling.models import (
     WeeklyAvailability,
 )
 from services.models import Service, ServiceCategory
-from staff.models import StaffProfile
+from staff.models import StaffProfile, StaffServiceOffering
 
 DEFAULT_PASSWORD = "Password12345!"
 SAME_ORG = factory.SelfAttribute("..organization")
@@ -84,6 +84,17 @@ class StaffProfileFactory(factory.django.DjangoModelFactory):
     organization = factory.SubFactory(OrganizationFactory)
     user = factory.SubFactory(UserFactory)
     job_title = "Therapist"
+
+
+class StaffServiceOfferingFactory(factory.django.DjangoModelFactory):
+    """``staff`` offers ``service`` at all their locations."""
+
+    class Meta:
+        model = StaffServiceOffering
+
+    organization = factory.SubFactory(OrganizationFactory)
+    staff = factory.SubFactory(StaffProfileFactory, organization=SAME_ORG)
+    service = factory.SubFactory("tests.factories.ServiceFactory", organization=SAME_ORG)
 
 
 class ServiceCategoryFactory(factory.django.DjangoModelFactory):

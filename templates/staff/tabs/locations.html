@@ -1,0 +1,26 @@
+<section class="card" aria-labelledby="locations-heading">
+  <div class="card-header flex flex-wrap items-center justify-between gap-2">
+    <h2 id="locations-heading" class="card-title">Where they work</h2>
+    {% if can_manage %}<a href="{% url 'app-staff-locations' staff.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-staff-locations' staff.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit locations</a>{% endif %}
+  </div>
+  {% with locations=staff.locations.all %}
+    {% if locations %}
+      <ul class="divide-y divide-slate-100">
+        {% for location in locations %}
+          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-6">
+            <div>
+              <a class="font-medium" href="{% url 'app-location-detail' location.pk %}">{{ location.name }}</a>
+              <span class="block text-slate-700">{{ location.address_lines|join:", "|default:location.timezone }}</span>
+            </div>
+            <div class="flex gap-1">
+              {% if location.is_default %}{% include "components/badge.html" with label="Default" level="brand" %}{% endif %}
+              {% if not location.is_active %}{% include "components/badge.html" with label="Inactive" %}{% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% include "components/empty_state.html" with title="No locations" message="This person can't be booked anywhere until they work at a location." icon="map-pin" %}
+    {% endif %}
+  {% endwith %}
+</section>

@@ -1,0 +1,16 @@
+<section class="card" aria-labelledby="time-off-heading">
+  <div class="card-header"><h2 id="time-off-heading" class="card-title">Upcoming time off</h2></div>
+  {% if time_off %}
+    <ul class="divide-y divide-slate-100">
+      {% for entry in time_off %}
+        <li class="px-4 py-3 text-sm sm:px-6">
+          <span class="font-medium text-slate-900">{{ entry.start_datetime|date:"D j M Y, H:i" }} – {{ entry.end_datetime|date:"D j M Y, H:i" }}</span>
+          {% if entry.reason %}<span class="block text-slate-700">{{ entry.reason }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {% include "components/empty_state.html" with title="No upcoming time off" icon="calendar" %}
+  {% endif %}
+  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in {{ organization.timezone }}. Time off is added through the API for now.</p>
+</section>

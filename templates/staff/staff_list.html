@@ -1,0 +1,61 @@
+{% extends "layouts/app.html" %}
+{% block title %}Staff · {{ organization.name }}{% endblock %}
+{% block page_title %}Staff{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">The people customers book with: where they work and what they offer.</p>{% endblock %}
+{% block page_actions %}
+  {% if can_manage %}
+    <a href="{% url 'app-staff-new' %}" class="btn btn-primary" hx-get="{% url 'app-staff-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}Add staff member
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if can_manage and limit is not None %}
+  <p class="mb-4 text-sm text-slate-700">{{ active_count }} of {{ limit }} active staff member{{ limit|pluralize }} on your plan.</p>
+{% endif %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" query=query search_label="Search by name, email or job title" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Staff</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Locations</th><th scope="col">Services</th><th scope="col">Booking</th></tr></thead>
+          <tbody>
+            {% for staff in page_obj %}
+              <tr>
+                <td class="font-medium">
+                  <a href="{% url 'app-staff-detail' staff.pk %}">{{ staff.public_name }}</a>
+                  <span class="block text-xs font-normal text-slate-600">{% if staff.public_name != staff.full_name %}{{ staff.full_name }}{% if staff.job_title %} · {% endif %}{% endif %}{{ staff.job_title }}</span>
+                </td>
+                <td class="text-slate-700">{% for location in staff.locations.all %}<span class="block">{{ location.name }}</span>{% empty %}<span class="text-slate-600">None</span>{% endfor %}</td>
+                <td class="text-slate-700">{{ staff.service_count }}</td>
+                <td>
+                  <div class="flex flex-wrap gap-1">
+                    {% if not staff.is_active %}{% include "components/badge.html" with label="Inactive" %}
+                    {% elif not staff.is_accepting_bookings %}{% include "components/badge.html" with label="Not taking appointments" level="warning" %}
+                    {% elif staff.online_booking_visible %}{% include "components/badge.html" with label="Bookable online" level="success" %}
+                    {% else %}{% include "components/badge.html" with label="Team bookings only" %}{% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No matching staff" message="Try another name or filter." icon="search" %}
+    {% elif can_manage %}
+      {% url 'app-staff-new' as new_url %}
+      {% include "components/empty_state.html" with title="No staff yet" message="Add the team members customers can book with." icon="user" action_url=new_url action_label="Add a staff member" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="No staff yet" icon="user" %}
+    {% endif %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

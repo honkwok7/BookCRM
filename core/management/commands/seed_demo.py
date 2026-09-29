@@ -27,6 +27,7 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
 from staff.models import StaffProfile
+from staff.services import add_offering, create_staff_profile
 from subscriptions.models import Plan, Subscription
 
 User = get_user_model()
@@ -41,6 +42,7 @@ ORGANIZATIONS = [
         "currency": "CAD",
         "email": "hello@harmony.local",
         "plan": "professional",
+        "staff_locations": {"massage@harmony.local": ["Main", "Downtown"]},
         "locations": [
             (
                 "Downtown",
@@ -223,9 +225,18 @@ class Command(BaseCommand):
                 organization=organization, user=user, defaults={"role": role}
             )
             if role == OrganizationRole.STAFF:
-                profile, _ = StaffProfile.objects.get_or_create(
-                    organization=organization, user=user, defaults={"job_title": job_title}
-                )
+                profile = StaffProfile.objects.filter(organization=organization, user=user).first()
+                if profile is None:
+                    names = spec.get("staff_locations", {}).get(email, ["Main"])
+                    profile = create_staff_profile(
+                        organization=organization,
+                        user=user,
+                        job_title=job_title,
+                        provider_type=job_title,
+                        locations=Location.objects.filter(
+                            organization=organization, name__in=names
+                        ),
+                    )
                 staff_by_email[email] = profile
                 for day in range(5):  # Monday-Friday, 09:00-17:00 local time
                     WeeklyAvailability.objects.get_or_create(
@@ -256,7 +267,9 @@ class Command(BaseCommand):
                         "buffer_after_minutes": 10,
                     },
                 )
-                service.assigned_staff_members.add(staff_by_email[provider_email])
+                provider = staff_by_email[provider_email]
+                if not provider.offerings.filter(service=service).exists():
+                    add_offering(staff=provider, service=service)  # at all their locations
                 services.append((service, staff_by_email[provider_email]))
 
         customers = []
