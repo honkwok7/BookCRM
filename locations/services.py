@@ -363,7 +363,8 @@ def update_closure(*, closure: LocationClosure, actor=None, **changes) -> Locati
         setattr(closure, name, value)
     _clean_closure(closure)
     closure.save()
-    diff = diff_snapshots(before, snapshot(closure))
+    # The reason is free text that may name people ("Dr Smith's leave"): changed, not values.
+    diff = diff_snapshots(before, snapshot(closure), redact_fields=("reason",))
     if diff:
         record_audit(
             AuditAction.LOCATION_CLOSURE_UPDATED,

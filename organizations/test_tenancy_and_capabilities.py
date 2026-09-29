@@ -31,7 +31,7 @@ from organizations.tenancy import (
 )
 from scheduling.models import WeeklyAvailability
 from services.models import Service
-from staff.models import StaffProfile
+from staff.models import StaffProfile, StaffServiceOffering
 
 User = get_user_model()
 
@@ -454,6 +454,9 @@ class PublicSlotTests(APITestCase):
         )
         self.service = Service.objects.create(
             organization=self.org, name="Facial", slug="facial", price=80, duration_minutes=60
+        )
+        StaffServiceOffering.objects.create(
+            organization=self.org, staff=self.staff, service=self.service
         )
         self.day = date.today() + timedelta(days=7)
         WeeklyAvailability.objects.create(

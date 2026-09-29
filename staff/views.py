@@ -45,12 +45,6 @@ class StaffProfileViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             return StaffProfile.objects.none()
         return staff_for(organization).select_related("organization").distinct()
 
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
     def perform_destroy(self, instance):
         delete_staff_profile(staff=instance, actor=self.request.user)
 
@@ -84,12 +78,6 @@ class StaffServiceOfferingViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSe
         return StaffServiceOffering.objects.filter(organization=organization).select_related(
             "service", "staff", "location"
         )
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
 
     def perform_destroy(self, instance):
         remove_offering(offering=instance, actor=self.request.user)

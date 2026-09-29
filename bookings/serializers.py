@@ -19,6 +19,7 @@ from organizations.tenancy import (
     requested_organization_slug,
     resolve_tenant,
 )
+from staff.selectors import provides
 
 
 class CustomerSerializer(TenantScopedModelSerializer):
@@ -254,6 +255,12 @@ class BookingCreateSerializer(serializers.Serializer):
         )
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
+        # Self-service bookings must use a provider who offers the service. The team is held
+        # to the same rule by the booking service from M4.1.
+        if not is_team and not provides(staff_profile, service, public=True):
+            raise serializers.ValidationError(
+                {"staff": "This staff member doesn't offer the selected service."}
+            )
 
         return create_booking(
             organization=organization,

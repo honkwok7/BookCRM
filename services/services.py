@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.utils.text import slugify
 
@@ -20,6 +20,7 @@ from crm.models import HEX_COLOR
 from locations.models import Location
 from organizations.models import Organization
 from services.models import Service, ServiceCategory
+from staff.services import sync_service_mirrors
 
 SERVICE_FIELDS = frozenset(
     {
@@ -147,6 +148,9 @@ def update_service(*, service: Service, actor=None, locations=None, **changes) -
     diff = diff_snapshots(before, snapshot(service))
     if diff:
         _audit(AuditAction.SERVICE_UPDATED, service, actor, changes=diff)
+    if {"required_provider_type", "locations"} & set(diff):
+        # Providers who no longer fit drop out of the assigned-staff mirror.
+        sync_service_mirrors([service.pk])
     return service
 
 
@@ -181,13 +185,25 @@ def _check_category(category: ServiceCategory) -> None:
         raise ConflictError("A category with this name already exists", code="duplicate")
 
 
+def _save_category(category: ServiceCategory) -> None:
+    """Save; a unique-constraint race (without the lock) is a 409, never a 500."""
+    try:
+        with transaction.atomic():
+            category.save()
+    except IntegrityError as error:
+        raise ConflictError("A category with this name already exists", code="duplicate") from error
+
+
 @transaction.atomic
 def create_category(*, organization, actor=None, **fields) -> ServiceCategory:
     _check_fields(fields, CATEGORY_FIELDS)
+    # Serialize category writes per organization: the name and slug checks below are
+    # check-then-insert.
+    organization = Organization.objects.select_for_update().get(pk=organization.pk)
     category = ServiceCategory(organization=organization, **fields)
     _check_category(category)
     category.slug = _unique_slug(ServiceCategory, organization, category.name)
-    category.save()
+    _save_category(category)
     _audit(AuditAction.SERVICE_CATEGORY_CREATED, category, actor, metadata={"name": category.name})
     return category
 
@@ -195,12 +211,13 @@ def create_category(*, organization, actor=None, **fields) -> ServiceCategory:
 @transaction.atomic
 def update_category(*, category: ServiceCategory, actor=None, **changes) -> ServiceCategory:
     _check_fields(changes, CATEGORY_FIELDS)
+    Organization.objects.select_for_update().get(pk=category.organization_id)
     category = ServiceCategory.objects.select_for_update().get(pk=category.pk)
     before = snapshot(category)
     for name, value in changes.items():
         setattr(category, name, value)
     _check_category(category)
-    category.save()
+    _save_category(category)
     diff = diff_snapshots(before, snapshot(category))
     if diff:
         _audit(AuditAction.SERVICE_CATEGORY_UPDATED, category, actor, changes=diff)

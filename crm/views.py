@@ -155,12 +155,6 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         customer = anonymize_customer(customer=customer, actor=request.user)
         return Response(CustomerDetailSerializer(customer, context={"request": request}).data)
 
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
 
 class TagViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     """Organization-defined customer tags. Writes go through crm.services (audited there)."""
@@ -181,12 +175,6 @@ class TagViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             )
         )
         return scope_queryset_by_organization(queryset, self.request)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
 
     def perform_destroy(self, instance):
         delete_tag(tag=instance, actor=self.request.user)

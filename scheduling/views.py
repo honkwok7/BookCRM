@@ -25,6 +25,7 @@ from scheduling.serializers import (
 from scheduling.services import generate_slots
 from services.models import Service
 from staff.models import StaffProfile
+from staff.selectors import provides
 
 SCHEDULE_PERMISSION = HasCapability(read="staff.view", write="staff.manage")
 
@@ -115,7 +116,12 @@ class SlotViewSet(viewsets.ViewSet):
             ).first()
         except ValueError, DjangoValidationError:
             return Response({"detail": "Invalid service, staff or date"}, status=400)
-        if service is None or staff_profile is None:
+        if (
+            service is None
+            or staff_profile is None
+            or not provides(staff_profile, service, public=True)
+        ):
+            # A pair where the provider doesn't offer the service answers like a missing one.
             return Response({"detail": "Service or staff not found"}, status=404)
 
         slots = generate_slots(

@@ -57,12 +57,6 @@ class LocationViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             return LocationHoursReplaceSerializer
         return LocationSerializer
 
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
     def perform_destroy(self, instance):
         delete_location(location=instance, actor=self.request.user)
 
@@ -118,12 +112,6 @@ class LocationClosureViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         if organization is None:
             return LocationClosure.objects.none()
         return closures_for(organization)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
 
     def perform_destroy(self, instance):
         delete_closure(closure=instance, actor=self.request.user)

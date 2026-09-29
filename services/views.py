@@ -34,12 +34,6 @@ class ServiceCategoryViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
         queryset = ServiceCategory.objects.select_related("organization")
         return scope_queryset_by_organization(queryset, self.request)
 
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
     def perform_destroy(self, instance):
         delete_category(category=instance, actor=self.request.user)
 
@@ -80,12 +74,6 @@ class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             "assigned_staff_members", "locations"
         )
         return scope_queryset_by_organization(queryset, self.request)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
 
     def perform_destroy(self, instance):
         delete_service(service=instance, actor=self.request.user)

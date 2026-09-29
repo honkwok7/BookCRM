@@ -53,6 +53,12 @@ def list_providers_for(service, location=None, *, public: bool = False):
     return providers.select_related("user").distinct()
 
 
+def provides(staff, service, location=None, *, public: bool = False) -> bool:
+    """Can ``staff`` be booked for ``service`` (at ``location``)? The same rule as
+    ``list_providers_for``."""
+    return list_providers_for(service, location, public=public).filter(pk=staff.pk).exists()
+
+
 def offering_for(staff, service, location=None) -> StaffServiceOffering | None:
     """The offering that applies: a location-specific one wins over "all locations"."""
     offerings = StaffServiceOffering.objects.filter(

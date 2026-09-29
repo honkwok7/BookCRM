@@ -918,6 +918,18 @@ A provider can offer service X only at location Y.
 > - **UI:** `/app/services/` grouped by category (colour, position), location and status
 >   filters, dialogs for services and categories.
 > - **Plan change:** the public booking wizard (M4.6) now follows M4.1 + M4.2.
+>
+> **Review 4 (Codex, 2026-09-29) on M3.1–M3.3, all fixed in this branch** (tests in
+> `tests/test_review_4_findings.py`): F1 compound API writes (a service and its providers, a
+> staff profile and its locations) are now one transaction (`AuditedModelViewSetMixin` wraps
+> service-audited writes too); F2 staff reactivation locks the organization before the plan
+> count (PostgreSQL race test); F3 the data migrations `locations/0002` and `staff/0003`
+> reverse as no-ops instead of deleting rows created later; F4 the public page, public slot
+> API and self-service booking API refuse a provider who doesn't offer the service; F5 the
+> `assigned_staff_members` mirror lists only providers whose offering still fits the service's
+> provider type and locations, and is rebuilt when those rules or a provider type change; F6
+> category writes lock the organization and turn a unique-constraint race into 409
+> `duplicate`; F7 closure reason changes are audited as "changed" without the text.
 
 #### Objective
 Complete service configuration.
