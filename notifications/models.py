@@ -35,6 +35,15 @@ class NotificationLog(BaseUUIDModel):
         on_delete=models.SET_NULL,
         related_name="notification_logs",
     )
+    # Set for a waitlist email: the email is about ``related_booking``'s freed time, but it
+    # belongs to this entry's customer (their timeline), not the booking's.
+    related_waitlist_entry = models.ForeignKey(
+        "bookings.WaitlistEntry",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notification_logs",
+    )
     sent_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.TextField(blank=True)
     retry_count = models.PositiveIntegerField(default=0)

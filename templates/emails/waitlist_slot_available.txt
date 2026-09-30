@@ -1,0 +1,10 @@
+{% load tz %}{% timezone booking.location.timezone|default:booking.organization.timezone %}Good news: a time you were waiting for is now available.
+
+{{ booking.service.name }}
+{{ booking.start_datetime|date:"l, F j, Y, g:i A" }} ({% if booking.location %}{{ booking.location.timezone }}{% else %}{{ booking.organization.timezone }}{% endif %}){% if booking.location %}
+{{ booking.location.name }}{% endif %}
+
+Book it here before someone else does: {{ booking_url }}
+
+You're receiving this because you joined the waitlist at {{ booking.organization.name }}.
+{% endtimezone %}

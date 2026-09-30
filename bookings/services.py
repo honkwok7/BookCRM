@@ -25,6 +25,7 @@ from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
 
 from bookings.models import Booking, BookingActivityLog, BookingStatusHistory, Customer
+from bookings.waitlist import schedule_matching
 from core.audit import AuditAction, record_audit
 from core.exceptions import ConflictError, DomainError
 from crm.activity import Kind, booking_metadata, record_activity
@@ -503,6 +504,8 @@ def cancel_booking(
         subject=booking,
         metadata={**booking_metadata(booking), "from_status": old_status},
     )
+    # The freed time may suit someone on the waitlist (checked after commit, in a task).
+    schedule_matching(booking)
     queue_booking_notification(
         booking=booking,
         notification_type="booking_cancellation",
@@ -661,6 +664,7 @@ def reschedule_booking(
         reason="Rescheduled",
         note="Rescheduled",
     )
+    schedule_matching(booking)
 
     new_booking = create_booking(
         organization=booking.organization,

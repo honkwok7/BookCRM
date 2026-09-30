@@ -52,3 +52,26 @@ def queue_booking_notification(
         )
     )
     return log
+
+
+def queue_waitlist_notification(*, entry, booking):
+    """Tell a waitlisted customer that ``booking``'s time has freed up (after commit)."""
+    log = NotificationLog.objects.create(
+        organization=booking.organization,
+        recipient=entry.customer.user if entry.customer else None,
+        recipient_email=entry.customer_email,
+        notification_type="waitlist_slot_available",
+        related_booking=booking,
+        related_waitlist_entry=entry,
+        status=NotificationLog.Status.PENDING,
+    )
+    transaction.on_commit(
+        partial(
+            _dispatch_email,
+            notification_log_id=str(log.id),
+            organization_id=str(booking.organization_id),
+            subject=f"A time is available: {booking.service.name}",
+            template_base="waitlist_slot_available",
+        )
+    )
+    return log

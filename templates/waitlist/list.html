@@ -1,0 +1,56 @@
+{% extends "layouts/app.html" %}
+{% block title %}Waitlist · {{ organization.name }}{% endblock %}
+{% block page_title %}Waitlist{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">People waiting for a time. When an appointment is cancelled, matching entries are emailed automatically, first come first served.</p>{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'app-waitlist-new' %}" class="btn btn-primary" hx-get="{% url 'app-waitlist-new' %}" hx-target="#modal-body">
+    {% include "components/icon.html" with name="plus" class="size-4" %}Add to waitlist
+  </a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Waitlist</caption>
+          <thead><tr><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">Preferences</th><th scope="col">Joined</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>
+            {% for entry in page_obj %}
+              <tr>
+                <td class="font-medium">
+                  {% if entry.customer_id %}<a href="{% url 'crm-customer-detail' entry.customer_id %}">{{ entry.customer_name }}</a>{% else %}{{ entry.customer_name }}{% endif %}
+                  <span class="block text-xs font-normal text-slate-600">{{ entry.customer_email }}{% if entry.customer_phone %} · {{ entry.customer_phone }}{% endif %}</span>
+                </td>
+                <td class="text-slate-700">{{ entry.service.name }}</td>
+                <td class="text-sm text-slate-700">
+                  {% if entry.preferred_staff %}{{ entry.preferred_staff.public_name }}{% else %}Any provider{% endif %}
+                  · {% if entry.location %}{{ entry.location.name }}{% else %}any location{% endif %}
+                  <span class="block text-xs text-slate-600">{{ entry.get_time_of_day_display }}{% if entry.preferred_start_date or entry.preferred_end_date %}, {{ entry.preferred_start_date|date:"M j"|default:"now" }} – {{ entry.preferred_end_date|date:"M j"|default:"open" }}{% endif %}</span>
+                </td>
+                <td class="whitespace-nowrap text-slate-700">{{ entry.created_at|date:"M j" }}<span class="block text-xs text-slate-600">{{ entry.get_source_display|default:"" }}</span></td>
+                <td>{% include "components/badge.html" with label=entry.get_status_display level=entry.status_level %}{% if entry.notified_at %}<span class="block text-xs text-slate-600">{{ entry.notified_at|date:"M j, g:i A" }}</span>{% endif %}</td>
+                <td class="text-right">
+                  {% if entry.status != "closed" %}
+                    <form method="post" action="{% url 'app-waitlist-close' entry.pk %}">{% csrf_token %}<button type="submit" class="btn btn-ghost btn-sm">Close</button></form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No matching entries" message="Try another filter." icon="search" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="Nobody is waiting" message="Customers can join from the booking page when no time suits them." icon="inbox" %}
+    {% endif %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

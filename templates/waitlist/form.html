@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+{% block title %}Add to waitlist · {{ organization.name }}{% endblock %}
+{% block page_title %}Add to waitlist{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-4" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Add to waitlist</h2>{% endif %}
+  {% csrf_token %}
+  {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
+  {% include "components/form_errors.html" with form=form %}
+  <div class="grid gap-4 sm:grid-cols-3">
+    {% include "components/field.html" with field=form.name %}
+    {% include "components/field.html" with field=form.email %}
+    {% include "components/field.html" with field=form.phone %}
+  </div>
+  <div class="grid gap-4 sm:grid-cols-3">
+    {% include "components/field.html" with field=form.service %}
+    {% include "components/field.html" with field=form.staff %}
+    {% include "components/field.html" with field=form.location %}
+  </div>
+  <div class="grid gap-4 sm:grid-cols-3">
+    {% include "components/field.html" with field=form.time_of_day %}
+    {% include "components/field.html" with field=form.preferred_start_date %}
+    {% include "components/field.html" with field=form.preferred_end_date %}
+  </div>
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}<button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>{% else %}<a href="{% url 'app-waitlist' %}" class="btn btn-secondary">Cancel</a>{% endif %}
+    <button type="submit" class="btn btn-primary">Add to waitlist</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

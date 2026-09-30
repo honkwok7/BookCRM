@@ -46,4 +46,5 @@
 {% else %}
   <p class="text-sm text-slate-700">No free times in these days.{% if next_from %} <a href="?from={{ next_from|date:'Y-m-d' }}">Try later dates</a>.{% endif %}</p>
 {% endif %}
+<p class="mt-6 border-t border-slate-200 pt-4 text-sm text-slate-700">Can't find a time that suits you? <a href="{% url 'public-booking-waitlist' organization.slug %}">Join the waitlist</a> and we'll email you if one frees up.</p>
 {% endblock %}
