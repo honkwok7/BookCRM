@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "notifications",
     "subscriptions",
     "dashboard",
+    "saas",
     "api",
 ]
 
@@ -245,6 +246,10 @@ CELERY_TASK_PUBLISH_RETRY_POLICY = {
 }
 # Local development without a worker: run tasks in-process (still after commit).
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+# celery beat: a heartbeat every minute, shown on the platform dashboard (saas/tasks.py).
+CELERY_BEAT_SCHEDULE = {
+    "platform-heartbeat": {"task": "saas.tasks.heartbeat", "schedule": 60.0},
+}
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
 SESSION_COOKIE_SECURE = env("SESSION_COOKIE_SECURE")
 CSRF_COOKIE_SECURE = env("CSRF_COOKIE_SECURE")

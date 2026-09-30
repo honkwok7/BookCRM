@@ -56,11 +56,20 @@ class AuditAction(StrEnum):
     ACCOUNT_EMAIL_VERIFIED = "account.email_verified"
     ACCOUNT_PASSWORD_RESET = "account.password_reset"
     # Organization and membership
+    ORGANIZATION_CREATED = "organization.created"
     ORGANIZATION_UPDATED = "organization.updated"
     ORGANIZATION_SUSPENDED = "organization.suspended"
     ORGANIZATION_REACTIVATED = "organization.reactivated"
     INVITATION_CREATED = "organization.invitation.created"
     INVITATION_ACCEPTED = "invitation.accepted"
+    # Platform (M5.5)
+    SUBSCRIPTION_CHANGED = "subscription.changed"
+    PLAN_CREATED = "plan.created"
+    PLAN_UPDATED = "plan.updated"
+    USER_DEACTIVATED = "user.deactivated"
+    USER_REACTIVATED = "user.reactivated"
+    PLATFORM_STAFF_GRANTED = "platform_staff.granted"
+    PLATFORM_STAFF_REVOKED = "platform_staff.revoked"
     # Catalogue and team
     SERVICE_CREATED = "service.created"
     SERVICE_UPDATED = "service.updated"

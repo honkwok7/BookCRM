@@ -47,6 +47,13 @@ class User(AbstractUser):
     privacy_accepted_at = models.DateTimeField(null=True, blank=True)
     email_verified = models.BooleanField(default=False)
     account_status = models.CharField(max_length=20, default="active")
+    # Platform operators (the /saas/ pages), separate from is_superuser (Django admin, and the
+    # only ones who can grant this). Neither gives access to an organization's data.
+    is_platform_staff = models.BooleanField(default=False)
+
+    @property
+    def is_platform_user(self) -> bool:
+        return self.is_active and (self.is_superuser or self.is_platform_staff)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

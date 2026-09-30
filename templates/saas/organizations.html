@@ -1,0 +1,36 @@
+{% extends "layouts/saas.html" %}
+{% block title %}Organizations · Platform{% endblock %}
+{% block page_title %}Organizations{% endblock %}
+{% block page_actions %}<a href="{% url 'saas-organization-new' %}" class="btn btn-primary">New organization</a>{% endblock %}
+{% block content %}
+<form method="get" role="search" class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+  <label for="org-q" class="sr-only">Search by name or address</label>
+  <input id="org-q" type="search" name="q" value="{{ query }}" placeholder="Name or address" class="input sm:max-w-xs">
+  <label for="org-state" class="sr-only">State</label>
+  <select id="org-state" name="state" class="input sm:w-auto">
+    <option value="">Any state</option>
+    {% for value in states %}<option value="{{ value }}"{% if value == state %} selected{% endif %}>{{ value|capfirst|cut:"_" }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+</form>
+<div class="card overflow-x-auto">
+  <table class="table">
+    <thead><tr><th scope="col">Organization</th><th scope="col">Plan</th><th scope="col">Subscription</th><th scope="col">Members</th><th scope="col">Created</th><th scope="col">State</th></tr></thead>
+    <tbody>
+      {% for organization in page_obj.object_list %}
+        <tr>
+          <td><a href="{% url 'saas-organization' organization.pk %}" class="font-medium">{{ organization.name }}</a><span class="block text-xs text-slate-600">{{ organization.slug }}</span></td>
+          <td>{{ organization.subscription.plan.name|default:"–" }}</td>
+          <td>{{ organization.subscription.get_status_display|default:"–" }}</td>
+          <td class="tabular-nums">{{ organization.members }}</td>
+          <td class="whitespace-nowrap">{{ organization.created_at|date:"j M Y" }}</td>
+          <td>{% if organization.is_suspended %}{% include "components/badge.html" with label="Suspended" level="danger" %}{% elif not organization.is_active %}{% include "components/badge.html" with label="Inactive" %}{% else %}{% include "components/badge.html" with label="Active" level="success" %}{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-slate-600">No organizations match.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include "components/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}
