@@ -217,9 +217,11 @@ class RescheduleForm(SlotChoicesMixin, forms.Form):
         self.fields["date"].initial = self.day
         self.fields["date"].widget.attrs["min"] = today.isoformat()
         self.slots = {}
-        self.fields["start"].choices = self.slot_choices(
-            engine, self.day, booking.staff, ignore_booking=booking
-        )
+        choices = self.slot_choices(engine, self.day, booking.staff, ignore_booking=booking)
+        # Its own time isn't a move.
+        current = booking.start_datetime
+        self.slots = {key: slot for key, slot in self.slots.items() if slot.start != current}
+        self.fields["start"].choices = [item for item in choices if item[0] in self.slots]
 
 
 def is_uuid(value) -> bool:

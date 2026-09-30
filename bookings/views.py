@@ -17,6 +17,7 @@ from bookings.serializers import (
     is_team_request,
 )
 from bookings.services import change_booking_status, check_in, check_out, reschedule_booking
+from bookings.waitlist import close_entry
 from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
@@ -144,20 +145,22 @@ class BookingViewSet(
         )
 
 
-class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
-    audit_actions = {
-        "create": AuditAction.WAITLIST_ENTRY_CREATED,
-        "update": AuditAction.WAITLIST_ENTRY_UPDATED,
-        "delete": AuditAction.WAITLIST_ENTRY_DELETED,
-    }
-    audit_redact_fields = (
-        "customer_name",
-        "customer_email",
-        "customer_phone",
-    )
+class WaitlistViewSet(
+    AuditedModelViewSetMixin,
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """The waitlist over the API. Entries are written only by ``bookings.waitlist``: create
+    joins (or updates the customer's waiting entry), ``close/`` closes one. There is no
+    generic update or delete, so the workflow fields (status, notification, expiry) can't be
+    set by hand."""
+
+    audit_actions = {"create": AuditAction.WAITLIST_ENTRY_CREATED}
+    audited_by_service = ("create",)
     serializer_class = WaitlistEntrySerializer
     # Waitlist entries hold customer PII.
-    # Public/portal joining arrives with the waitlist service (M4.7).
     permission_classes = [permissions.IsAuthenticated, HasCapability(read="waitlist.manage")]
 
     def get_queryset(self):
@@ -165,3 +168,9 @@ class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             "organization", "service", "preferred_staff"
         )
         return scope_queryset_by_organization(queryset, self.request)
+
+    @action(detail=True, methods=["post"])
+    def close(self, request, pk=None):
+        """Stop waiting: the entry no longer matches freed times."""
+        entry = close_entry(entry=self.get_object(), actor=request.user)
+        return Response(self.get_serializer(entry).data)

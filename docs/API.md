@@ -80,7 +80,12 @@ Read: `locations.view`. Write: `locations.manage`. Rules and error codes are in
 - `POST /api/v1/bookings/{id}/check-in/` and `POST /api/v1/bookings/{id}/check-out/`: confirmed to checked in, and checked in or in progress to completed (needs `appointments.manage`; 400 `too_early` more than an hour before the start)
 - `GET /api/v1/bookings/{id}/history/`: every status change with `reason`, `source`, `note`, `changed_by` (team only)
 - `/api/v1/customers/`
-- `/api/v1/waitlist/`
+- `/api/v1/waitlist/` (needs `waitlist.manage`): list, retrieve and `POST` to join. Joining goes through
+  the waitlist service, so it links the CRM customer, updates the customer's waiting entry for the same
+  service instead of adding another, and sets the expiry. `status`, `source`, `notified_at` and
+  `expires_at` are read-only. There is no `PUT`/`PATCH`/`DELETE` (405).
+  A provider or location that can never match is 400 `invalid_preferences`.
+- `POST /api/v1/waitlist/{id}/close/`: stop waiting
 
 Customers see a reduced appointment representation without `internal_notes`.
 Lifecycle rules and error codes are in [BOOKING_ENGINE.md](BOOKING_ENGINE.md).

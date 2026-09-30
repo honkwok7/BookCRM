@@ -1,17 +1,22 @@
 """M4.7: the waitlist - joining, matching a freed time, notifying once, and the screens."""
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import time, timedelta
 from importlib import import_module
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.apps import apps
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, connection, connections
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from bookings import waitlist
 from bookings.models import Booking, WaitlistEntry
-from bookings.services import cancel_booking, create_booking
+from bookings.services import cancel_booking, create_booking, reschedule_booking
 from bookings.tasks import notify_waitlist
 from bookings.waitlist import (
     NOTIFY_LIMIT,
@@ -28,6 +33,7 @@ from tests import factories as f
 from tests.wizard_helpers import DETAILS
 
 TimeOfDay = WaitlistEntry.TimeOfDay
+POSTGRES = skipUnless(connection.vendor == "postgresql", "row locks across connections")
 
 
 class Fixtures:
@@ -84,6 +90,54 @@ class JoinTests(Fixtures, TestCase):
         with self.assertRaises(DomainError):
             self.join(preferred_end_date=today - timedelta(days=1))
 
+    def test_impossible_preferences_are_refused(self):
+        stranger = f.StaffProfileFactory(organization=self.org)  # doesn't offer the service
+        empty = f.LocationFactory(organization=self.org)  # nobody offers it there
+        for preferences in (
+            {"preferred_staff": stranger},
+            {"location": empty},
+            {"preferred_staff": self.staff, "location": empty},
+        ):
+            with self.subTest(preferences=preferences):
+                with self.assertRaises(DomainError) as raised:
+                    self.join(**preferences)
+                self.assertEqual(raised.exception.code, "invalid_preferences")
+        self.assertFalse(WaitlistEntry.objects.exists())
+
+    def test_one_waiting_entry_per_customer_and_service_in_the_database(self):
+        entry = self.join()
+        with self.assertRaises(IntegrityError):
+            WaitlistEntry.objects.create(
+                organization=self.org,
+                service=self.service,
+                customer=entry.customer,
+                customer_name="Twice",
+                customer_email="wait@x.test",
+            )
+
+    def test_migration_keeps_the_oldest_waiting_entry(self):
+        constraint = next(
+            item
+            for item in WaitlistEntry._meta.constraints
+            if item.name == waitlist.ONE_WAITING_CONSTRAINT
+        )
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")  # no pending FK checks
+        with connection.schema_editor() as editor:
+            editor.remove_constraint(WaitlistEntry, constraint)
+        first = self.join()
+        second = f.WaitlistEntryFactory(
+            organization=self.org, service=self.service, customer=first.customer
+        )
+        migration = import_module("bookings.migrations.0014_waitlist_one_waiting_entry")
+        migration.close_duplicates(apps, None)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, WaitlistEntry.Status.WAITING)
+        self.assertEqual(second.status, WaitlistEntry.Status.CLOSED)
+        with connection.schema_editor() as editor:
+            editor.add_constraint(WaitlistEntry, constraint)
+
     def test_end_date_sets_expiry(self):
         end = self.day + timedelta(days=2)
         entry = self.join(preferred_end_date=end)
@@ -103,8 +157,11 @@ class MatchingTests(Fixtures, TestCase):
         self.join("morning@x.test", time_of_day=TimeOfDay.MORNING)
         self.join("evening@x.test", time_of_day=TimeOfDay.EVENING)
         self.join("later@x.test", preferred_start_date=self.day + timedelta(days=1))
-        self.join("sam@x.test", preferred_staff=f.StaffProfileFactory(organization=self.org))
-        self.join("elsewhere@x.test", location=f.LocationFactory(organization=self.org))
+        sam = f.make_bookable(f.StaffProfileFactory(organization=self.org), self.service)
+        self.join("sam@x.test", preferred_staff=sam)
+        elsewhere = f.LocationFactory(organization=self.org)
+        sam.locations.add(elsewhere)
+        self.join("elsewhere@x.test", location=elsewhere)
         other = f.ServiceFactory(organization=self.org)
         self.join("other@x.test", service=other)
         self.assertEqual(self.matches(), ["any@x.test", "morning@x.test"])
@@ -116,6 +173,12 @@ class MatchingTests(Fixtures, TestCase):
         )
         closed = self.join("closed@x.test")
         WaitlistEntry.objects.filter(pk=closed.pk).update(status=WaitlistEntry.Status.CLOSED)
+        self.assertEqual(self.matches(), [])
+
+    def test_a_time_booked_again_is_not_offered(self):
+        self.join()
+        cancel_booking(booking=self.freed)
+        self.book(hour=10, email="quick@x.test")
         self.assertEqual(self.matches(), [])
 
     def test_past_times_are_not_offered(self):
@@ -145,6 +208,19 @@ class NotificationTests(Fixtures, TestCase):
         delay.assert_called_once_with(
             booking_id=str(self.freed.pk), organization_id=str(self.org.pk)
         )
+
+    def test_rescheduling_offers_only_a_time_really_left(self, send):
+        booking = self.freed
+        with self.assertRaises(DomainError) as raised:
+            reschedule_booking(booking=booking, new_start=booking.start_datetime)
+        self.assertEqual(raised.exception.code, "same_time")
+        with patch("bookings.tasks.notify_waitlist.delay") as delay:
+            with self.captureOnCommitCallbacks(execute=True):
+                moved = reschedule_booking(booking=booking, new_start=f.future(3, 10, 30))
+            delay.assert_not_called()  # still overlaps the old time: nothing was freed
+            with self.captureOnCommitCallbacks(execute=True):
+                reschedule_booking(booking=moved, new_start=f.future(3, hour=15))
+            delay.assert_called_once()
 
     def test_matching_entries_are_emailed_once_first_come_first_served(self, send):
         waiting = [self.join(f"w{index}@x.test") for index in range(NOTIFY_LIMIT + 2)]
@@ -243,6 +319,102 @@ class PublicJoinTests(Fixtures, TestCase):
         self.join()
         response = APIClient().get("/api/v1/waitlist/", HTTP_X_ORGANIZATION_SLUG="glow")
         self.assertIn(response.status_code, (401, 403))
+
+
+class ApiTests(Fixtures, TestCase):
+    """The API writes through the waitlist service: no hand-set status, no generic edits."""
+
+    def setUp(self):
+        self.make_fixtures()
+        self.client = APIClient()
+        self.client.force_authenticate(
+            f.MembershipFactory(organization=self.org, role=OrganizationRole.RECEPTIONIST).user
+        )
+
+    def post(self, url, payload=None):
+        return self.client.post(url, payload, format="json", HTTP_X_ORGANIZATION_SLUG="glow")
+
+    def test_create_goes_through_the_service(self):
+        payload = {
+            "service": str(self.service.pk),
+            "customer_name": "Api Person",
+            "customer_email": "api@x.test",
+            "status": "notified",  # ignored: the workflow sets it
+            "expires_at": "2000-01-01T00:00:00Z",  # ignored
+        }
+        response = self.post("/api/v1/waitlist/", payload)
+        self.assertEqual(response.status_code, 201, response.content)
+        entry = WaitlistEntry.objects.get()
+        self.assertEqual(entry.status, WaitlistEntry.Status.WAITING)
+        self.assertEqual(entry.source, Booking.Source.API)
+        self.assertEqual(entry.customer.email, "api@x.test")
+        self.assertGreater(entry.expires_at, timezone.now())
+        again = self.post("/api/v1/waitlist/", payload | {"time_of_day": "evening"})
+        self.assertEqual(again.json()["id"], str(entry.pk))
+        self.assertEqual(WaitlistEntry.objects.count(), 1)
+
+    def test_impossible_preferences_are_400(self):
+        payload = {
+            "service": str(self.service.pk),
+            "customer_name": "Api Person",
+            "customer_email": "api@x.test",
+            "preferred_staff": str(f.StaffProfileFactory(organization=self.org).pk),
+        }
+        response = self.post("/api/v1/waitlist/", payload)
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(WaitlistEntry.objects.exists())
+
+    def test_no_generic_edits_and_close_through_the_service(self):
+        entry = self.join()
+        url = f"/api/v1/waitlist/{entry.pk}/"
+        for method in ("put", "patch", "delete"):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(
+                    url, {"status": "notified"}, format="json", HTTP_X_ORGANIZATION_SLUG="glow"
+                )
+                self.assertEqual(response.status_code, 405)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, WaitlistEntry.Status.WAITING)
+        response = self.post(f"{url}close/")
+        self.assertEqual(response.status_code, 200, response.content)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, WaitlistEntry.Status.CLOSED)
+
+
+@POSTGRES
+class JoinRaceTests(Fixtures, TransactionTestCase):
+    """Two joins for the same customer and service at the same moment: one entry."""
+
+    def setUp(self):
+        self.make_fixtures()
+        self.customer = f.CustomerFactory(organization=self.org, email="wait@x.test")
+
+    def test_concurrent_joins_make_one_entry(self):
+        barrier = threading.Barrier(2, timeout=10)
+        real = waitlist._waiting_entry
+        local = threading.local()
+
+        def both_miss(*args):
+            if not getattr(local, "looked", False):
+                local.looked = True
+                barrier.wait()  # both have looked and found nothing
+                return None
+            return real(*args)
+
+        def attempt(time_of_day):
+            connections.close_all()
+            try:
+                return self.join(customer=self.customer, time_of_day=time_of_day).pk
+            finally:
+                connections.close_all()
+
+        with (
+            patch.object(waitlist, "_waiting_entry", both_miss),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            results = list(pool.map(attempt, (TimeOfDay.MORNING, TimeOfDay.EVENING)))
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(WaitlistEntry.objects.count(), 1)
 
 
 class ReceptionScreenTests(Fixtures, TestCase):

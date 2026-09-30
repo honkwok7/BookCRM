@@ -282,6 +282,51 @@ class MonthlyLimitTests(Fixtures, TestCase):
         self.book(self.start + timedelta(hours=2), customer_email="b@example.test")
 
 
+@POSTGRES
+class MonthlyLimitRaceTests(Fixtures, TransactionTestCase):
+    """The last booking of the month, requested for two different providers at once: the
+    staff locks don't serialize them, the subscription lock does."""
+
+    def setUp(self):
+        self.make_fixtures()
+        plan = Plan.objects.create(
+            name="Tiny", slug="tiny", monthly_price=0, yearly_price=0, maximum_monthly_bookings=1
+        )
+        Subscription.objects.create(organization=self.org, plan=plan)
+        self.org.refresh_from_db()
+        self.other = f.StaffProfileFactory(organization=self.org)
+        f.make_bookable(self.other, self.service, start=time(9), end=time(17))
+
+    def test_only_one_takes_the_last_booking(self):
+        barrier = Barrier(2, timeout=10)
+        real_validate = AvailabilityService.validate_slot
+
+        def both_validated(engine, *args, **kwargs):
+            result = real_validate(engine, *args, **kwargs)
+            barrier.wait()  # both hold their own staff lock and are about to count
+            return result
+
+        def attempt(staff, email):
+            connections.close_all()
+            try:
+                self.book(staff_profile=staff, customer_email=email)
+                return "booked"
+            except ConflictError as error:
+                return error.code
+            finally:
+                connections.close_all()
+
+        with (
+            patch.object(AvailabilityService, "validate_slot", both_validated),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            results = sorted(
+                pool.map(attempt, (self.staff, self.other), ("a@example.test", "b@example.test"))
+            )
+        self.assertEqual(results, ["booked", "plan_limit"])
+        self.assertEqual(Booking.objects.count(), 1)
+
+
 class DeadlineAndRescheduleTests(Fixtures, TestCase):
     def setUp(self):
         self.make_fixtures()

@@ -7,6 +7,7 @@ from rest_framework import serializers
 from bookings.models import Booking, BookingStatusHistory, Customer, WaitlistEntry
 from bookings.selectors import bookable_services, bookable_staff
 from bookings.services import cancel_booking, create_booking
+from bookings.waitlist import join_waitlist
 from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
 from crm.models import Tag
 from crm.selectors import customer_stats
@@ -377,7 +378,29 @@ class WaitlistEntrySerializer(TenantScopedModelSerializer):
             "organization",
             "customer",
             "source",
+            "status",
             "notified_at",
+            "expires_at",
             "created_at",
             "updated_at",
+        )
+
+    def create(self, validated_data):
+        """Join through the waitlist service (customer link, one waiting entry per customer
+        and service, expiry, preference checks). Status and notification fields are the
+        workflow's, never the client's."""
+        request = self.context["request"]
+        return join_waitlist(
+            organization=get_request_organization(request),
+            service=validated_data["service"],
+            customer_name=validated_data["customer_name"],
+            customer_email=validated_data["customer_email"],
+            customer_phone=validated_data.get("customer_phone", ""),
+            location=validated_data.get("location"),
+            preferred_staff=validated_data.get("preferred_staff"),
+            preferred_start_date=validated_data.get("preferred_start_date"),
+            preferred_end_date=validated_data.get("preferred_end_date"),
+            time_of_day=validated_data.get("time_of_day", WaitlistEntry.TimeOfDay.ANY),
+            source=Booking.Source.API,
+            actor=request.user,
         )
