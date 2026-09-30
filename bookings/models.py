@@ -344,10 +344,23 @@ class BookingActivityLog(BaseUUIDModel):
 
 
 class WaitlistEntry(BaseUUIDModel):
+    """Someone waiting for a time to free up (M4.7). Written by ``bookings.waitlist``.
+
+    Preferences narrow which freed slots match: the location (or any), the provider (or any),
+    the date range and the time of day. A matching cancellation notifies the entry once
+    (status "notified"); it stops matching after ``expires_at``.
+    """
+
     class Status(models.TextChoices):
         WAITING = "waiting", "Waiting"
         NOTIFIED = "notified", "Notified"
         CLOSED = "closed", "Closed"
+
+    class TimeOfDay(models.TextChoices):
+        ANY = "any", "Any time"
+        MORNING = "morning", "Morning (before 12:00)"
+        AFTERNOON = "afternoon", "Afternoon (12:00-17:00)"
+        EVENING = "evening", "Evening (after 17:00)"
 
     organization = models.ForeignKey(
         "organizations.Organization", on_delete=models.CASCADE, related_name="waitlist_entries"
@@ -368,3 +381,24 @@ class WaitlistEntry(BaseUUIDModel):
     customer_email = models.EmailField()
     customer_phone = models.CharField(max_length=30, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING)
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waitlist_entries",
+    )
+    location = models.ForeignKey(
+        "locations.Location",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waitlist_entries",
+    )
+    time_of_day = models.CharField(max_length=20, choices=TimeOfDay.choices, default=TimeOfDay.ANY)
+    source = models.CharField(max_length=20, choices=Booking.Source.choices, blank=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["organization", "service", "status"])]

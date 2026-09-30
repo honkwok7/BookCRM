@@ -1,0 +1,16 @@
+{% extends "layouts/public.html" %}
+{% block title %}On the waitlist · {{ organization.name }}{% endblock %}
+{% block extra_head %}{% if organization.brand_color %}<link rel="stylesheet" href="{% url 'public-booking-theme' organization.slug %}">{% endif %}{% endblock %}
+{% block main %}
+{% comment %}#wizard: the boosted wizard form swaps this element in.{% endcomment %}
+<div id="wizard" class="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
+  <section class="card card-body" aria-labelledby="joined-heading">
+    <div class="mb-3 flex items-center gap-3">
+      {% include "components/icon.html" with name="check-circle" class="size-8 text-green-600" %}
+      <h1 id="joined-heading" class="text-2xl font-bold tracking-tight">You're on the waitlist</h1>
+    </div>
+    <p class="text-sm text-slate-700">We'll email you if a time that suits you frees up. It isn't booked until you book it, so act quickly when you hear from us.</p>
+    <p class="mt-6"><a href="{% url 'public-booking' organization.slug %}" class="btn btn-secondary">Back to booking</a></p>
+  </section>
+</div>
+{% endblock %}

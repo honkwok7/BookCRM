@@ -1347,6 +1347,18 @@ The wizard works without JavaScript on the essential steps (progressive enhancem
 
 ### M4.7: Waitlist enhancement
 
+> **Status: done (2026-09-30, branch `m4.7-waitlist`).** See [WAITLIST.md](WAITLIST.md).
+> - `WaitlistEntry` gains `customer` (backfilled by email), `location`, `time_of_day`,
+>   `source`, `notified_at` and `expires_at`. `NotificationLog.related_waitlist_entry` puts
+>   the email on the waiting customer's timeline.
+> - `bookings.waitlist`: `join_waitlist` (updates an existing waiting entry), `close_entry`,
+>   `matching_entries`, and `notify_matching_entries` (first come first served, at most 5
+>   per freed time, claimed atomically so each entry is emailed once). Cancellations and
+>   reschedules queue `notify_waitlist` on commit.
+> - Joining happens from the public booking wizard (the portal comes with M5.4, which reuses
+>   the same service) and from the `/app/waitlist/` screen. Public joins have a honeypot and
+>   a rate limit, and reveal no entries.
+
 #### Objective
 A useful waitlist.
 

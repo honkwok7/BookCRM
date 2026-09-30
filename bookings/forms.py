@@ -1,5 +1,7 @@
 from django import forms
 
+from bookings.models import WaitlistEntry
+
 
 class BookingDetailsForm(forms.Form):
     """The visitor's contact details in the public booking wizard.
@@ -41,4 +43,40 @@ class BookingDetailsForm(forms.Form):
             "email": data["email"].strip(),
             "phone": data["phone"].strip(),
             "notes": data["notes"].strip(),
+        }
+
+
+class WaitlistJoinForm(BookingDetailsForm):
+    """Joining the waitlist from the public booking page: when, and how to reach you."""
+
+    time_of_day = forms.ChoiceField(
+        choices=WaitlistEntry.TimeOfDay.choices, initial=WaitlistEntry.TimeOfDay.ANY
+    )
+    preferred_start_date = forms.DateField(
+        required=False, label="From", widget=forms.DateInput(attrs={"type": "date"})
+    )
+    preferred_end_date = forms.DateField(
+        required=False, label="Until", widget=forms.DateInput(attrs={"type": "date"})
+    )
+    field_order = (
+        "time_of_day",
+        "preferred_start_date",
+        "preferred_end_date",
+        "name",
+        "email",
+        "phone",
+        "website",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        del self.fields["notes"]
+        self.fields["email"].help_text = "We'll email you if a time frees up."
+
+    def customer(self) -> dict:
+        data = self.cleaned_data
+        return {
+            "name": data["name"].strip(),
+            "email": data["email"].strip(),
+            "phone": data["phone"].strip(),
         }

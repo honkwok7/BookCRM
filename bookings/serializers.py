@@ -363,7 +363,21 @@ class WaitlistEntrySerializer(TenantScopedModelSerializer):
             "customer_email",
             "customer_phone",
             "status",
+            "customer",
+            "location",
+            "time_of_day",
+            "source",
+            "notified_at",
+            "expires_at",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "organization", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "organization",
+            "customer",
+            "source",
+            "notified_at",
+            "created_at",
+            "updated_at",
+        )

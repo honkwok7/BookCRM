@@ -1,9 +1,16 @@
 from django.urls import path
 
-from bookings import appointment_views, calendar_views
+from bookings import appointment_views, calendar_views, waitlist_views
 from bookings import web_views as views
 
 urlpatterns = [
+    path("app/waitlist/", waitlist_views.WaitlistListView.as_view(), name="app-waitlist"),
+    path("app/waitlist/new/", waitlist_views.WaitlistAddView.as_view(), name="app-waitlist-new"),
+    path(
+        "app/waitlist/<uuid:pk>/close/",
+        waitlist_views.WaitlistCloseView.as_view(),
+        name="app-waitlist-close",
+    ),
     path("app/calendar/", calendar_views.CalendarView.as_view(), name="app-calendar"),
     path(
         "app/calendar/events.json",
@@ -62,6 +69,16 @@ urlpatterns = [
         "book/<slug:slug>/confirmation/<uuid:public_uuid>/",
         views.ConfirmationView.as_view(),
         name="public-booking-confirmation",
+    ),
+    path(
+        "book/<slug:slug>/waitlist/",
+        views.WaitlistJoinView.as_view(),
+        name="public-booking-waitlist",
+    ),
+    path(
+        "book/<slug:slug>/waitlist/joined/",
+        views.WaitlistJoinedView.as_view(),
+        name="public-booking-waitlist-joined",
     ),
     path("book/<slug:slug>/theme.css", views.theme_stylesheet, name="public-booking-theme"),
 ]

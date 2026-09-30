@@ -54,6 +54,7 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
         (
             NavItem("Calendar", "app-calendar", "calendar", allow=can_use_calendar),
             NavItem("Appointments", "app-appointment-list", "clipboard", allow=can_use_calendar),
+            NavItem("Waitlist", "app-waitlist", "inbox", (Capability.WAITLIST_MANAGE,)),
         ),
     ),
     NavSection(

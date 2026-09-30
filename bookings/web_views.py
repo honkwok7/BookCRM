@@ -18,9 +18,10 @@ from django.urls import reverse
 from django.utils.dateparse import parse_date, parse_datetime
 from django.views import View
 
-from bookings.forms import BookingDetailsForm
+from bookings.forms import BookingDetailsForm, WaitlistJoinForm
 from bookings.models import Booking
 from bookings.services import create_booking
+from bookings.waitlist import join_waitlist
 from bookings.wizard import ANY_PROVIDER, STEPS, Wizard
 from core import ratelimit
 from core.audit import client_ip
@@ -398,3 +399,63 @@ def theme_stylesheet(request, slug):
     response = HttpResponse(theme_css(organization.brand_color), content_type="text/css")
     response["Cache-Control"] = "public, max-age=300"
     return response
+
+
+class WaitlistJoinView(WizardStepView):
+    """ "Can't find a time?": join the waitlist for the chosen service (and provider, when one
+    was chosen) at the chosen location. Creates the entry only; nothing about other entries
+    is ever shown."""
+
+    step = "time"  # reachable once there is something to wait for
+    template_name = "booking/waitlist.html"
+
+    def get(self, request, slug):
+        initial = {}
+        if request.user.is_authenticated:
+            initial = {"name": request.user.get_full_name(), "email": request.user.email}
+        return self.render_step(request, {"form": WaitlistJoinForm(initial=initial)})
+
+    def post(self, request, slug):
+        form = WaitlistJoinForm(request.POST)
+        if not form.is_valid():
+            return self.render_step(request, {"form": form}, status=422)
+        if not self.organization.allow_guest_booking and not request.user.is_authenticated:
+            return self.render_step(request, {"form": form}, status=403)
+        rate = settings.PUBLIC_BOOKING_RATE
+        if ratelimit.hit(
+            f"waitlist:{self.organization.pk}:ip", client_ip(request) or "unknown", rate
+        ):
+            return self.render_step(
+                request,
+                {"form": form, "error": "Too many attempts. Please wait a while and try again."},
+                status=429,
+            )
+        wizard, data = self.wizard, form.cleaned_data
+        user = request.user if request.user.is_authenticated else None
+        try:
+            join_waitlist(
+                organization=self.organization,
+                service=wizard.service,
+                location=wizard.location,
+                preferred_staff=wizard.staff,
+                preferred_start_date=data["preferred_start_date"],
+                preferred_end_date=data["preferred_end_date"],
+                time_of_day=data["time_of_day"],
+                customer_name=data["name"],
+                customer_email=data["email"],
+                customer_phone=data["phone"],
+                source=Booking.Source.PUBLIC_BOOKING,
+                actor=user,
+                customer_user=user,
+            )
+        except DomainError as error:
+            return self.render_step(request, {"form": form, "error": error.message}, status=422)
+        return redirect("public-booking-waitlist-joined", slug=self.organization.slug)
+
+
+class WaitlistJoinedView(View):
+    template_name = "booking/waitlist_joined.html"
+
+    def get(self, request, slug):
+        organization = public_organization_or_404(slug)
+        return render(request, self.template_name, {"organization": organization})
