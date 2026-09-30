@@ -3,11 +3,52 @@
 # - an email or a phone is required (anonymized customers are exempt);
 # - total_bookings / no_show_count / last_appointment were never updated (always 0/empty);
 #   crm.selectors.customer_stats computes them from bookings instead.
-# If existing data has two customers whose emails differ only in case, the unique constraint
-# fails here: merge them first (crm.services.merge_customers).
+# Customers whose emails differ only in case (allowed by the old, case-sensitive rule) are
+# merged first, so the new constraint can be added: see merge_case_duplicates.
 
 import django.db.models.functions.text
 from django.db import migrations, models
+from django.db.models.functions import Lower
+
+# Filled from a later duplicate when the kept customer has them blank.
+FILL_FIELDS = ("first_name", "last_name", "name", "phone", "notes")
+
+
+def merge_case_duplicates(apps, schema_editor):
+    """Per organization, customers whose emails are equal ignoring case become one: the
+    oldest is kept, takes the others' appointments and fills its blank details from them, and
+    the others are deleted. Only appointments refer to customers at this point (the CRM tables
+    come later). One-way: reversing leaves the merged customer."""
+    Customer = apps.get_model("bookings", "Customer")
+    Booking = apps.get_model("bookings", "Booking")
+    fields = {field.name for field in Customer._meta.get_fields()}
+    keepers = {}
+    rows = (
+        Customer.objects.exclude(email="")
+        .annotate(email_key=Lower("email"))
+        .order_by("created_at", "pk")
+    )
+    for customer in rows:
+        key = (customer.organization_id, customer.email_key)
+        keeper = keepers.get(key)
+        if keeper is None:
+            keepers[key] = customer
+            continue
+        Booking.objects.filter(customer=customer).update(customer=keeper)
+        changed = [
+            name
+            for name in FILL_FIELDS
+            if name in fields and not getattr(keeper, name) and getattr(customer, name)
+        ]
+        for name in changed:
+            setattr(keeper, name, getattr(customer, name))
+        if changed:
+            keeper.save(update_fields=changed)
+        customer.delete()
+    if schema_editor.connection.vendor == "postgresql":
+        # Run the deferred foreign-key checks now: the ALTER TABLEs that follow refuse to run
+        # with pending trigger events.
+        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
 class Migration(migrations.Migration):
@@ -20,6 +61,7 @@ class Migration(migrations.Migration):
             name="customer",
             unique_together=set(),
         ),
+        migrations.RunPython(merge_case_duplicates, migrations.RunPython.noop),
         migrations.AddIndex(
             model_name="customer",
             index=models.Index(

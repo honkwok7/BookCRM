@@ -19,7 +19,7 @@ from accounts.serializers import (
 )
 from accounts.services import (
     queue_password_reset_email,
-    queue_verification_email,
+    queue_verification_resend,
     reset_password_with_token,
     verify_email,
 )
@@ -103,12 +103,8 @@ class ResendVerificationView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"]
-        user = User.objects.filter(email__iexact=email).first()
-        if not user or user.email_verified:
-            return Response({"detail": "If account exists, verification email has been sent."})
-
-        queue_verification_email(user)
+        # The same work and answer whether or not the account exists (see accounts.tasks).
+        queue_verification_resend(serializer.validated_data["email"])
         return Response({"detail": "If account exists, verification email has been sent."})
 
 
@@ -120,10 +116,8 @@ class ForgotPasswordView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"]
-        user = User.objects.filter(email__iexact=email).first()
-        if user:
-            queue_password_reset_email(user)
+        # The same work and answer whether or not the account exists (see accounts.tasks).
+        queue_password_reset_email(serializer.validated_data["email"])
         return Response(
             {"detail": "If account exists, password reset instructions have been sent."}
         )

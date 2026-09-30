@@ -30,7 +30,13 @@ from crm.serializers import (
     CustomerSearchResultSerializer,
     TagSerializer,
 )
-from crm.services import anonymize_customer, delete_note, delete_tag, merge_customers
+from crm.services import (
+    anonymize_customer,
+    delete_customer,
+    delete_note,
+    delete_tag,
+    merge_customers,
+)
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
 from staff.models import StaffProfile
@@ -71,6 +77,7 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     """
 
     audit_actions = {"delete": AuditAction.CUSTOMER_DELETED}
+    # Deletion goes through crm.services.delete_customer (anonymize, then delete; audited).
     # crm.services audits create/update (field-level, personal values redacted).
     audited_by_service = ("create", "update")
     serializer_class = CustomerSerializer
@@ -91,6 +98,9 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
             .prefetch_related("tag_set")
             .annotate(last_visit=last_visit_annotation())
         )
+
+    def perform_destroy(self, instance):
+        delete_customer(customer=instance, actor=self.request.user)
 
     def get_serializer_class(self):
         return {

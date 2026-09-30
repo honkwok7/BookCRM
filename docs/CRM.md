@@ -21,9 +21,10 @@ for reads. The API, the web app, the booking engine and future AI agents all go 
 |---|---|
 | `create_customer` | Validates, sets `created_by`, stamps `consent_updated_at` if any consent is given, and audits `customer.created`. |
 | `update_customer` | Locks the row and validates. Audits `customer.updated`, with personal fields recorded as "changed" without values. If a consent flag changed, it stamps `consent_updated_at` and audits `customer.consent_changed`, recording which flags and their new values. Anonymized customers can't be changed. |
-| `find_or_create_customer` | Used by the booking engine. It matches by email, then by phone, or else creates a new customer (source `public_booking` or `reception`). A match **never** links the booking user's account to the existing record, because knowing someone's email must not give you their history. |
-| `merge_customers` | Moves the duplicate's appointments to the target, fills the target's blank fields, appends notes, combines tags, then deletes the duplicate. **Consent is never copied.** It refuses merges across organizations, merges into itself, and records linked to two different user accounts. Audited as `customer.merged`. |
+| `find_or_create_customer` | Used by the booking engine. It matches by email, then by phone, or else creates a new customer (source `public_booking` or `reception`). A match **never** links the booking user's account to the existing record, because knowing someone's email must not give you their history. A **new** record is linked to the signed-in account only when that account's email is verified and is the booking's email, so nobody can book under someone else's address and see that person's later appointments. Phone-only lookups for one number are serialized with a PostgreSQL advisory lock, because phones aren't unique, so two simultaneous bookings can't create two customers. |
+| `merge_customers` | Moves the duplicate's appointments to the target, fills the target's blank fields, appends notes, combines tags, then deletes the duplicate. Waitlist entries move too; where both wait for the same service, the target's entry stays and the duplicate's is closed. **Consent is never copied.** Rows are locked in primary-key order, and a customer removed by a concurrent merge gives 409 `customer_gone`. It refuses merges across organizations, merges into itself, and records linked to two different user accounts. Audited as `customer.merged`. |
 | `anonymize_customer` | Irreversible. See below. Audited as `customer.anonymized`. |
+| `delete_customer` | Anonymizes first, then deletes the record, so no copy of their details survives; the appointments stay, unlinked. `DELETE /api/v1/customers/{id}/` uses it. Audited as `customer.anonymized` and `customer.deleted`. |
 
 ## Anonymization
 
@@ -32,11 +33,15 @@ and revenue totals stay correct. It clears:
 
 - **The customer record:** names become "Anonymized"; contact details, address, birthday, gender, pronouns, notes, alerts and tags are cleared; the linked account, staff links, preferences and all consents are removed. `anonymized_at` is set.
 - **Their appointments:** the name, email and phone copies, customer and internal notes, and cancellation reasons. Status, time, service, staff and price are kept.
-- **Status-history notes and cancellation reasons** in the booking activity log.
-- **Notification logs** for their appointments: the recipient email and account link.
-- **Waitlist entries** under their old email address.
+- **Status history:** the note and the reason of every change; cancellation reasons in the booking activity log.
+- **Notification logs** for their appointments and their waitlist entries: the recipient email, account link and failure text.
+- **Waitlist entries** linked to them, or under their current email address.
+- **Their own account as an actor:** where the linked sign-in account booked, cancelled or changed something itself (appointment creator and canceller, status history, booking activity, timeline), the link is removed. Staff actors are kept.
 
-Audit history already stores personal fields without values, so it needs no rewrite. Anonymized
+Audit history already stores personal fields without values, so it needs no rewrite. The audit log
+is append-only: its entries keep the account that acted (a security record, visible only with
+`audit.view`). Anonymizing a customer doesn't delete their sign-in account; that is a separate
+account action. Anonymized
 customers are hidden from `list_customers` by default.
 
 Not yet covered: free text that staff typed about the customer somewhere else (for example

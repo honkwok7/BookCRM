@@ -167,7 +167,7 @@ class ServiceTests(TestCase):
         self.assertIsNone(found.user)
 
     def test_find_or_create_links_the_user_on_a_new_record(self):
-        user = f.UserFactory()
+        user = f.UserFactory(email="new@example.test", email_verified=True)
         customer = find_or_create_customer(
             organization=self.organization, name="New Person", email="new@example.test", user=user
         )

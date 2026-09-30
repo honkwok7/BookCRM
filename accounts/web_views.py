@@ -96,10 +96,9 @@ class PasswordResetRequestView(FormView):
         if _limited(self.request, "password_reset", settings.WEB_PASSWORD_RESET_RATE, email):
             form.add_error(None, TOO_MANY_ATTEMPTS)
             return self.render_to_response(self.get_context_data(form=form), status=429)
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
-        if user is not None:
-            queue_password_reset_email(user)
-        # The same answer either way, so the page does not reveal which emails have accounts.
+        # The same work and answer either way (the worker looks the account up), so neither
+        # the page nor its timing reveals which emails have accounts.
+        queue_password_reset_email(email)
         messages.info(self.request, RESET_SENT)
         return super().form_valid(form)
 

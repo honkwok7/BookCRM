@@ -89,7 +89,12 @@ class WizardFlowTests(WizardFixtures, TestCase):
         self.assertFalse(Booking.objects.exists())
 
     def test_logged_in_customer_is_prefilled_and_linked(self):
-        user = f.UserFactory(first_name="Grace", last_name="Hopper", email="grace@example.test")
+        user = f.UserFactory(
+            first_name="Grace",
+            last_name="Hopper",
+            email="grace@example.test",
+            email_verified=True,
+        )
         self.client.force_login(user)
         self.client.post(f"{URL}service/", {"service": str(self.service.pk)})
         start = first_free_time(self.organization, self.service)

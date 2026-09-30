@@ -26,6 +26,7 @@ claimed; that would need a separate formal review.
 | CSRF, clickjacking (`DENY`), `nosniff`, auto-escaping templates | ✅ | Django defaults and settings |
 | `manage.py check --deploy` in CI | ❌ | Planned for M11.1 |
 | HSTS, secure cookies and SSL redirect enforced in production | ❌ | Configurable through env vars today; enforced in M11.1 |
+| "Forgot password" and "resend verification" do the same work for every address: the request queues one task keyed by the email and the worker looks the account up, so neither the answer nor its timing reveals which addresses have accounts | ✅ | `accounts/services.py`, `accounts/tasks.py` |
 | Login and password-reset rate limiting | ✅ | API: scoped throttles `login` / `password_reset` (`accounts/views.py`). Web: per client IP **and** per email (`WEB_LOGIN_RATE`, `WEB_PASSWORD_RESET_RATE`; `core/ratelimit.py`) |
 | Account lockout after repeated failures | ✅ (temporary) | Too many attempts on one email pause sign-in for that email for the rate window (default 10 per 15 minutes). There is no permanent lockout, which anyone could trigger against someone else's account |
 | Content Security Policy: only self-hosted scripts and styles, nothing inline, no `eval` (Alpine CSP build, htmx without eval) | ✅ | `SECURE_CSP` in `config/settings.py`; the API docs pages have their own looser policy (`core/csp.py`) |
