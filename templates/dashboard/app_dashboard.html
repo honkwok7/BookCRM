@@ -1,43 +1,151 @@
 {% extends "layouts/app.html" %}
+{% comment %}
+The organization dashboard (dashboard/web_views.py AppDashboardView, numbers from
+dashboard/reporting.py). Analytics need reports.view; everyone sees the upcoming appointments
+they may see. The filter bar refreshes #dashboard through htmx (the "dashboard" partial).
+{% endcomment %}
 {% block title %}Dashboard · {{ organization.name }}{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 {% block page_description %}<p class="mt-1 text-sm text-slate-600">{{ today|date:"l j F Y" }} · times in {{ zone }}</p>{% endblock %}
 {% block content %}
-{% if summary %}
-<section aria-labelledby="summary-heading" class="mb-6">
-  <h2 id="summary-heading" class="sr-only">Summary</h2>
-  <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <div class="card card-body"><dt class="text-sm text-slate-600">Appointments today</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.appointments_today }}</dd></div>
-    <div class="card card-body"><dt class="text-sm text-slate-600">This week</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.appointments_this_week }}</dd></div>
-    <div class="card card-body"><dt class="text-sm text-slate-600">Active customers</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.active_customers }}</dd></div>
-    <div class="card card-body"><dt class="text-sm text-slate-600">Active staff</dt><dd class="mt-1 text-3xl font-semibold">{{ summary.active_staff }}</dd></div>
-  </dl>
-</section>
+{% if report %}
+  <div class="mb-4">{% include "components/filter_bar.html" with target="#dashboard" filters=filter_bar %}</div>
+{% endif %}
+{% partialdef dashboard inline %}
+<div id="dashboard" class="grid gap-6 *:min-w-0">
+{% if report %}
+  <section aria-labelledby="summary-heading">
+    <h2 id="summary-heading" class="sr-only">Summary</h2>
+    <dl class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">Appointments today</dt>
+        <dd class="mt-1 text-3xl font-semibold">{{ report.today }}</dd>
+        <dd class="mt-1 text-sm text-slate-600">{{ report.this_week }} this week</dd>
+      </div>
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">New customers</dt>
+        <dd class="mt-1 text-3xl font-semibold">{{ report.new_customers }}</dd>
+        <dd class="mt-1 text-sm text-slate-600">in the last {{ filters.days }} days{% if filtered %}, who booked with this selection{% endif %}</dd>
+      </div>
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">Estimated revenue this month</dt>
+        <dd class="mt-1 text-3xl font-semibold">{{ report.revenue_month|floatformat:2 }} <span class="text-base font-normal text-slate-600">{{ currency }}</span></dd>
+        <dd class="mt-1 text-sm text-slate-600">Estimated from completed appointments, not payments</dd>
+      </div>
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">Cancellation rate</dt>
+        {% if report.cancellation_rate is None %}
+          <dd class="mt-1 text-lg font-semibold text-slate-700">Not enough data yet</dd>
+          <dd class="mt-1 text-sm text-slate-600">Shown from 20 past appointments ({{ report.past_appointments }} in the last {{ filters.days }} days)</dd>
+        {% else %}
+          <dd class="mt-1 text-3xl font-semibold">{{ report.cancellation_rate }}%</dd>
+          <dd class="mt-1 text-sm text-slate-600">of {{ report.past_appointments }} appointments in the last {{ filters.days }} days</dd>
+        {% endif %}
+      </div>
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">No-show rate</dt>
+        {% if report.no_show_rate is None %}
+          <dd class="mt-1 text-lg font-semibold text-slate-700">Not enough data yet</dd>
+          <dd class="mt-1 text-sm text-slate-600">Shown from 20 past appointments ({{ report.past_appointments }} in the last {{ filters.days }} days)</dd>
+        {% else %}
+          <dd class="mt-1 text-3xl font-semibold">{{ report.no_show_rate }}%</dd>
+          <dd class="mt-1 text-sm text-slate-600">of {{ report.past_appointments }} appointments in the last {{ filters.days }} days</dd>
+        {% endif %}
+      </div>
+      <div class="card card-body">
+        <dt class="text-sm text-slate-600">Estimated revenue, last {{ filters.days }} days</dt>
+        <dd class="mt-1 text-3xl font-semibold">{{ report.revenue_recent|floatformat:2 }} <span class="text-base font-normal text-slate-600">{{ currency }}</span></dd>
+        <dd class="mt-1 text-sm text-slate-600">Estimated from completed appointments</dd>
+      </div>
+    </dl>
+  </section>
+
+  <div class="grid gap-6 *:min-w-0 xl:grid-cols-3">
+    <section class="card xl:col-span-2" aria-labelledby="volume-heading">
+      <div class="card-header"><h2 id="volume-heading" class="card-title">Appointments per day</h2></div>
+      <div class="card-body">
+        {% if report.volume_max %}
+          <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" preserveAspectRatio="none" class="h-40 w-full" aria-hidden="true" focusable="false">
+            {% for bar in chart.bars %}
+              <rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" rx="1" class="fill-brand-500"><title>{{ bar.day|date:"D j M" }}: {{ bar.count }}</title></rect>
+            {% endfor %}
+          </svg>
+          <div class="mt-2 flex justify-between text-xs text-slate-600">
+            <span>{{ chart.bars.0.day|date:"j M" }}</span><span>busiest day: {{ report.volume_max }}</span><span>{{ today|date:"j M" }}</span>
+          </div>
+          <table class="sr-only">
+            <caption>Appointments per day, last {{ filters.days }} days</caption>
+            <thead><tr><th scope="col">Day</th><th scope="col">Appointments</th></tr></thead>
+            <tbody>{% for bar in chart.bars %}<tr><td>{{ bar.day|date:"D j M" }}</td><td>{{ bar.count }}</td></tr>{% endfor %}</tbody>
+          </table>
+        {% else %}
+          {% include "components/empty_state.html" with title="No appointments in this period" icon="calendar" %}
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="services-heading">
+      <div class="card-header"><h2 id="services-heading" class="card-title">Popular services</h2></div>
+      {% if report.popular_services %}
+        <ol class="divide-y divide-slate-100">
+          {% for row in report.popular_services %}
+            <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm"><span class="min-w-0 truncate">{{ row.service__name }}</span><span class="font-semibold">{{ row.count }}</span></li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="card-body">{% include "components/empty_state.html" with title="No appointments yet" icon="calendar" %}</div>
+      {% endif %}
+    </section>
+  </div>
 {% endif %}
 
-<section class="card" aria-labelledby="today-heading">
-  <div class="card-header">
-    <h2 id="today-heading" class="card-title">{% if sees_all_appointments %}Today's appointments{% else %}Your appointments today{% endif %}</h2>
+  <div class="grid gap-6 *:min-w-0{% if report %} xl:grid-cols-2{% endif %}">
+    {% if report %}
+    <section class="card" aria-labelledby="providers-heading">
+      <div class="card-header"><h2 id="providers-heading" class="card-title">Top providers</h2></div>
+      {% if report.top_providers %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead><tr><th scope="col">Provider</th><th scope="col">Appointments</th><th scope="col">Completed</th><th scope="col">Est. revenue</th></tr></thead>
+            <tbody>
+              {% for row in report.top_providers %}
+                <tr><td>{{ row.name }}</td><td>{{ row.count }}</td><td>{{ row.completed }}</td><td class="whitespace-nowrap">{{ row.revenue|floatformat:2 }} {{ currency }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">{% include "components/empty_state.html" with title="No appointments yet" icon="calendar" %}</div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="card" aria-labelledby="upcoming-heading">
+      <div class="card-header">
+        <h2 id="upcoming-heading" class="card-title">{% if sees_all_appointments %}Upcoming appointments{% else %}Your upcoming appointments{% endif %}</h2>
+      </div>
+      {% if upcoming %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead><tr><th scope="col">When</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">With</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+              {% for appointment in upcoming %}
+                <tr>
+                  <td class="whitespace-nowrap font-medium">{% if appointment.start_datetime|date:"Y-m-d" == today|date:"Y-m-d" %}Today{% else %}{{ appointment.start_datetime|date:"D j M" }}{% endif %} {{ appointment.start_datetime|time:"H:i" }}</td>
+                  <td>{{ appointment.customer_name }}</td>
+                  <td>{{ appointment.service.name }}</td>
+                  <td>{{ appointment.staff.public_name }}</td>
+                  <td>{% include "dashboard/status_badge.html" with status=appointment.status label=appointment.get_status_display %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">{% include "components/empty_state.html" with title="No upcoming appointments" icon="calendar" %}</div>
+      {% endif %}
+    </section>
   </div>
-  {% if appointments %}
-    <div class="overflow-x-auto">
-      <table class="table">
-        <thead><tr><th scope="col">Time</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">With</th><th scope="col">Status</th></tr></thead>
-        <tbody>
-          {% for appointment in appointments %}
-            <tr>
-              <td class="whitespace-nowrap font-medium">{{ appointment.start_datetime|time:"H:i" }}–{{ appointment.end_datetime|time:"H:i" }}</td>
-              <td>{{ appointment.customer_name }}</td>
-              <td>{{ appointment.service.name }}</td>
-              <td>{{ appointment.staff.user.get_full_name|default:appointment.staff.user.email }}</td>
-              <td>{% include "dashboard/status_badge.html" with status=appointment.status label=appointment.get_status_display %}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    {% include "components/empty_state.html" with title="No appointments today" icon="calendar" %}
-  {% endif %}
-</section>
+</div>
+{% endpartialdef %}
 {% endblock %}

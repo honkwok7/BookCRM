@@ -577,4 +577,4 @@ class DashboardSummaryTimeZoneTests(TestCase):
         owner = member(OrganizationRole.OWNER, organization)
         self.client.force_login(owner)
         response = self.client.get(reverse("app-dashboard"))
-        self.assertEqual(len(response.context["appointments"]), summary["appointments_today"])
+        self.assertEqual(response.context["report"]["today"], summary["appointments_today"])

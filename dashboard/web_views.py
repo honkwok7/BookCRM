@@ -17,10 +17,18 @@ from django.views.generic import TemplateView
 
 from bookings.models import Booking
 from bookings.selectors import bookings_for_customer_account, bookings_visible_to
-from core.web import PlatformAdminMixin, TenantPageMixin, organization_zone, tenant_for_page
-from dashboard.selectors import organization_dashboard_summary
+from core.web import (
+    HtmxPartialMixin,
+    PlatformAdminMixin,
+    TenantPageMixin,
+    organization_zone,
+    tenant_for_page,
+)
+from dashboard.reporting import PERIODS, Filters, dashboard_report, upcoming_appointments
+from locations.models import Location
 from organizations.models import Organization, OrganizationRole
 from organizations.permissions import Capability
+from staff.models import StaffProfile
 
 User = get_user_model()
 INACTIVE_STATUSES = (Booking.Status.CANCELLED, Booking.Status.REJECTED)
@@ -44,31 +52,114 @@ def day_bounds(zone: ZoneInfo, day):
     return start, start + timedelta(days=1)
 
 
-class AppDashboardView(TenantPageMixin, TemplateView):
+class AppDashboardView(TenantPageMixin, HtmxPartialMixin, TemplateView):
+    """The organization dashboard (M5.1).
+
+    Everyone on the team sees the operational part: the upcoming appointments they may see.
+    With ``reports.view`` (owners and managers) the analytics widgets are added, narrowed by
+    period, location and provider; the filter bar refreshes ``#dashboard`` through htmx.
+    """
+
     template_name = "dashboard/app_dashboard.html"
+    partial_name = "dashboard"
+
+    def _filters(self, organization):
+        """The requested filters, keeping only values that belong to the organization."""
+        query = self.request.GET
+        days = int(query["days"]) if query.get("days", "").isdigit() else 30
+        locations = list(
+            Location.objects.filter(organization=organization, is_active=True).order_by(
+                "-is_default", "name"
+            )
+        )
+        providers = list(
+            StaffProfile.objects.filter(organization=organization, is_active=True)
+            .select_related("user")
+            .order_by("display_name", "user__first_name", "user__last_name")
+        )
+        location = next((str(i.pk) for i in locations if str(i.pk) == query.get("location")), None)
+        staff = next((str(i.pk) for i in providers if str(i.pk) == query.get("staff")), None)
+        filters = Filters(days=days if days in PERIODS else 30, location=location, staff=staff)
+        bar = [
+            {
+                "name": "days",
+                "label": "Period",
+                "value": str(filters.days),
+                "options": [(str(n), f"Last {n} days") for n in PERIODS if n != 30],
+                "all_label": "Last 30 days",
+            },
+        ]
+        if len(locations) > 1:
+            bar.append(
+                {
+                    "name": "location",
+                    "label": "Location",
+                    "value": location or "",
+                    "options": [(str(i.pk), i.name) for i in locations],
+                    "all_label": "Every location",
+                }
+            )
+        bar.append(
+            {
+                "name": "staff",
+                "label": "Provider",
+                "value": staff or "",
+                "options": [(str(i.pk), i.public_name) for i in providers],
+                "all_label": "Every provider",
+            }
+        )
+        return filters, bar
 
     def get_context_data(self, **kwargs):
         organization = self.tenant.organization
         zone = organization_zone(organization)
-        today = timezone.now().astimezone(zone).date()
-        start, end = day_bounds(zone, today)
-        appointments = (
-            bookings_visible_to(self.request)
-            .filter(start_datetime__gte=start, start_datetime__lt=end)
-            .exclude(status__in=INACTIVE_STATUSES)
-            .select_related("staff__user")
-            .order_by("start_datetime")
-        )
-        summary = None
-        if self.tenant.has(Capability.REPORTS_VIEW):
-            summary = organization_dashboard_summary(organization)
-        return super().get_context_data(**kwargs) | {
-            "today": today,
+        now = timezone.now()
+        visible = bookings_visible_to(self.request)
+        context = {
+            "today": now.astimezone(zone).date(),
             "zone": zone,
-            "appointments": appointments[:50],
-            "summary": summary,
             "sees_all_appointments": self.tenant.has(Capability.APPOINTMENTS_VIEW_ALL),
+            "report": None,
         }
+        if self.tenant.has(Capability.REPORTS_VIEW):
+            filters, bar = self._filters(organization)
+            if filters.location:
+                visible = visible.filter(location_id=filters.location)
+            if filters.staff:
+                visible = visible.filter(staff_id=filters.staff)
+            report = dashboard_report(organization, filters, now=now)
+            context |= {
+                "report": report,
+                "filters": filters,
+                "filter_bar": bar,
+                "filtered": bool(filters.location or filters.staff),
+                "chart": volume_chart(report["volume"], report["volume_max"]),
+                "currency": organization.currency,
+            }
+        context["upcoming"] = upcoming_appointments(visible, now=now)
+        return super().get_context_data(**kwargs) | context
+
+
+CHART_HEIGHT = 100
+BAR_WIDTH = 10
+
+
+def volume_chart(volume: list[dict], highest: int) -> dict:
+    """Bars for an SVG chart (drawn with attributes, not styles: the CSP forbids inline
+    styles). Heights are scaled to the busiest day."""
+    bars = []
+    for index, item in enumerate(volume):
+        height = round(CHART_HEIGHT * item["count"] / highest, 1) if highest else 0
+        bars.append(
+            item
+            | {
+                "x": index * BAR_WIDTH + 1,
+                "y": CHART_HEIGHT - height,
+                "height": height,
+                "width": BAR_WIDTH - 2,
+            }
+        )
+    return {"bars": bars, "width": len(volume) * BAR_WIDTH, "height": CHART_HEIGHT}
 
 
 class StaffDashboardView(TenantPageMixin, TemplateView):

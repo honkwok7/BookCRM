@@ -6,7 +6,7 @@ Leave out search_label for filters only. filters: a list of {"name", "label", "v
 {% endcomment %}
 <form method="get" role="search" class="flex flex-col gap-3 sm:flex-row sm:items-center"
       action="{{ request.path }}" hx-get="{{ request.path }}" hx-target="{{ target }}" hx-push-url="true"
-      hx-trigger="input changed delay:300ms from:find input[type=search], change from:find select, submit">
+      hx-trigger="input changed delay:300ms from:find input[type=search], change, submit">
   {% if search_label %}{% include "components/search.html" with name="q" value=query label=search_label %}{% endif %}
   {% for filter in filters %}
     <div>
