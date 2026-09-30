@@ -52,3 +52,32 @@ listed with `@source inline(...)` in `static/src/app.css`. The page uses a fixed
 queries however many appointments it shows, and a test checks this.
 
 Drag-and-drop rescheduling isn't built. It would call `reschedule_booking`.
+
+## Appointment screens (M4.5)
+
+| Screen | What it does |
+|---|---|
+| `/app/appointments/` | A list with search (customer name, email, phone, reference) and filters: when (upcoming, today, past, all), status and provider. Upcoming and today show active appointments unless a status is chosen |
+| `/app/appointments/new/` | A new appointment, in the page dialog |
+| `/app/appointments/walk-in/` | Someone walks in: book from the next minute with the chosen provider, or the first one free, and check them in straight away |
+| `/app/appointments/<id>/reschedule/` | A new date and time with the same provider. The appointment's own time doesn't block its new one. The old appointment is closed as rescheduled |
+
+**The new appointment form:**
+
+- **Customer.** Search the customers you may read, or enter a new customer with a name and
+  an email or phone number. Phone-only customers are fine.
+- **Location, service, provider and date.** Location defaults to the default location. The
+  provider can be "First available" when several offer the service.
+- **Times.** A list of free times, each showing who is free.
+- **Rebuilding the choices.** Every change re-posts the form to rebuild the choices (htmx,
+  `refresh`). Without JavaScript the Update button does the same.
+- **Booking.** It goes through the booking service with the team's rules (no online notice
+  or booking window), so the time is checked again under the lock.
+
+**Access and sources:**
+
+- The screens need `appointments.manage` to book.
+- Providers without `appointments.view_all` see and book only their own appointments, and
+  can look up only their own customers.
+- The source is `reception` for receptionists and `staff` for everyone else.
+- A reschedule keeps the appointment's original source, and its history records who moved it.

@@ -199,6 +199,7 @@ def create_booking(
     activity_kind: str | None = Kind.APPOINTMENT_BOOKED,
     idempotency_key: str = "",
     rescheduled_from: Booking | None = None,
+    history_source: str | None = None,
 ):
     """Book an appointment, or raise ``DomainError`` (400) / ``ConflictError`` (409).
 
@@ -206,6 +207,8 @@ def create_booking(
     time to the online-booking rules too (minimum notice, how far ahead), for bookings made by
     customers. ``source``: where the booking came from (``Booking.Source``).
     ``idempotency_key``: repeating the call with the same key returns the first booking.
+    ``history_source``: the channel recorded on the first history row when it differs from
+    ``source`` (a reschedule keeps the booking's origin but records who moved it).
     ``customer``: book for this existing CRM customer instead of looking one up by the contact
     details (reschedule). ``activity_kind``: the timeline entry to record, or None when the
     caller records its own.
@@ -318,7 +321,7 @@ def create_booking(
         old_status="",
         new_status=booking.status,
         changed_by=actor,
-        source=source,
+        source=history_source or source,
         reason="Rescheduled" if rescheduled_from is not None else "",
     )
     BookingActivityLog.objects.create(
@@ -678,6 +681,7 @@ def reschedule_booking(
         customer=booking.customer,
         activity_kind=None,
         rescheduled_from=booking,
+        history_source=source,  # the channel of this change; the booking keeps its origin
     )
     record_audit(
         AuditAction.BOOKING_RESCHEDULED,

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from bookings import calendar_views
+from bookings import appointment_views, calendar_views
 from bookings import web_views as views
 
 urlpatterns = [
@@ -9,6 +9,26 @@ urlpatterns = [
         "app/calendar/events.json",
         calendar_views.CalendarEventsView.as_view(),
         name="app-calendar-events",
+    ),
+    path(
+        "app/appointments/",
+        appointment_views.AppointmentListView.as_view(),
+        name="app-appointment-list",
+    ),
+    path(
+        "app/appointments/new/",
+        appointment_views.NewAppointmentView.as_view(),
+        name="app-appointment-new",
+    ),
+    path(
+        "app/appointments/walk-in/",
+        appointment_views.WalkInView.as_view(),
+        name="app-appointment-walk-in",
+    ),
+    path(
+        "app/appointments/<uuid:pk>/reschedule/",
+        appointment_views.RescheduleView.as_view(),
+        name="app-appointment-reschedule",
     ),
     path(
         "app/appointments/<uuid:pk>/",

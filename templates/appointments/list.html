@@ -1,0 +1,49 @@
+{% extends "layouts/app.html" %}
+{% load tz %}
+{% block title %}Appointments · {{ organization.name }}{% endblock %}
+{% block page_title %}Appointments{% endblock %}
+{% block page_actions %}
+  {% if can_book %}
+    <a href="{% url 'app-appointment-walk-in' %}" class="btn btn-secondary" hx-get="{% url 'app-appointment-walk-in' %}" hx-target="#modal-body">Walk-in</a>
+    <a href="{% url 'app-appointment-new' %}" class="btn btn-primary" hx-get="{% url 'app-appointment-new' %}" hx-target="#modal-body">
+      {% include "components/icon.html" with name="plus" class="size-4" %}New appointment
+    </a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="border-b border-slate-200 p-4">
+    {% include "components/filter_bar.html" with target="#results" query=query search_label="Search by customer or reference" filters=filters %}
+  </div>
+  <div id="results">
+    {% partialdef results inline %}
+    {% timezone zone %}
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <caption class="sr-only">Appointments</caption>
+          <thead><tr><th scope="col">When</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">Provider</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {% for booking in page_obj %}
+              <tr>
+                <td class="whitespace-nowrap"><a href="{% url 'app-appointment' booking.pk %}">{{ booking.start_datetime|date:"D, M j" }}, {{ booking.start_datetime|time:"g:i A" }}</a>{% if booking.location %}<span class="block text-xs text-slate-600">{{ booking.location.name }}</span>{% endif %}</td>
+                <td class="font-medium">{{ booking.customer_name }}<span class="block text-xs font-normal text-slate-600">{{ booking.reference }}</span></td>
+                <td class="text-slate-700">{{ booking.service.name }}</td>
+                <td class="text-slate-700">{{ booking.staff.public_name }}</td>
+                <td>{% include "components/badge.html" with label=booking.get_status_display level=booking.status_level %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj target="#results" %}
+    {% elif filtered %}
+      {% include "components/empty_state.html" with title="No matching appointments" message="Try another search or filter." icon="search" %}
+    {% else %}
+      {% include "components/empty_state.html" with title="No upcoming appointments" message="New appointments appear here." icon="calendar" %}
+    {% endif %}
+    {% endtimezone %}
+    {% endpartialdef %}
+  </div>
+</div>
+{% endblock %}

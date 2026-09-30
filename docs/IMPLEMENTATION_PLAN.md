@@ -1238,6 +1238,19 @@ A week view with 500 events loads in under 300 ms on the server.
 
 ### M4.5: Reception and staff booking flows
 
+> **Status: done (2026-09-30, branch `m4.5-appointment-screens`).** See
+> [CALENDAR.md](CALENDAR.md#appointment-screens-m45).
+> - `/app/appointments/`: a list with filters. Screens for a new appointment (customer search
+>   or an inline new customer, free times with who is free, "first available"), walk-in
+>   (starts at the next minute and is checked in) and reschedule (same provider, the
+>   appointment's own time ignored). Cancel, check-in and check-out are in the appointment
+>   panel (M4.4).
+> - The source is `reception` or `staff`. A reschedule records the channel in the new
+>   appointment's history and keeps the original `Booking.source`
+>   (`create_booking(history_source=...)`).
+> - The booking form is a single form that rebuilds its choices (htmx refresh, or an Update
+>   button without JavaScript) rather than a multi-step wizard.
+
 #### Objective
 Operational booking UI.
 
