@@ -133,7 +133,9 @@ def get_public_organization(slug: str | None) -> Organization | None:
 
 
 @transaction.atomic
-def suspend_organization(*, organization: Organization, reason: str, actor=None) -> None:
+def suspend_organization(
+    *, organization: Organization, reason: str, actor=None, actor_type: str | None = None
+) -> None:
     from core.audit import AuditAction, record_audit
 
     organization.is_suspended = True
@@ -149,11 +151,14 @@ def suspend_organization(*, organization: Organization, reason: str, actor=None)
         object_type="Organization",
         object_identifier=str(organization.pk),
         metadata={"reason": reason},
+        actor_type=actor_type,
     )
 
 
 @transaction.atomic
-def reactivate_organization(*, organization: Organization, actor=None) -> None:
+def reactivate_organization(
+    *, organization: Organization, actor=None, reason: str = "", actor_type: str | None = None
+) -> None:
     from core.audit import AuditAction, record_audit
 
     organization.is_suspended = False
@@ -168,4 +173,6 @@ def reactivate_organization(*, organization: Organization, actor=None) -> None:
         actor=actor,
         object_type="Organization",
         object_identifier=str(organization.pk),
+        metadata={"reason": reason} if reason else None,
+        actor_type=actor_type,
     )

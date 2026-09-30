@@ -18,14 +18,13 @@ from bookings.models import Booking
 from bookings.selectors import bookings_visible_to
 from core.web import (
     HtmxPartialMixin,
-    PlatformAdminMixin,
     TenantPageMixin,
     organization_zone,
     tenant_for_page,
 )
 from dashboard.reporting import PERIODS, Filters, dashboard_report, upcoming_appointments
 from locations.models import Location
-from organizations.models import Organization, OrganizationRole
+from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from staff.models import StaffProfile
 
@@ -36,7 +35,7 @@ INACTIVE_STATUSES = (Booking.Status.CANCELLED, Booking.Status.REJECTED)
 @login_required
 def home(request):
     """Where "home" is depends on who you are: platform, team, staff or customer."""
-    if request.user.is_superuser:
+    if request.user.is_platform_user:
         return redirect("saas-dashboard")
     tenant = tenant_for_page(request)
     if tenant is None or tenant.role == OrganizationRole.CUSTOMER:
@@ -161,23 +160,6 @@ def volume_chart(volume: list[dict], highest: int) -> dict:
             }
         )
     return {"bars": bars, "width": len(volume) * BAR_WIDTH, "height": CHART_HEIGHT}
-
-
-class SaasDashboardView(PlatformAdminMixin, TemplateView):
-    """Platform operator overview. Counts only: no tenant records are shown here."""
-
-    template_name = "dashboard/saas_dashboard.html"
-
-    def get_context_data(self, **kwargs):
-        organizations = Organization.objects.all()
-        return super().get_context_data(**kwargs) | {
-            "stats": {
-                "organizations": organizations.count(),
-                "active": organizations.filter(is_active=True, is_suspended=False).count(),
-                "suspended": organizations.filter(is_suspended=True).count(),
-                "users": User.objects.filter(is_active=True).count(),
-            }
-        }
 
 
 class ComponentGalleryView(TenantPageMixin, TemplateView):

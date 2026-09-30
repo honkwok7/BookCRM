@@ -5,8 +5,11 @@ from organizations.tenancy import resolve_tenant
 
 
 class IsPlatformAdmin(BasePermission):
+    """Platform staff or superusers (``User.is_platform_user``)."""
+
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_platform_user)
 
 
 class IsOrganizationMember(BasePermission):

@@ -11,7 +11,13 @@ from organizations.models import OrganizationMembership, OrganizationRole
 from tests import factories as f
 
 User = get_user_model()
-ELEVATION = {"role": "owner", "is_staff": True, "is_superuser": True, "is_platform_admin": True}
+ELEVATION = {
+    "role": "owner",
+    "is_staff": True,
+    "is_superuser": True,
+    "is_platform_admin": True,
+    "is_platform_staff": True,
+}
 
 
 class PrivilegeEscalationTests(APITestCase):
@@ -32,6 +38,7 @@ class PrivilegeEscalationTests(APITestCase):
         user = User.objects.get(email="new-user@example.test")
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_platform_staff)
         self.assertFalse(OrganizationMembership.objects.filter(user=user).exists())
         self.client.force_authenticate(user)
         self.assertEqual(self.client.get("/api/v1/customers/").status_code, 403)
@@ -49,6 +56,7 @@ class PrivilegeEscalationTests(APITestCase):
                 self.assertEqual(user.first_name, "Allowed edit")
                 self.assertFalse(user.is_staff)
                 self.assertFalse(user.is_superuser)
+                self.assertFalse(user.is_platform_staff)
 
     def test_removed_membership_takes_effect_for_an_existing_jwt(self):
         membership = f.MembershipFactory(role=OrganizationRole.MANAGER)

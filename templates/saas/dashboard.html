@@ -1,0 +1,36 @@
+{% extends "layouts/saas.html" %}
+{% comment %}Platform overview (saas/views.py DashboardView, saas/metrics.py). Counts only.{% endcomment %}
+{% block title %}Platform · {{ brand_name }}{% endblock %}
+{% block page_title %}Platform overview{% endblock %}
+{% block page_actions %}<a href="{% url 'saas-organization-new' %}" class="btn btn-primary">New organization</a>{% endblock %}
+{% block content %}
+{% with o=overview %}
+{% if o.alerts %}
+  <section aria-label="System alerts" class="mb-6 grid gap-2">
+    {% for level, message in o.alerts %}{% include "components/alert.html" with level=level message=message %}{% endfor %}
+  </section>
+{% endif %}
+<dl class="grid gap-4 *:min-w-0 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="card card-body"><dt class="text-sm text-slate-600">Organizations</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.organizations.total }}</dd><dd class="text-sm text-slate-600">{{ o.organizations.active }} active · {{ o.organizations.suspended }} suspended</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Trialing / paying</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.subscriptions.trialing }} / {{ o.subscriptions.paying }}</dd><dd class="text-sm text-slate-600">{{ o.subscriptions.trials_ending }} trial{{ o.subscriptions.trials_ending|pluralize }} ending within 7 days</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">MRR (plan prices)</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.mrr|floatformat:2 }}</dd><dd class="text-sm text-slate-600">Active subscriptions; a yearly plan counts as 1/12 of its price</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">New organizations, last {{ o.recent_days }} days</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.organizations.new }}</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Accounts</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.users.total }}</dd><dd class="text-sm text-slate-600">{{ o.users.active }} signed in, {{ o.users.new }} joined in the last {{ o.recent_days }} days</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Appointments booked, last {{ o.recent_days }} days</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.appointments.created }}</dd><dd class="text-sm text-slate-600">{{ o.appointments.week }} in the last 7 days</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Failed notifications, 24 h</dt><dd class="mt-1 text-3xl font-semibold tabular-nums">{{ o.failed_notifications }}</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Background worker</dt><dd class="mt-1 font-semibold">{% if o.heartbeat %}Last heartbeat {{ o.heartbeat|date:"H:i" }} UTC{% else %}No heartbeat yet{% endif %}</dd></div>
+</dl>
+
+<section class="card mt-6" aria-labelledby="plans-heading">
+  <div class="card-header"><h2 id="plans-heading" class="card-title">Subscriptions by plan</h2></div>
+  {% if o.plans %}
+    <ul class="divide-y divide-slate-100">
+      {% for row in o.plans %}<li class="flex justify-between gap-3 px-4 py-2 text-sm"><span>{{ row.plan__name }}</span><span class="font-semibold tabular-nums">{{ row.count }}</span></li>{% endfor %}
+    </ul>
+  {% else %}
+    <p class="card-body text-sm text-slate-600">No subscriptions yet.</p>
+  {% endif %}
+</section>
+<p class="mt-4 text-xs text-slate-600">Updated {{ o.computed_at|date:"H:i" }} UTC; figures are cached for a minute. Organizations' customers and appointments are not shown here.</p>
+{% endwith %}
+{% endblock %}

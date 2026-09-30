@@ -1,0 +1,38 @@
+{% extends "layouts/saas.html" %}
+{% comment %}Platform-wide audit trail (saas/views.py AuditLogView). Details only for platform
+actions: an organization's own entries can describe its customers.{% endcomment %}
+{% block title %}Audit log · Platform{% endblock %}
+{% block page_title %}Audit log{% endblock %}
+{% block content %}
+<form method="get" class="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <label for="audit-action" class="sr-only">Action</label>
+  <select id="audit-action" name="action" class="input sm:w-auto">
+    <option value="">Any action</option>
+    {% for value in actions %}<option value="{{ value }}"{% if value == action %} selected{% endif %}>{{ value }}</option>{% endfor %}
+  </select>
+  <label for="audit-org" class="sr-only">Organization address</label>
+  <input id="audit-org" type="search" name="organization" value="{{ organization_slug }}" placeholder="Organization address" class="input sm:max-w-xs">
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="platform" value="1"{% if platform_only %} checked{% endif %}> Platform actions only</label>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+</form>
+<div class="card overflow-x-auto">
+  <table class="table">
+    <thead><tr><th scope="col">When (UTC)</th><th scope="col">Action</th><th scope="col">Organization</th><th scope="col">By</th><th scope="col">Object</th><th scope="col">Details</th></tr></thead>
+    <tbody>
+      {% for entry in page_obj.object_list %}
+        <tr>
+          <td class="whitespace-nowrap">{{ entry.created_at|date:"j M Y H:i" }}</td>
+          <td class="whitespace-nowrap font-medium">{{ entry.action }}</td>
+          <td>{% if entry.organization %}<a href="{% url 'saas-organization' entry.organization.pk %}">{{ entry.organization.slug }}</a>{% else %}–{% endif %}</td>
+          <td>{{ entry.user.email|default:entry.actor_type }}{% if entry.actor_type == platform_type %} <span class="text-xs text-slate-600">(platform)</span>{% endif %}</td>
+          <td class="text-xs text-slate-600">{{ entry.object_type }}</td>
+          <td class="text-xs text-slate-600">{% if entry.actor_type == platform_type %}{% if entry.metadata.reason %}{{ entry.metadata.reason }}{% elif entry.metadata.changes %}{{ entry.metadata.changes|join:", " }}{% endif %}{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-slate-600">Nothing matches.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include "components/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}

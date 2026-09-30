@@ -1,0 +1,56 @@
+{% extends "layouts/saas.html" %}
+{% comment %}One account (saas/views.py UserDetailView). "account": "user" is the signed-in admin.{% endcomment %}
+{% block title %}{{ account.email }} · Platform{% endblock %}
+{% block page_title %}{{ account.email }}{% endblock %}
+{% block content %}
+<div class="grid gap-6 *:min-w-0 lg:grid-cols-2">
+  <section class="card" aria-labelledby="account-heading">
+    <div class="card-header"><h2 id="account-heading" class="card-title">Account</h2></div>
+    <dl class="card-body grid gap-3 text-sm sm:grid-cols-2">
+      <div><dt class="text-slate-600">Name</dt><dd class="font-medium">{{ account.get_full_name|default:"–" }}</dd></div>
+      <div><dt class="text-slate-600">Email</dt><dd class="font-medium">{{ account.email }}{% if not account.email_verified %} (unverified){% endif %}</dd></div>
+      <div><dt class="text-slate-600">Joined</dt><dd class="font-medium">{{ account.date_joined|date:"j M Y" }}</dd></div>
+      <div><dt class="text-slate-600">Last sign-in</dt><dd class="font-medium">{{ account.last_login|date:"j M Y H:i"|default:"Never" }}</dd></div>
+      <div><dt class="text-slate-600">State</dt><dd class="font-medium">{% if account.is_active %}Active{% else %}Deactivated{% endif %}</dd></div>
+      <div><dt class="text-slate-600">Platform</dt><dd class="font-medium">{% if account.is_superuser %}Superuser{% elif account.is_platform_staff %}Platform staff{% else %}No{% endif %}</dd></div>
+    </dl>
+  </section>
+
+  <section class="card" aria-labelledby="memberships-heading">
+    <div class="card-header"><h2 id="memberships-heading" class="card-title">Organizations</h2></div>
+    {% if memberships %}
+      <ul class="divide-y divide-slate-100">
+        {% for membership in memberships %}
+          <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm"><a href="{% url 'saas-organization' membership.organization.pk %}">{{ membership.organization.name }}</a><span>{{ membership.get_role_display }}{% if not membership.is_active %} (left){% endif %}</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">Not a member of any organization.</p>
+    {% endif %}
+  </section>
+
+  {% if account.pk != user.pk %}
+  <section class="card" aria-labelledby="access-heading">
+    <div class="card-header"><h2 id="access-heading" class="card-title">{% if account.is_active %}Deactivate{% else %}Reactivate{% endif %} account</h2></div>
+    <form method="post" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="{{ account.is_active|yesno:'deactivate,reactivate' }}">
+      {% include "components/form_errors.html" with form=reason_form %}
+      <p class="text-sm text-slate-700">{% if account.is_active %}They can't sign in until reactivated. Their memberships and data stay.{% else %}They can sign in again.{% endif %}</p>
+      {% include "components/field.html" with field=reason_form.reason %}
+      <div><button type="submit" class="btn {% if account.is_active %}btn-danger{% else %}btn-primary{% endif %}">{% if account.is_active %}Deactivate{% else %}Reactivate{% endif %}</button></div>
+    </form>
+  </section>
+  {% if user.is_superuser and not account.is_superuser %}
+  <section class="card" aria-labelledby="platform-heading">
+    <div class="card-header"><h2 id="platform-heading" class="card-title">Platform access</h2></div>
+    <form method="post" class="card-body grid gap-4">
+      {% csrf_token %}
+      <p class="text-sm text-slate-700">Platform staff use these /saas/ pages. It gives no access to organizations' data.</p>
+      <div><button type="submit" name="action" value="{{ account.is_platform_staff|yesno:'revoke_platform,grant_platform' }}" class="btn btn-secondary">{% if account.is_platform_staff %}Remove platform access{% else %}Make platform staff{% endif %}</button></div>
+    </form>
+  </section>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,23 +1,30 @@
 {% extends "base.html" %}
-{% comment %}Platform operator pages (/saas/). Superusers only; no tenant data by default.{% endcomment %}
+{% comment %}Platform operator pages (/saas/, saas/views.py). Platform staff and superusers; no
+organization's customer or appointment data here.{% endcomment %}
 {% block body_class %}flex min-h-screen flex-col{% endblock %}
 {% block body %}
 <header class="bg-slate-900 text-white">
-  <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-    <a href="{% url 'saas-dashboard' %}" class="flex items-center gap-2 font-bold text-white no-underline hover:no-underline">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-3 px-4 py-2 sm:px-6">
+    <a href="{% url 'saas-dashboard' %}" class="flex h-10 items-center gap-2 font-bold text-white no-underline hover:no-underline">
       {% include "components/icon.html" with name="shield" %}{{ brand_name }} Platform
     </a>
-    <nav aria-label="Platform" class="flex items-center gap-2 text-sm">
-      <a href="{% url 'admin:index' %}" class="rounded-md px-3 py-2 text-slate-200 no-underline hover:bg-white/10 hover:text-white hover:no-underline">Django admin</a>
-      <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit" class="rounded-md px-3 py-2 text-slate-200 hover:bg-white/10 hover:text-white">Sign out</button>
-      </form>
-    </nav>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-white/10 hover:text-white">Sign out</button>
+    </form>
   </div>
+  <nav aria-label="Platform" class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 pb-2 text-sm sm:px-4">
+    {% for key, label, url_name in saas_sections %}
+      <a href="{% url url_name %}" class="shrink-0 rounded-md px-3 py-2 no-underline hover:no-underline {% if key == section %}bg-white/15 text-white{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}"{% if key == section %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+    {% if user.is_superuser %}<a href="{% url 'admin:index' %}" class="shrink-0 rounded-md px-3 py-2 text-slate-300 no-underline hover:bg-white/10 hover:text-white hover:no-underline">Django admin</a>{% endif %}
+  </nav>
 </header>
 <main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
-  <h1 class="mb-6 text-2xl font-bold tracking-tight">{% block page_title %}{% endblock %}</h1>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <h1 class="text-2xl font-bold tracking-tight">{% block page_title %}{% endblock %}</h1>
+    <div class="flex flex-wrap gap-2">{% block page_actions %}{% endblock %}</div>
+  </div>
   {% block content %}{% endblock %}
 </main>
 {% endblock %}

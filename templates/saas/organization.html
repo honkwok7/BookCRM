@@ -1,0 +1,72 @@
+{% extends "layouts/saas.html" %}
+{% comment %}One organization (saas/views.py OrganizationDetailView): platform facts and counts
+only, never its customers or appointments.{% endcomment %}
+{% block title %}{{ organization.name }} · Platform{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% if organization.is_suspended %}{% include "components/alert.html" with level="error" title="Suspended" message=organization.suspension_reason %}<div class="mb-6"></div>{% endif %}
+<div class="grid gap-6 *:min-w-0 lg:grid-cols-2">
+  <section class="card" aria-labelledby="facts-heading">
+    <div class="card-header"><h2 id="facts-heading" class="card-title">Organization</h2></div>
+    <dl class="card-body grid gap-3 text-sm sm:grid-cols-2">
+      <div><dt class="text-slate-600">Address</dt><dd class="font-medium">{{ organization.slug }}</dd></div>
+      <div><dt class="text-slate-600">Created</dt><dd class="font-medium">{{ organization.created_at|date:"j M Y" }}</dd></div>
+      <div><dt class="text-slate-600">Time zone</dt><dd class="font-medium">{{ organization.timezone }}</dd></div>
+      <div><dt class="text-slate-600">Currency</dt><dd class="font-medium">{{ organization.currency }}</dd></div>
+      <div><dt class="text-slate-600">Owners</dt><dd class="font-medium">{% for member in owners %}<a href="{% url 'saas-user' member.user.pk %}" class="block">{{ member.user.email }}</a>{% empty %}None yet{% endfor %}</dd></div>
+      <div><dt class="text-slate-600">Members</dt><dd class="font-medium">{% for row in roles %}<span class="block">{{ row.count }} {{ row.role }}</span>{% empty %}None{% endfor %}</dd></div>
+      <div><dt class="text-slate-600">Staff profiles</dt><dd class="font-medium tabular-nums">{{ counts.staff }}</dd></div>
+      <div><dt class="text-slate-600">Customers</dt><dd class="font-medium tabular-nums">{{ counts.customers }}</dd></div>
+      <div><dt class="text-slate-600">Appointments</dt><dd class="font-medium tabular-nums">{{ counts.appointments }} ({{ counts.appointments_recent }} booked in 30 days)</dd></div>
+    </dl>
+    {% if invitations %}
+      <div class="border-t border-slate-100 px-4 py-3 text-sm"><p class="font-medium">Open invitations</p>{% for invitation in invitations %}<p class="text-slate-600">{{ invitation.email }} · {{ invitation.role }} · expires {{ invitation.expires_at|date:"j M Y" }}</p>{% endfor %}</div>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="subscription-heading">
+    <div class="card-header"><h2 id="subscription-heading" class="card-title">Subscription</h2></div>
+    {% if subscription_form %}
+      <form method="post" action="{% url 'saas-subscription-change' organization.pk %}" class="card-body grid gap-4" novalidate>
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=subscription_form %}
+        <div class="grid gap-4 *:min-w-0 sm:grid-cols-2">
+          {% include "components/field.html" with field=subscription_form.plan %}
+          {% include "components/field.html" with field=subscription_form.status %}
+          {% include "components/field.html" with field=subscription_form.billing_cycle %}
+          {% include "components/field.html" with field=subscription_form.trial_end %}
+          {% include "components/field.html" with field=subscription_form.current_period_end %}
+        </div>
+        <p class="text-xs text-slate-600">Times in UTC. There is no payment provider yet: this changes the record only.</p>
+        <div><button type="submit" class="btn btn-secondary">Save subscription</button></div>
+      </form>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">No subscription.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="status-heading">
+    <div class="card-header"><h2 id="status-heading" class="card-title">{% if organization.is_suspended %}Reactivate{% else %}Suspend{% endif %}</h2></div>
+    <form method="post" action="{% url 'saas-organization-status' organization.pk organization.is_suspended|yesno:'reactivate,suspend' %}" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      {% include "components/form_errors.html" with form=reason_form %}
+      <p class="text-sm text-slate-700">{% if organization.is_suspended %}Its members get their access back.{% else %}Its members lose access to the app and its booking page closes. The owner sees the reason.{% endif %}</p>
+      {% include "components/field.html" with field=reason_form.reason %}
+      <div><button type="submit" class="btn {% if organization.is_suspended %}btn-primary{% else %}btn-danger{% endif %}">{% if organization.is_suspended %}Reactivate{% else %}Suspend{% endif %}</button></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="history-heading">
+    <div class="card-header flex items-center justify-between gap-3"><h2 id="history-heading" class="card-title">Platform actions</h2><a href="{% url 'saas-audit' %}?organization={{ organization.slug }}" class="text-sm">Full audit log</a></div>
+    {% if history %}
+      <ul class="divide-y divide-slate-100">
+        {% for entry in history %}
+          <li class="px-4 py-2 text-sm"><span class="font-medium">{{ entry.action }}</span> · {{ entry.user.email|default:"system" }}<span class="block text-slate-600">{{ entry.created_at|date:"j M Y H:i" }}{% if entry.metadata.reason %} · {{ entry.metadata.reason }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">None yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

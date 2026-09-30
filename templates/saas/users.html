@@ -1,0 +1,33 @@
+{% extends "layouts/saas.html" %}
+{% block title %}Users · Platform{% endblock %}
+{% block page_title %}Users{% endblock %}
+{% block content %}
+<form method="get" role="search" class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+  <label for="user-q" class="sr-only">Search by email or name</label>
+  <input id="user-q" type="search" name="q" value="{{ query }}" placeholder="Email or name" class="input sm:max-w-xs">
+  <button type="submit" class="btn btn-secondary">Search</button>
+</form>
+<div class="card overflow-x-auto">
+  <table class="table">
+    <thead><tr><th scope="col">Account</th><th scope="col">Organizations</th><th scope="col">Joined</th><th scope="col">Last sign-in</th><th scope="col">State</th></tr></thead>
+    <tbody>
+      {% for account in page_obj.object_list %}
+        <tr>
+          <td><a href="{% url 'saas-user' account.pk %}" class="font-medium">{{ account.email }}</a><span class="block text-xs text-slate-600">{{ account.get_full_name }}</span></td>
+          <td class="tabular-nums">{{ account.organizations }}</td>
+          <td class="whitespace-nowrap">{{ account.date_joined|date:"j M Y" }}</td>
+          <td class="whitespace-nowrap">{{ account.last_login|date:"j M Y"|default:"Never" }}</td>
+          <td class="flex flex-wrap gap-1">
+            {% if not account.is_active %}{% include "components/badge.html" with label="Deactivated" level="danger" %}{% endif %}
+            {% if account.is_superuser %}{% include "components/badge.html" with label="Superuser" level="warning" %}{% elif account.is_platform_staff %}{% include "components/badge.html" with label="Platform staff" level="brand" %}{% endif %}
+            {% if not account.email_verified %}{% include "components/badge.html" with label="Unverified" %}{% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-slate-600">No accounts match.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include "components/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}

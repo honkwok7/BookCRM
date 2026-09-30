@@ -1575,6 +1575,13 @@ A customer books, reschedules and cancels within policy from the portal.
 
 ### M5.5: SaaS administration
 
+> **Status: part one done (2026-09-30, branch `m5.5-saas-admin`).** See [SAAS.md](SAAS.md).
+> - `User.is_platform_staff`; `/saas/` for platform staff and superusers: overview (tenants,
+>   trialing and paying, MRR, sign-ups, plan mix, appointment volume, active accounts, failed
+>   notifications, worker heartbeat), organizations (create, suspend and reactivate with a
+>   reason), subscriptions, plans, users, audit log. All audited as platform actions.
+> - Part two (M5.5b): announcements, feature flags, impersonation.
+
 #### Objective
 A separate platform admin UI.
 

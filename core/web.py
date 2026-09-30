@@ -85,12 +85,13 @@ class TenantPageMixin(LoginRequiredMixin):
 
 
 class PlatformAdminMixin(LoginRequiredMixin):
-    """Platform (SaaS operator) pages. Superusers only; they get no tenant access from this."""
+    """Platform (SaaS operator) pages: platform staff and superusers. They get no access to an
+    organization's data from this; only impersonation (M5.5) reaches it."""
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        if not request.user.is_superuser:
+        if not request.user.is_platform_user:
             raise PermissionDenied(NO_ACCESS_MESSAGE)
         return super().dispatch(request, *args, **kwargs)
 
