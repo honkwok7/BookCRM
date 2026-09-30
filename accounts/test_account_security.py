@@ -113,7 +113,7 @@ class PasswordResetTests(APITestCase):
                 "/api/forgot-password/", {"email": "ADA@example.test"}, format="json"
             )
         self.assertEqual(response.status_code, 200)
-        delay.assert_called_once_with(user_id=self.user.pk)
+        delay.assert_called_once_with(email="ADA@example.test")  # looked up in the worker
         send_password_reset_email.apply(kwargs=delay.call_args.kwargs).get()
         self.assertIn(
             f"https://app.example/reset-password/?uid={self.user.pk}&token=", mail.outbox[0].body

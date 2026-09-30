@@ -341,7 +341,7 @@ class BookingApiTests(TwoTenants):
 
     def test_reschedule_keeps_customer_account_link(self):
         customer_user = User.objects.create_user(
-            email="linked@example.test", password="Password12345!"
+            email="linked@example.test", password="Password12345!", email_verified=True
         )
         linked = create_booking(
             organization=self.org_a,

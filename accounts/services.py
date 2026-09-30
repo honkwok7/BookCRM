@@ -30,8 +30,16 @@ def queue_verification_email(user) -> EmailVerificationToken:
     return token
 
 
-def queue_password_reset_email(user) -> None:
-    transaction.on_commit(partial(_enqueue, send_password_reset_email, user_id=user.pk))
+def queue_password_reset_email(email: str) -> None:
+    """Queue a reset email for ``email``. Called for every request, account or not: the
+    worker finds the account (see ``accounts.tasks``)."""
+    transaction.on_commit(partial(_enqueue, send_password_reset_email, email=email.strip()))
+
+
+def queue_verification_resend(email: str) -> None:
+    """Queue a new verification email for ``email``; the worker sends it only to an
+    unverified account (see ``accounts.tasks``)."""
+    transaction.on_commit(partial(_enqueue, send_verification_email, email=email.strip()))
 
 
 def revoke_refresh_tokens(user) -> int:

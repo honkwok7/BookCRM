@@ -345,11 +345,15 @@ class PasswordResetPageTests(TestCase):
         self.user = f.UserFactory()
 
     @mock.patch("accounts.services.send_password_reset_email.delay")
-    def test_request_sends_email_only_for_real_accounts_with_the_same_answer(self, delay):
+    def test_request_does_the_same_work_and_answer_for_any_address(self, delay):
         with self.captureOnCommitCallbacks(execute=True):
             known = self.client.post(reverse("password-reset"), {"email": self.user.email})
             unknown = self.client.post(reverse("password-reset"), {"email": "nobody@example.test"})
-        delay.assert_called_once_with(user_id=self.user.pk)
+        # The worker decides whether there is an account to email (accounts.tasks).
+        self.assertEqual(
+            [call.kwargs for call in delay.call_args_list],
+            [{"email": self.user.email}, {"email": "nobody@example.test"}],
+        )
         self.assertEqual(known["Location"], unknown["Location"])
 
     @override_settings(WEB_PASSWORD_RESET_RATE="2/3600")

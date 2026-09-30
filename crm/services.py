@@ -8,7 +8,8 @@ Errors are ``DomainError`` (400) or ``ConflictError`` (409) with a stable ``code
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -178,15 +179,42 @@ def update_customer(*, customer: Customer, actor=None, **changes) -> Customer:
     return customer
 
 
+def _may_link(user, email: str) -> bool:
+    """May ``user`` be linked to a customer with ``email``? Only as themselves: a verified
+    account whose email is that email. Otherwise anyone signed in could book under somebody
+    else's address and see (and change) that person's later appointments."""
+    return (
+        user is not None
+        and bool(email)
+        and user.email_verified
+        and user.email.strip().lower() == email.lower()
+    )
+
+
+def _lock_phone(organization, phone: str) -> None:
+    """Serialize phone-only lookups for one number (PostgreSQL advisory lock, released at
+    commit). Phones aren't unique (a family can share one), so a constraint can't do this."""
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                [f"customer-phone:{organization.pk}:{phone}"],
+            )
+
+
+@transaction.atomic
 def find_or_create_customer(
     *, organization, name, email="", phone="", user=None, source="", actor=None
 ) -> Customer:
     """The booking engine's customer lookup: match by email, else by phone, else create.
 
     A match never links ``user`` to an existing record: knowing someone's email must not
-    attach their history to your account.
+    attach their history to your account. A new record is linked to ``user`` only when it is
+    their own verified email (``_may_link``).
     """
     email, phone = email.strip(), phone.strip()
+    if not email and phone:
+        _lock_phone(organization, phone)
     matches = Customer.objects.filter(organization=organization).exclude(
         status=Customer.Status.ANONYMIZED
     )
@@ -211,7 +239,7 @@ def find_or_create_customer(
             )
     except IntegrityError, ConflictError:
         return matches.get(email__iexact=email)
-    if user is not None:
+    if _may_link(user, email):
         customer.user = user
         customer.save(update_fields=["user", "updated_at"])
     return customer
@@ -227,11 +255,15 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         raise DomainError("A customer cannot be merged into itself", code="invalid_merge")
     if target.organization_id != duplicate.organization_id:
         raise DomainError("Customer not found", code="not_found")
-    # Lock both rows in a fixed order so concurrent merges cannot deadlock.
+    # Lock both rows in a fixed order (primary key) so concurrent merges cannot deadlock.
     locked = {
         c.pk: c
-        for c in Customer.objects.select_for_update().filter(pk__in=[target.pk, duplicate.pk])
+        for c in Customer.objects.select_for_update()
+        .filter(pk__in=[target.pk, duplicate.pk])
+        .order_by("pk")
     }
+    if len(locked) != 2:  # a concurrent merge or deletion removed one of them meanwhile
+        raise ConflictError("The customer no longer exists", code="customer_gone")
     target, duplicate = locked[target.pk], locked[duplicate.pk]
     if Customer.Status.ANONYMIZED in (target.status, duplicate.status):
         raise ConflictError("An anonymized customer cannot be merged", code="anonymized")
@@ -253,6 +285,16 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
     # The duplicate's history and notes become the target's.
     CustomerActivity.objects.filter(customer=duplicate).update(customer=target)
     CustomerNote.objects.filter(customer=duplicate).update(customer=target)
+    # Waitlist entries too. One waiting entry per customer and service: where both wait for
+    # the same service, the target's entry stays and the duplicate's is closed.
+    waiting = WaitlistEntry.Status.WAITING
+    target_services = WaitlistEntry.objects.filter(customer=target, status=waiting).values(
+        "service_id"
+    )
+    WaitlistEntry.objects.filter(
+        customer=duplicate, status=waiting, service_id__in=target_services
+    ).update(status=WaitlistEntry.Status.CLOSED)
+    WaitlistEntry.objects.filter(customer=duplicate).update(customer=target)
     duplicate.delete()  # before saving target: target may take over the duplicate's email
     target.save()
 
@@ -285,6 +327,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     if customer.status == Customer.Status.ANONYMIZED:
         return customer
     old_email = customer.email
+    own_account = customer.user_id  # their sign-in account, if linked
 
     for field in PII_FIELDS:
         default = Customer._meta.get_field(field).get_default()
@@ -310,22 +353,52 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
         internal_notes="",
         cancellation_reason="",
     )
-    BookingStatusHistory.objects.filter(booking__in=bookings).update(note="")
+    BookingStatusHistory.objects.filter(booking__in=bookings).update(note="", reason="")
     for activity in BookingActivityLog.objects.filter(
         booking__in=bookings, metadata__has_key="reason"
     ):
         activity.metadata.pop("reason")
         activity.save(update_fields=["metadata"])
-    NotificationLog.objects.filter(related_booking__in=bookings).update(
-        recipient_email="", recipient=None, failure_reason=""
-    )
+    entries = WaitlistEntry.objects.filter(customer=customer)
     if old_email:
-        WaitlistEntry.objects.filter(
-            organization=customer.organization, customer_email__iexact=old_email
-        ).update(customer_name=ANONYMIZED_NAME, customer_email="", customer_phone="")
+        entries = WaitlistEntry.objects.filter(
+            Q(customer=customer)
+            | Q(organization=customer.organization, customer_email__iexact=old_email)
+        )
+    entry_ids = list(entries.values_list("pk", flat=True))
+    WaitlistEntry.objects.filter(pk__in=entry_ids).update(
+        customer_name=ANONYMIZED_NAME, customer_email="", customer_phone=""
+    )
+    NotificationLog.objects.filter(
+        Q(related_booking__in=bookings) | Q(related_waitlist_entry__in=entry_ids)
+    ).update(recipient_email="", recipient=None, failure_reason="")
+    if own_account:
+        # What they did themselves (booked, cancelled, ...) no longer points to their account.
+        # Staff actors stay. The audit log is append-only and keeps its entries (access is
+        # limited to audit.view); see docs/CRM.md.
+        Customer.objects.filter(pk=customer.pk, created_by_id=own_account).update(created_by=None)
+        bookings.filter(created_by_id=own_account).update(created_by=None)
+        bookings.filter(cancelled_by_id=own_account).update(cancelled_by=None)
+        BookingStatusHistory.objects.filter(booking__in=bookings, changed_by_id=own_account).update(
+            changed_by=None
+        )
+        BookingActivityLog.objects.filter(booking__in=bookings, actor_id=own_account).update(
+            actor=None
+        )
+        CustomerActivity.objects.filter(customer=customer, actor_id=own_account).update(actor=None)
 
     _audit(AuditAction.CUSTOMER_ANONYMIZED, customer, actor, metadata={"appointments": scrubbed})
     return customer
+
+
+@transaction.atomic
+def delete_customer(*, customer: Customer, actor=None) -> None:
+    """Delete a customer: anonymize first (so no copy of their details survives on
+    appointments, waitlist entries or notifications), then remove the record. Appointments
+    stay, unlinked, for aggregate reporting. Irreversible."""
+    customer = anonymize_customer(customer=customer, actor=actor)
+    _audit(AuditAction.CUSTOMER_DELETED, customer, actor)
+    customer.delete()
 
 
 # -- Tags ----------------------------------------------------------------------------------
