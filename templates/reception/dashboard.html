@@ -2,12 +2,12 @@
 {% load tz %}
 {% comment %}
 The reception dashboard (bookings/reception_views.py). #reception-live refreshes itself every
-30 seconds (the "live" partial). Row actions are plain forms that post to the appointment
+30 seconds (the "live" partial); the location filter replaces it (outerHTML), next free time included. Row actions are plain forms that post to the appointment
 action view and come back here (next=), so they work without JavaScript.
 {% endcomment %}
 {% block title %}Reception · {{ organization.name }}{% endblock %}
 {% block page_title %}Reception{% endblock %}
-{% block page_description %}<p class="mt-1 text-sm text-slate-600">{% if location %}{{ location.name }} · {% endif %}{% now "l j F Y" %}</p>{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">{% now "l j F Y" %}</p>{% endblock %}
 {% block content %}
 <nav aria-label="Quick actions" class="mb-4 flex flex-wrap gap-2">
   <a href="{% url 'app-appointment-walk-in' %}" class="btn btn-primary">{% include "components/icon.html" with name="user" class="size-4" %}Walk-in</a>
@@ -16,7 +16,7 @@ action view and come back here (next=), so they work without JavaScript.
   <a href="{% url 'crm-customer-list' %}" class="btn btn-secondary">{% include "components/icon.html" with name="search" class="size-4" %}Find a customer</a>
   <a href="{% url 'app-calendar' %}" class="btn btn-ghost">Calendar</a>
 </nav>
-{% if filters %}<div class="mb-4">{% include "components/filter_bar.html" with target="#reception-live" filters=filters %}</div>{% endif %}
+{% if filters %}<div class="mb-4">{% include "components/filter_bar.html" with target="#reception-live" swap="outerHTML" filters=filters %}</div>{% endif %}
 
 {% partialdef live inline %}
 <div id="reception-live" hx-get="{{ request.get_full_path }}" hx-trigger="every 30s" hx-swap="outerHTML" class="grid gap-6 *:min-w-0 xl:grid-cols-3">
@@ -24,7 +24,7 @@ action view and come back here (next=), so they work without JavaScript.
 {% timezone desk.zone %}
   <section class="card xl:col-span-2" aria-labelledby="timeline-heading">
     <div class="card-header flex items-center justify-between gap-3">
-      <h2 id="timeline-heading" class="card-title">Today</h2>
+      <h2 id="timeline-heading" class="card-title">Today at {{ location.name }}</h2>
       <span class="text-sm text-slate-600">{{ desk.timeline|length }} appointment{{ desk.timeline|length|pluralize }} · updated {{ desk.now|time:"H:i" }}</span>
     </div>
     {% if desk.timeline %}
@@ -79,7 +79,7 @@ action view and come back here (next=), so they work without JavaScript.
               <span class="min-w-0">
                 <span class="font-medium">{{ row.staff.public_name }}</span>
                 <span class="block text-slate-600">
-                  {% if row.state == "busy" %}With {{ row.current.customer_name }} until {{ row.current.end_datetime|time:"H:i" }}{% elif row.next %}Next at {{ row.next.start_datetime|time:"H:i" }}{% else %}No more appointments today{% endif %}
+                  {% if row.state == "busy" %}With {{ row.current.customer_name }} until {{ row.current.end_datetime|time:"H:i" }}{% if row.current.location_id != location.pk %} at {{ row.current.location.name }}{% endif %}{% elif row.next %}Next at {{ row.next.start_datetime|time:"H:i" }}{% else %}No more appointments today{% endif %}
                 </span>
               </span>
               {% if row.state == "busy" %}{% include "components/badge.html" with label="Busy" level="warning" %}{% elif row.state == "free" %}{% include "components/badge.html" with label="Free" level="success" %}{% else %}{% include "components/badge.html" with label="Off" %}{% endif %}
@@ -108,18 +108,18 @@ action view and come back here (next=), so they work without JavaScript.
     </section>
   </div>
 {% endtimezone %}
+  {% comment %}Inside the live block so a location change replaces it; hx-preserve (the id names the
+  location) keeps the loaded panel through the 30-second refresh instead of reloading it.{% endcomment %}
+  <section id="next-free-{{ location.pk }}" hx-preserve="true" class="card xl:col-span-3" aria-labelledby="free-heading">
+    <div class="card-header"><h2 id="free-heading" class="card-title">Next free time</h2></div>
+    <div hx-get="{% url 'app-reception-next-free' %}?location={{ location.pk }}" hx-trigger="load, every 300s" hx-swap="innerHTML">
+      <p class="card-body text-sm text-slate-600"><a href="{% url 'app-reception-next-free' %}?location={{ location.pk }}">Show the next free time for each service</a></p>
+    </div>
+  </section>
 {% else %}
   <div class="card card-body xl:col-span-3">{% include "components/empty_state.html" with title="No active location" icon="map-pin" %}</div>
 {% endif %}
 </div>
 {% endpartialdef %}
 
-{% if location %}
-<section class="card mt-6" aria-labelledby="free-heading">
-  <div class="card-header"><h2 id="free-heading" class="card-title">Next free time</h2></div>
-  <div hx-get="{% url 'app-reception-next-free' %}?location={{ location.pk }}" hx-trigger="load, every 300s" hx-swap="innerHTML">
-    <p class="card-body text-sm text-slate-600"><a href="{% url 'app-reception-next-free' %}?location={{ location.pk }}">Show the next free time for each service</a></p>
-  </div>
-</section>
-{% endif %}
 {% endblock %}

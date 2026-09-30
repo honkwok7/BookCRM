@@ -2,10 +2,11 @@
 Search and filters for a list. It works without JavaScript (a plain GET form); with htmx,
 typing or changing a filter refreshes only the target and updates the address bar.
   {% include "components/filter_bar.html" with target="#results" query=query search_label="Search" filters=filters %}
-Leave out search_label for filters only. filters: a list of {"name", "label", "value", "options": [(value, label), ...], "all_label"}.
+Leave out search_label for filters only. Pass swap="outerHTML" when the target element is
+itself inside the partial the view returns (the dashboards), so it is replaced, not nested. filters: a list of {"name", "label", "value", "options": [(value, label), ...], "all_label"}.
 {% endcomment %}
 <form method="get" role="search" class="flex flex-col gap-3 sm:flex-row sm:items-center"
-      action="{{ request.path }}" hx-get="{{ request.path }}" hx-target="{{ target }}" hx-push-url="true"
+      action="{{ request.path }}" hx-get="{{ request.path }}" hx-target="{{ target }}" hx-swap="{{ swap|default:'innerHTML' }}" hx-push-url="true"
       hx-trigger="input changed delay:300ms from:find input[type=search], change, submit">
   {% if search_label %}{% include "components/search.html" with name="q" value=query label=search_label %}{% endif %}
   {% for filter in filters %}

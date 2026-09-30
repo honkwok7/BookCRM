@@ -2,7 +2,7 @@
 cancellations, the waitlist count, row actions, the walk-in path, the next free time and the
 query budget of the live refresh."""
 
-from datetime import time
+from datetime import time, timedelta
 from unittest.mock import patch
 
 from django.core.cache import cache
@@ -135,6 +135,33 @@ class FrontDeskTests(Fixtures, TestCase):
         board = {row.staff.pk: row for row in self.desk()["providers"]}
         self.assertEqual(board[self.maya.pk].state, "free")
 
+    def test_busy_elsewhere_or_since_before_midnight_still_counts(self):
+        # Sam's hours here ended at 12:00, but he is with someone at another location.
+        annex = f.LocationFactory(organization=self.org, name="Annex", timezone="UTC")
+        away = f.BookingFactory(
+            organization=self.org,
+            service=self.service,
+            staff=self.sam,
+            location=annex,
+            start_datetime=self.noon - timedelta(minutes=30),
+            end_datetime=self.noon + timedelta(minutes=30),
+        )
+        board = {row.staff.pk: row for row in self.desk()["providers"]}
+        self.assertEqual((board[self.sam.pk].state, board[self.sam.pk].current), ("busy", away))
+        # 00:15: Maya's 23:30-00:30 appointment started yesterday, before her hours today.
+        midnight = self.noon.replace(hour=0, minute=0)
+        late = f.BookingFactory(
+            organization=self.org,
+            service=self.service,
+            staff=self.maya,
+            location=self.location,
+            start_datetime=midnight - timedelta(minutes=30),
+            end_datetime=midnight + timedelta(minutes=30),
+        )
+        desk = front_desk(self.org, self.location, now=midnight + timedelta(minutes=15))
+        board = {row.staff.pk: row for row in desk["providers"]}
+        self.assertEqual((board[self.maya.pk].state, board[self.maya.pk].current), ("busy", late))
+
     def test_the_page_shows_only_this_organization(self):
         self.client.force_login(self.receptionist)
         with self.at_noon():
@@ -151,6 +178,27 @@ class FrontDeskTests(Fixtures, TestCase):
         self.assertIn('id="reception-live"', body)
         self.assertNotIn("<html", body)
         self.assertLessEqual(len(queries), 14, [q["sql"][:80] for q in queries])
+
+
+class LocationFilterTests(Fixtures, TestCase):
+    def setUp(self):
+        self.make_fixtures()
+        self.annex = f.LocationFactory(organization=self.org, name="Annex", timezone="UTC")
+        self.client.force_login(self.receptionist)
+
+    def test_the_filter_replaces_the_live_block_next_free_time_included(self):
+        page = self.client.get(URL).content.decode()
+        self.assertIn('hx-target="#reception-live" hx-swap="outerHTML"', page)
+        self.assertEqual(page.count('id="reception-live"'), 1)
+        self.assertIn(f'id="next-free-{self.location.pk}"', page)
+        fragment = self.client.get(
+            URL, {"location": str(self.annex.pk)}, HTTP_HX_REQUEST="true"
+        ).content.decode()
+        # The next free time moves with the location (a new id, so hx-preserve lets it go).
+        self.assertIn(f'id="next-free-{self.annex.pk}"', fragment)
+        self.assertIn(f"?location={self.annex.pk}", fragment)
+        self.assertNotIn(f'id="next-free-{self.location.pk}"', fragment)
+        self.assertIn("Today at Annex", fragment)
 
 
 class ActionTests(Fixtures, TestCase):

@@ -22,7 +22,7 @@ Every number comes from `dashboard/reporting.py` (`dashboard_report`):
 | Appointments today / this week | Appointments still on (not cancelled or rejected) starting today, or this Monday–Sunday, in the organization's time zone. |
 | New customers | Customer records created in the period, not anonymized. With a location or provider filter: only those who booked with that selection. |
 | Cancellation rate, no-show rate | Among appointments in the period whose time has passed (rejected ones left out). Shown only from `MIN_SAMPLE` (20) appointments; below that the widget says "Not enough data yet". |
-| Estimated revenue (this month, and the period) | The sum of completed appointments' `price_snapshot`. An estimate, not payments; labelled so. |
+| Estimated revenue (this month, and the period) | The sum of completed appointments' `price_snapshot`, for appointments that start by the end of today (one completed early for tomorrow counts tomorrow). An estimate, not payments; labelled so. |
 | Popular services, top providers | The top 5 by appointments still on in the period. Top providers also show completed appointments and estimated revenue. |
 | Appointments per day | One bar per day of the period. |
 
@@ -61,10 +61,10 @@ location, or the one chosen with the location filter when the organization has s
 | Quick actions | Walk-in, new appointment, new customer, find a customer, calendar |
 | Today | Every appointment today (all statuses except rejected requests), with Check in, Check out and No-show buttons where the workflow allows them, plus Reschedule |
 | Waiting | Who has checked in, in check-in order |
-| Providers now | Busy (with a customer until a time), Free (with their next appointment), or Off (time off now, or outside today's weekly hours) |
+| Providers now | Busy (with a customer until a time, at any location, including an appointment that started before midnight), Free (with their next appointment here), or Off (time off now, or outside today's weekly hours) |
 | Cancelled today | Appointments cancelled today, for whatever date they were booked |
 | Waitlist | How many people are waiting for a time at this location, with a link |
-| Next free time | The first free time per service in the next 7 days (the team's view, with no online notice), up to 8 services |
+| Next free time | The first free time per service in the next 7 days (the team's view, with no online notice), up to 8 services. It sits inside the live block, so changing location replaces it; the 30-second refresh keeps it (`hx-preserve`) |
 
 - **Live:** the page refreshes itself every 30 seconds through htmx polling (the
   `#reception-live` partial). That refresh takes 6 queries of its own

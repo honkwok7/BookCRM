@@ -6,9 +6,9 @@ number of queries (the page refreshes itself every 30 seconds). ``next_free_time
 next free time per service; it runs the availability engine per service, so the page loads it
 separately and it is cached for a minute.
 
-"Now" for a provider is simple on purpose: with someone (an appointment on now), off (time off
-now, or outside their weekly hours today), otherwise free. Closures and one-day exceptions are
-left to the booking forms, which check everything.
+"Now" for a provider is simple on purpose: with someone (an appointment on now, at any location:
+people work at several), off (time off now, or outside their weekly hours today), otherwise
+free. Closures and one-day exceptions are left to the booking forms, which check everything.
 """
 
 from __future__ import annotations
@@ -99,7 +99,9 @@ def front_desk(organization, location, *, now: datetime | None = None) -> dict:
 
 
 def providers_now(organization, location, timeline, *, now, zone) -> list[ProviderNow]:
-    """What each provider working here is doing now (3 queries)."""
+    """What each provider working here is doing now (4 queries). ``timeline`` gives the next
+    appointment here; what they are doing now is looked up everywhere, so an appointment at another
+    location, or one that started yesterday and runs past midnight, still counts."""
     staff = list(
         StaffProfile.objects.filter(
             organization=organization,
@@ -131,11 +133,30 @@ def providers_now(organization, location, timeline, *, now, zone) -> list[Provid
             end_datetime__gt=now,
         ).values_list("staff_id", flat=True)
     )
+    current_by_staff = {}
+    for booking in (
+        Booking.objects.filter(
+            organization=organization,
+            staff_id__in=ids,
+            status__in=ON,
+            start_datetime__lte=now,
+            end_datetime__gt=now,
+        )
+        .select_related("location")
+        .order_by("start_datetime")
+    ):
+        current_by_staff.setdefault(booking.staff_id, booking)
     board = []
     for person in staff:
-        mine = [b for b in timeline if b.staff_id == person.pk and b.status in ON]
-        current = next((b for b in mine if b.start_datetime <= now < b.end_datetime), None)
-        upcoming = next((b for b in mine if b.start_datetime > now), None)
+        current = current_by_staff.get(person.pk)
+        upcoming = next(
+            (
+                b
+                for b in timeline
+                if b.staff_id == person.pk and b.status in ON and b.start_datetime > now
+            ),
+            None,
+        )
         if current is not None:
             state = "busy"
         elif person.pk in away or person.pk not in working:
