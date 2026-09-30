@@ -113,7 +113,7 @@ class RoleHomeTests(TestCase):
         expected = {
             OrganizationRole.OWNER: "app-dashboard",
             OrganizationRole.MANAGER: "app-dashboard",
-            OrganizationRole.RECEPTIONIST: "app-dashboard",
+            OrganizationRole.RECEPTIONIST: "app-reception",
             OrganizationRole.STAFF: "staff-dashboard",
             OrganizationRole.CUSTOMER: "portal-home",
         }

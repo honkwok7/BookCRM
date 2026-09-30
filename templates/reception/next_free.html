@@ -1,0 +1,25 @@
+{% load tz %}
+{% comment %}
+The next free time per service (bookings/reception_views.py NextFreeView): loaded into the
+reception page by htmx, or wrapped by next_free_page.html without JavaScript.
+{% endcomment %}
+{% if location %}
+{% timezone location.timezone %}
+{% if rows %}
+  <ul class="divide-y divide-slate-100">
+    {% for row in rows %}
+      <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
+        <span class="font-medium">{{ row.service.name }}</span>
+        {% if row.start %}
+          <span>{% if row.start|date:"Y-m-d" == today|date:"Y-m-d" %}Today{% else %}{{ row.start|date:"D j M" }}{% endif %} {{ row.start|time:"H:i" }} with {{ row.staff.public_name }}</span>
+        {% else %}
+          <span class="text-slate-600">Nothing free this week</span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="card-body text-sm text-slate-600">No services are offered here yet.</p>
+{% endif %}
+{% endtimezone %}
+{% endif %}

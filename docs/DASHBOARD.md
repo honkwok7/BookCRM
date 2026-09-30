@@ -10,7 +10,8 @@ land on `/staff/dashboard/`.
 | Upcoming appointments | Team membership | Appointments that haven't finished yet (the current one, then the next ones), up to 10. Providers without `appointments.view_all` see only their own. Not cached. |
 | Analytics | `reports.view` (owners and managers) | Everything below, with the filter bar |
 
-Receptionists get the operational part only. Their own front-desk page is M5.2.
+Receptionists get the operational part only. They land on the reception dashboard instead
+(below).
 
 ## Analytics widgets
 
@@ -47,3 +48,34 @@ visually hidden table gives screen readers the same numbers.
 
 The plan named Chart.js. That can come with the reports (M9) if interactive charts are
 needed.
+
+# Reception dashboard (M5.2)
+
+`/app/reception/` is the front desk's page and where receptionists land after signing in. It
+needs `appointments.manage` and `appointments.view_all`, so receptionists, managers and owners
+can use it; providers and customers get 403. It shows one location at a time: the default
+location, or the one chosen with the location filter when the organization has several.
+
+| Section | Shows |
+|---|---|
+| Quick actions | Walk-in, new appointment, new customer, find a customer, calendar |
+| Today | Every appointment today (all statuses except rejected requests), with Check in, Check out and No-show buttons where the workflow allows them, plus Reschedule |
+| Waiting | Who has checked in, in check-in order |
+| Providers now | Busy (with a customer until a time), Free (with their next appointment), or Off (time off now, or outside today's weekly hours) |
+| Cancelled today | Appointments cancelled today, for whatever date they were booked |
+| Waitlist | How many people are waiting for a time at this location, with a link |
+| Next free time | The first free time per service in the next 7 days (the team's view, with no online notice), up to 8 services |
+
+- **Live:** the page refreshes itself every 30 seconds through htmx polling (the
+  `#reception-live` partial). That refresh takes 6 queries of its own
+  (`bookings.reception.front_desk`), and the whole request is tested at 14 or fewer. The next
+  free times load separately, refresh every 5 minutes and are cached for a minute, because
+  they run the availability engine once per service.
+- **Actions** are plain forms posting to the appointment action view with `next` pointing back
+  here. The action view only follows a `next` that is a page of this app (`/app/…` on the same
+  host); anything else goes to the appointment. Everything works without JavaScript.
+- **Walk-in:** from the front desk, click Walk-in, then submit the form. The appointment is
+  created and checked in (the plan's target was three interactions or fewer).
+- **Settings and billing:** receptionists hold neither `organization.manage` nor
+  `billing.manage`, and the front desk links to neither. The settings and subscription pages
+  themselves come in later phases, with their own tests.

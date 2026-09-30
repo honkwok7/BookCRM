@@ -1451,6 +1451,19 @@ The dashboard renders in ≤ 12 queries.
 
 ### M5.2: Reception dashboard
 
+> **Status: done (2026-09-30, branch `m5.2-reception`).** See [DASHBOARD.md](DASHBOARD.md#reception-dashboard-m52).
+> - `/app/reception/` (receptionists land here): today's timeline with check-in, check-out,
+>   no-show and reschedule; waiting; providers now; cancellations today; waitlist count; the
+>   next free time per service (loaded separately and cached). Refreshes every 30 s through
+>   htmx.
+> - `bookings/reception.py`: the live part takes 6 queries of its own; the whole refresh is
+>   tested at 14 or fewer.
+> - The appointment action view accepts a `next` limited to `/app/` pages on the same host.
+> - Walk-in: open the desk, click Walk-in, submit (tested).
+> - **Deviation:** `/app/settings/` and `/app/subscription/` don't exist yet (later phases).
+>   The tests check instead that receptionists don't hold those capabilities and that the desk
+>   doesn't link to them.
+
 #### Objective
 An operational front-desk view.
 

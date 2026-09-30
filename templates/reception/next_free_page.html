@@ -1,0 +1,7 @@
+{% extends "layouts/app.html" %}
+{% block title %}Next free time · {{ organization.name }}{% endblock %}
+{% block page_title %}Next free time{% endblock %}
+{% block content %}
+<section class="card">{% include "reception/next_free.html" %}</section>
+<p class="mt-4"><a href="{% url 'app-reception' %}?location={{ location.pk }}" class="btn btn-ghost btn-sm">Back to reception</a></p>
+{% endblock %}
