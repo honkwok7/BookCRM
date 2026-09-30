@@ -13,6 +13,7 @@ pages and redirects. Each tab is its own URL; htmx swaps only the tab area.
 from __future__ import annotations
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse
@@ -24,9 +25,11 @@ from django.views.generic import TemplateView
 
 from core.exceptions import DomainError
 from core.web import HtmxPartialMixin, TenantPageMixin, is_htmx
-from locations.models import Location, Weekday
+from locations.models import Location
 from organizations.permissions import Capability
-from scheduling.models import TimeOff, WeeklyAvailability
+from scheduling.models import TimeOff
+from scheduling.selectors import weekly_hours
+from scheduling.services import appointments_during, decide_time_off
 from staff.forms import StaffCreateForm, StaffLocationsForm, StaffProfileForm, StaffServicesForm
 from staff.models import StaffProfile
 from staff.selectors import offerings_by_service, staff_for
@@ -224,25 +227,45 @@ class StaffDetailView(StaffPageMixin, TemplateView):
         return {"rows": rows, "location_count": location_count}
 
     def context_availability(self, staff):
-        periods: dict[int, list] = {day: [] for day in range(7)}
-        rows = WeeklyAvailability.objects.filter(staff=staff, is_active=True).select_related(
-            "location"
-        )
-        for row in rows:
-            where = row.location.name if row.location else "Any of their locations"
-            periods[row.day_of_week].append((row.start_time, row.end_time, where))
-        week = [
-            {"weekday": day, "label": label, "periods": sorted(periods[day])}
-            for day, label in Weekday.choices
-        ]
-        return {"week": week, "has_availability": any(periods.values())}
+        return weekly_hours(staff)
 
     def context_time_off(self, staff):
         now = timezone.now()
-        entries = TimeOff.objects.filter(staff=staff, end_datetime__gte=now).order_by(
-            "start_datetime"
+        entries = list(
+            TimeOff.objects.filter(
+                staff=staff,
+                end_datetime__gte=now,
+                approval_status__in=(
+                    TimeOff.ApprovalStatus.PENDING,
+                    TimeOff.ApprovalStatus.APPROVED,
+                ),
+            ).order_by("start_datetime")
         )
-        return {"time_off": entries}
+        for entry in entries:
+            if entry.approval_status == TimeOff.ApprovalStatus.PENDING:
+                entry.clashes = appointments_during(
+                    staff, entry.start_datetime, entry.end_datetime
+                ).count()
+        return {"time_off": entries, "can_decide": self.can_manage()}
+
+
+class StaffTimeOffDecideView(StaffManageMixin, View):
+    """Approve or reject a pending time-off request (``staff.manage``)."""
+
+    def post(self, request, pk, entry_pk):
+        staff = self.get_staff(pk)
+        entry = TimeOff.objects.filter(pk=entry_pk, staff=staff).first()
+        if entry is None:
+            raise Http404("Time off not found")
+        approve = request.POST.get("decision") == "approve"
+        try:
+            decide_time_off(entry=entry, approve=approve, actor=request.user)
+        except ValidationError as error:
+            messages.error(request, " ".join(error.messages))
+            return redirect(staff_tab_url(staff, "time-off"))
+        return self.success(
+            staff, "Time off approved." if approve else "Time off rejected.", tab="time-off"
+        )
 
 
 # -- Forms ----------------------------------------------------------------------------------

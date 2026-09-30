@@ -45,6 +45,7 @@ from crm.selectors import (
     can_read_internal_notes,
     customer_stats,
     customer_timeline,
+    customers_of_provider,
     customers_visible_to,
     last_visit_annotation,
     list_tags,
@@ -62,6 +63,7 @@ from crm.services import (
     update_note,
 )
 from organizations.permissions import Capability
+from staff.selectors import is_provider_here
 
 # Profile tabs, in order: (slug, label). Forms and transactions are placeholders until their
 # milestones (M6 forms, payments later).
@@ -107,6 +109,13 @@ class CustomerManageMixin(CustomerPageMixin):
 class CustomerListView(CustomerPageMixin, HtmxPartialMixin, TemplateView):
     template_name = "crm/customer_list.html"
     page_size = 25
+    heading = "Customers"
+
+    def visible_customers(self):
+        return customers_visible_to(self.request)
+
+    def can_add(self) -> bool:
+        return can_manage_customers(self.tenant)
 
     def get_context_data(self, **kwargs):
         organization = self.tenant.organization
@@ -116,7 +125,7 @@ class CustomerListView(CustomerPageMixin, HtmxPartialMixin, TemplateView):
         tag_id = self.request.GET.get("tag", "")
         tag = next((t for t in tags if str(t.pk) == tag_id), None)
 
-        customers = customers_visible_to(self.request).prefetch_related("tag_set")
+        customers = self.visible_customers().prefetch_related("tag_set")
         if status in Customer.Status.values:
             customers = customers.filter(status=status)
         else:
@@ -134,7 +143,8 @@ class CustomerListView(CustomerPageMixin, HtmxPartialMixin, TemplateView):
             "page_obj": page,
             "query": query,
             "filtered": bool(query or status or tag),
-            "can_manage": can_manage_customers(self.tenant),
+            "can_manage": self.can_add(),
+            "heading": self.heading,
             "filters": [
                 {
                     "name": "status",
@@ -152,6 +162,22 @@ class CustomerListView(CustomerPageMixin, HtmxPartialMixin, TemplateView):
                 },
             ],
         }
+
+
+class ProviderCustomerListView(CustomerListView):
+    """``/staff/customers/`` (M5.3): only the customers assigned to the signed-in provider or
+    seen by them, whatever else their role may see. Details open the usual customer page."""
+
+    heading = "My customers"
+
+    def has_page_access(self, tenant):
+        return is_provider_here(tenant)
+
+    def visible_customers(self):
+        return customers_of_provider(self.tenant.organization, user=self.tenant.user)
+
+    def can_add(self) -> bool:
+        return False
 
 
 # -- Create and edit ------------------------------------------------------------------------

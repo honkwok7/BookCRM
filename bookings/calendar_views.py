@@ -50,7 +50,7 @@ from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from scheduling.availability import zone_of
 from services.selectors import services_for
-from staff.selectors import staff_for
+from staff.selectors import is_provider_here, own_profile, staff_for
 
 VIEWS = ("day", "week", "month")
 # Actions offered in the panel: (action, target status, button label).
@@ -83,7 +83,14 @@ def change_source(tenant) -> str:
 
 
 class CalendarAccessMixin(TenantPageMixin):
+    # The provider area's calendar (/staff/calendar/) shows only the member's own appointments,
+    # whatever else they may see.
+    own_only = False
+    url_name = "app-calendar"
+
     def has_page_access(self, tenant) -> bool:
+        if self.own_only:
+            return is_provider_here(tenant)
         return can_use_calendar(tenant)
 
     def filters(self):
@@ -100,13 +107,15 @@ class CalendarAccessMixin(TenantPageMixin):
 
         location = pick(locations_for(organization), "location")
         staff = pick(self.visible_staff(), "staff")
+        if self.own_only:
+            staff = own_profile(self.tenant)
         service = pick(services_for(organization), "service")
         statuses = [value for value in params.getlist("status") if value in Booking.Status.values]
         return location, staff, service, statuses
 
     def visible_staff(self):
         staff = staff_for(self.tenant.organization).filter(is_active=True)
-        if not self.tenant.has(Capability.APPOINTMENTS_VIEW_ALL):
+        if self.own_only or not self.tenant.has(Capability.APPOINTMENTS_VIEW_ALL):
             staff = staff.filter(user=self.tenant.user)
         return staff
 
@@ -140,7 +149,10 @@ class CalendarView(CalendarAccessMixin, View):
             "staff_options": self.visible_staff(),
             "service_options": services_for(self.tenant.organization).filter(is_archived=False),
             "status_options": Booking.Status.choices,
-            "sees_everyone": self.tenant.has(Capability.APPOINTMENTS_VIEW_ALL),
+            "sees_everyone": not self.own_only
+            and self.tenant.has(Capability.APPOINTMENTS_VIEW_ALL),
+            "calendar_url": reverse(self.url_name),
+            "page_heading": "My calendar" if self.own_only else "Calendar",
             "weekday_names": WEEKDAY_NAMES,
         }
         filters = dict(location=location, staff=staff, service=service, statuses=statuses)
@@ -193,7 +205,7 @@ class CalendarView(CalendarAccessMixin, View):
             params.pop(key, None)
             if value is not None:
                 params[key] = value.isoformat() if isinstance(value, date) else value
-        return f"{reverse('app-calendar')}?{params.urlencode()}"
+        return f"{reverse(self.url_name)}?{params.urlencode()}"
 
 
 class AppointmentMixin(CalendarAccessMixin):
@@ -259,7 +271,7 @@ class AppointmentActionView(AppointmentMixin, View):
         safe = url_has_allowed_host_and_scheme(
             target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
         )
-        return target if safe and target.startswith("/app/") else None
+        return target if safe and target.startswith(("/app/", "/staff/")) else None
 
     def post(self, request, pk):
         booking = self.get_booking(pk)
@@ -293,6 +305,13 @@ class AppointmentActionView(AppointmentMixin, View):
         response = self.render_panel(booking)
         response["HX-Trigger"] = "calendar-refresh"
         return response
+
+
+class StaffCalendarView(CalendarView):
+    """``/staff/calendar/``: the provider's own calendar (M5.3)."""
+
+    own_only = True
+    url_name = "staff-calendar"
 
 
 class CalendarEventsView(CalendarAccessMixin, View):

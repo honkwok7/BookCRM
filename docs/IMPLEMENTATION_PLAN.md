@@ -1494,6 +1494,16 @@ A walk-in can be checked in within 3 interactions.
 
 ### M5.3: Provider area
 
+> **Status: done (2026-09-30, branch `m5.3-provider`).** See [DASHBOARD.md](DASHBOARD.md#provider-area-m53).
+> - `/staff/dashboard/`, `/staff/calendar/`, `/staff/customers/`, `/staff/availability/`,
+>   scoped to the member's own staff profile whatever their role; a "My work" sidebar section.
+> - `TimeOff.approval_status` choices (pending, approved, rejected, cancelled; migration
+>   `scheduling/0004`, choices only). `scheduling/services.py`: request, block (approved at
+>   once, refused over an appointment, under the staff lock), approve or reject
+>   (`staff.manage`, on the staff Time off tab), cancel.
+> - **Deviation:** weekly hours stay read-only for providers (managers set them, still through
+>   the API); providers change their availability through blocked time and time-off requests.
+
 #### Objective
 The staff experience.
 

@@ -5,13 +5,13 @@ The calendar (bookings/calendar_views.py). #calendar swaps on filter changes and
 (htmx) and refreshes itself after a status change (the calendar-refresh event). Appointments
 open in #calendar-panel. Without JavaScript every link is a page and the filters have a button.
 {% endcomment %}
-{% block title %}Calendar · {{ organization.name }}{% endblock %}
-{% block page_title %}Calendar{% endblock %}
+{% block title %}{{ page_heading }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ page_heading }}{% endblock %}
 {% block content %}
 {% timezone zone %}
 <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 <div id="calendar" class="min-w-0" hx-disinherit="*" hx-get="{{ request.get_full_path }}" hx-trigger="calendar-refresh from:body" hx-select="#calendar" hx-swap="outerHTML">
-  <form method="get" action="{% url 'app-calendar' %}" class="mb-3 flex flex-wrap items-end gap-3" hx-get="{% url 'app-calendar' %}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
+  <form method="get" action="{{ calendar_url }}" class="mb-3 flex flex-wrap items-end gap-3" hx-get="{{ calendar_url }}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
     <input type="hidden" name="view" value="{{ view }}">
     <input type="hidden" name="date" value="{{ anchor|date:'Y-m-d' }}">
     {% if locations|length > 1 %}

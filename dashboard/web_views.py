@@ -164,37 +164,6 @@ def volume_chart(volume: list[dict], highest: int) -> dict:
     return {"bars": bars, "width": len(volume) * BAR_WIDTH, "height": CHART_HEIGHT}
 
 
-class StaffDashboardView(TenantPageMixin, TemplateView):
-    """The signed-in provider's own appointments for the next seven days."""
-
-    template_name = "dashboard/staff_dashboard.html"
-    days = 7
-
-    def get_context_data(self, **kwargs):
-        organization = self.tenant.organization
-        zone = organization_zone(organization)
-        today = timezone.now().astimezone(zone).date()
-        start, _ = day_bounds(zone, today)
-        appointments = (
-            Booking.objects.filter(
-                organization=organization,
-                staff__user=self.request.user,
-                start_datetime__gte=start,
-                start_datetime__lt=start + timedelta(days=self.days),
-            )
-            .exclude(status__in=INACTIVE_STATUSES)
-            .select_related("service")
-            .order_by("start_datetime")
-        )
-        has_profile = organization.staff_profiles.filter(user=self.request.user).exists()
-        return super().get_context_data(**kwargs) | {
-            "appointments": appointments,
-            "zone": zone,
-            "has_profile": has_profile,
-            "days": self.days,
-        }
-
-
 class PortalHomeView(LoginRequiredMixin, TemplateView):
     """Customer portal. Lists the account's own upcoming bookings in every organization."""
 

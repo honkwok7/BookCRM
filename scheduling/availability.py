@@ -302,7 +302,7 @@ class AvailabilityService:
             data.exceptions[(row.staff_id, row.date)].append(row)
         for row in TimeOff.objects.filter(
             staff_id__in=staff_ids,
-            approval_status="approved",
+            approval_status=TimeOff.ApprovalStatus.APPROVED,
             start_datetime__lt=range_end,
             end_datetime__gt=range_start,
         ):

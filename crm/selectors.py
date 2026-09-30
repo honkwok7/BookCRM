@@ -75,6 +75,16 @@ def search_filter(customers: QuerySet[Customer], query: str) -> QuerySet[Custome
 # -- Who sees what -------------------------------------------------------------------------
 
 
+def customers_of_provider(organization, *, user) -> QuerySet[Customer]:
+    """Customers assigned to this provider, or with whom they have (had) an appointment."""
+    own_bookings = Booking.objects.filter(organization=organization, staff__user=user).values(
+        "customer_id"
+    )
+    return Customer.objects.filter(organization=organization).filter(
+        Q(assigned_staff__user=user) | Q(pk__in=own_bookings)
+    )
+
+
 def customers_visible_to(request) -> QuerySet[Customer]:
     """Customers the requesting team member may read.
 
@@ -90,11 +100,7 @@ def customers_visible_to(request) -> QuerySet[Customer]:
     if tenant.has(Capability.CUSTOMERS_VIEW):
         return customers
     if tenant.role == OrganizationRole.STAFF:
-        user = request.user
-        own_bookings = Booking.objects.filter(
-            organization=tenant.organization, staff__user=user
-        ).values("customer_id")
-        return customers.filter(Q(assigned_staff__user=user) | Q(pk__in=own_bookings))
+        return customers_of_provider(tenant.organization, user=request.user)
     return Customer.objects.none()
 
 

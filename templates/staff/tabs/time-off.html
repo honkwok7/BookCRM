@@ -3,14 +3,31 @@
   {% if time_off %}
     <ul class="divide-y divide-slate-100">
       {% for entry in time_off %}
-        <li class="px-4 py-3 text-sm sm:px-6">
-          <span class="font-medium text-slate-900">{{ entry.start_datetime|date:"D j M Y, H:i" }} – {{ entry.end_datetime|date:"D j M Y, H:i" }}</span>
-          {% if entry.reason %}<span class="block text-slate-700">{{ entry.reason }}</span>{% endif %}
+        <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm sm:px-6">
+          <span class="min-w-0">
+            <span class="font-medium text-slate-900">{{ entry.start_datetime|date:"D j M Y, H:i" }} – {{ entry.end_datetime|date:"D j M Y, H:i" }}</span>
+            {% if entry.reason %}<span class="block text-slate-700">{{ entry.reason }}</span>{% endif %}
+            {% if entry.clashes %}<span class="block text-amber-800">{{ entry.clashes }} appointment{{ entry.clashes|pluralize }} booked then; approving doesn't move them.</span>{% endif %}
+          </span>
+          <span class="flex flex-wrap items-center gap-2">
+            {% if entry.approval_status == "pending" %}
+              {% include "components/badge.html" with label="Requested" level="warning" %}
+              {% if can_decide %}
+                <form method="post" action="{% url 'app-staff-time-off-decide' staff.pk entry.pk %}" class="flex gap-2">
+                  {% csrf_token %}
+                  <button type="submit" name="decision" value="approve" class="btn btn-sm btn-primary">Approve</button>
+                  <button type="submit" name="decision" value="reject" class="btn btn-sm btn-ghost">Reject</button>
+                </form>
+              {% endif %}
+            {% else %}
+              {% include "components/badge.html" with label="Approved" level="success" %}
+            {% endif %}
+          </span>
         </li>
       {% endfor %}
     </ul>
   {% else %}
     {% include "components/empty_state.html" with title="No upcoming time off" icon="calendar" %}
   {% endif %}
-  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in {{ organization.timezone }}. Time off is added through the API for now.</p>
+  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in {{ organization.timezone }}. Providers request time off and block time from their own availability page; only approved time off blocks their calendar.</p>
 </section>

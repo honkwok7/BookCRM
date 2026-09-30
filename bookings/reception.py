@@ -128,7 +128,7 @@ def providers_now(organization, location, timeline, *, now, zone) -> list[Provid
     away = set(
         TimeOff.objects.filter(
             staff_id__in=ids,
-            approval_status="approved",
+            approval_status=TimeOff.ApprovalStatus.APPROVED,
             start_datetime__lte=now,
             end_datetime__gt=now,
         ).values_list("staff_id", flat=True)
