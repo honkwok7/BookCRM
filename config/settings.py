@@ -157,6 +157,9 @@ SITE_NAME = env("SITE_NAME", default="BookCRM")
 # Web sign-in and password-reset limits (per client IP and per email address), on top of the
 # API's DRF throttles. Format: "<count>/<seconds>".
 WEB_LOGIN_RATE = env("WEB_LOGIN_RATE", default="10/900")
+# Public booking wizard: confirmations per client IP per organization, and per organization.
+PUBLIC_BOOKING_RATE = env("PUBLIC_BOOKING_RATE", default="10/3600")
+PUBLIC_BOOKING_ORG_RATE = env("PUBLIC_BOOKING_ORG_RATE", default="300/3600")
 WEB_PASSWORD_RESET_RATE = env("WEB_PASSWORD_RESET_RATE", default="5/3600")
 
 REST_FRAMEWORK = {

@@ -1,0 +1,55 @@
+{% extends "layouts/public.html" %}
+{% load tz %}
+{% comment %}
+The public booking wizard (bookings/web_views.py). Every step is a plain page with plain forms,
+so it works without JavaScript; with it, hx-boost swaps just #wizard between steps. Times are
+shown in the location's time zone.
+{% endcomment %}
+{% block title %}{% block step_title %}Book{% endblock %} · {{ organization.name }}{% endblock %}
+{% block meta_description %}Book an appointment with {{ organization.name }} online.{% endblock %}
+{% block extra_head %}{% if organization.brand_color %}<link rel="stylesheet" href="{% url 'public-booking-theme' organization.slug %}">{% endif %}{% endblock %}
+{% block main %}
+{% timezone zone %}
+<div id="wizard" class="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10" hx-boost="true" hx-target="#wizard" hx-select="#wizard" hx-swap="outerHTML show:window:top">
+  <header class="mb-6">
+    <p class="text-sm font-semibold text-brand-700">Book an appointment</p>
+    <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{{ organization.name }}</h1>
+    {% if organization.booking_instructions %}<p class="mt-2 text-sm whitespace-pre-line text-slate-700">{{ organization.booking_instructions }}</p>{% endif %}
+  </header>
+
+  {% if progress %}
+  <nav aria-label="Booking steps" class="mb-6">
+    <ol class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      {% for item in progress %}
+        <li class="flex items-center gap-2">
+          <span class="flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold {% if item.state == 'current' %}bg-brand-600 text-white{% elif item.state == 'done' %}bg-brand-100 text-brand-800{% else %}bg-slate-200 text-slate-600{% endif %}" aria-hidden="true">{{ item.number }}</span>
+          {% if item.state == "done" %}
+            <a href="{{ item.url }}" class="hidden sm:inline">{{ item.label }}</a><span class="sr-only sm:hidden">{{ item.label }} (done)</span>
+          {% elif item.state == "current" %}
+            <span aria-current="step" class="font-semibold text-slate-900">{{ item.label }}</span>
+          {% else %}
+            <span class="hidden text-slate-600 sm:inline">{{ item.label }}</span><span class="sr-only sm:hidden">{{ item.label }}</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+  </nav>
+  {% endif %}
+
+  {% if step != "location" and step != "review" and wizard.location %}
+    {% include "booking/summary.html" %}
+  {% endif %}
+
+  {% if error %}<div class="mb-4">{% include "components/alert.html" with level="error" message=error %}</div>{% endif %}
+
+  <section aria-labelledby="step-heading" class="card card-body">
+    {% block step %}{% endblock %}
+  </section>
+
+  {% if back_url %}
+    <p class="mt-4"><a href="{{ back_url }}" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="chevron-left" class="size-4" %}Back</a></p>
+  {% endif %}
+  <p class="mt-6 text-xs text-slate-600">Times are shown in {{ zone }} time.</p>
+</div>
+{% endtimezone %}
+{% endblock %}

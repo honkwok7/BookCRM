@@ -180,15 +180,22 @@ class OfferingApiTests(TestCase):
 class PublicStaffExposureTests(TestCase):
     def test_public_page_shows_display_names_and_hides_team_only_staff(self):
         org = f.OrganizationFactory(slug="glow")
-        f.ServiceFactory(organization=org, is_public=True)
+        service = f.ServiceFactory(organization=org, is_public=True)
         visible_user = f.UserFactory(first_name="Maya", last_name="Chen", email="maya@private.test")
-        f.StaffProfileFactory(organization=org, user=visible_user, display_name="Maya C.")
+        maya = f.StaffProfileFactory(organization=org, user=visible_user, display_name="Maya C.")
+        sam = f.StaffProfileFactory(organization=org, display_name="Sam")
         hidden_user = f.UserFactory(
             first_name="Ines", last_name="Hidden", email="ines@private.test"
         )
-        f.StaffProfileFactory(organization=org, user=hidden_user, online_booking_visible=False)
+        ines = f.StaffProfileFactory(
+            organization=org, user=hidden_user, online_booking_visible=False
+        )
+        for staff in (maya, sam, ines):
+            f.make_bookable(staff, service)
 
-        body = self.client.get("/book/glow/").content.decode()
+        # The booking wizard's provider step.
+        self.client.post("/book/glow/service/", {"service": str(service.pk)})
+        body = self.client.get("/book/glow/provider/").content.decode()
         self.assertIn("Maya C.", body)
         self.assertNotIn("Chen", body)
         self.assertNotIn("private.test", body)

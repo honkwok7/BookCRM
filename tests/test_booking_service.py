@@ -43,6 +43,8 @@ from organizations.models import OrganizationRole
 from scheduling.availability import AvailabilityService, Candidate
 from subscriptions.models import Plan, Subscription
 from tests import factories as f
+from tests.wizard_helpers import DETAILS as WIZARD_DETAILS
+from tests.wizard_helpers import book_through_wizard
 
 Status = Booking.Status
 POSTGRES = skipUnless(connection.vendor == "postgresql", "PostgreSQL exclusion constraint")
@@ -175,15 +177,8 @@ class RecordedDetailsTests(Fixtures, TestCase):
         self.assertEqual(raised.exception.code, "invalid_source")
 
     def test_every_entry_point_records_its_source(self):
-        public_page = self.client.post(
-            "/book/glow/",
-            {
-                "service": str(self.service.pk),
-                "staff": str(self.staff.pk),
-                "start_datetime": self.start.strftime("%Y-%m-%dT%H:%M"),
-                "customer_name": "Grace Hopper",
-                "customer_email": "grace@example.test",
-            },
+        public_page = book_through_wizard(
+            self.client, self.org, self.service, start=self.start, details=WIZARD_DETAILS
         )
         self.assertEqual(public_page.status_code, 302, public_page.content)
 

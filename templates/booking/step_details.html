@@ -1,0 +1,20 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Your details{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">Your details</h2>
+{% if sign_in_required %}
+  {% url 'login' as login_url %}
+  <p class="text-sm text-slate-700">{{ organization.name }} asks you to sign in before booking.</p>
+  <p class="mt-4"><a href="{{ login_url }}?next={{ request.path|urlencode }}" class="btn btn-primary" hx-boost="false">Sign in to continue</a></p>
+{% else %}
+<form method="post" class="grid gap-4" novalidate>
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  {% for field in form %}
+    {% if field.name != "website" %}{% include "components/field.html" with field=field %}{% endif %}
+  {% endfor %}
+  <div class="hidden" aria-hidden="true">{% include "components/field.html" with field=form.website %}</div>
+  <div><button type="submit" class="btn btn-primary">Continue</button></div>
+</form>
+{% endif %}
+{% endblock %}

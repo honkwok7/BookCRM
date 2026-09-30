@@ -185,4 +185,30 @@
   .htmx-request.htmx-indicator {
     @apply opacity-100;
   }
+
+  /* Public booking wizard: one-tap choices, the day strip and time slots */
+  .choice {
+    @apply block w-full rounded-lg bg-white p-4 text-left ring-1 ring-slate-300 ring-inset
+      transition-shadow hover:ring-2 hover:ring-brand-600;
+  }
+  .choice-selected {
+    @apply bg-brand-50 ring-2 ring-brand-600;
+  }
+  .day {
+    @apply flex flex-col items-center rounded-md px-1 py-2 text-slate-900 no-underline ring-1
+      ring-slate-300 ring-inset hover:no-underline hover:ring-2 hover:ring-brand-600;
+  }
+  .day-selected {
+    @apply bg-brand-600 text-white ring-brand-600 hover:text-white;
+  }
+  .day-unavailable {
+    @apply bg-slate-100 text-slate-500 ring-slate-200 hover:ring-1 hover:ring-slate-200;
+  }
+  .slot {
+    @apply rounded-md bg-white px-2 py-2.5 text-sm font-semibold text-brand-700 ring-1 ring-brand-200
+      ring-inset hover:bg-brand-50 hover:ring-brand-600;
+  }
+  .slot-selected {
+    @apply bg-brand-600 text-white ring-brand-600 hover:bg-brand-700;
+  }
 }

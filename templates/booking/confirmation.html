@@ -1,0 +1,34 @@
+{% extends "layouts/public.html" %}
+{% load tz %}
+{% comment %}After booking: what was booked, never who booked it (the address is only unguessable).
+The container is #wizard because the wizard's boosted Confirm swaps that element in.{% endcomment %}
+{% block title %}Booking confirmed · {{ organization.name }}{% endblock %}
+{% block extra_head %}{% if organization.brand_color %}<link rel="stylesheet" href="{% url 'public-booking-theme' organization.slug %}">{% endif %}{% endblock %}
+{% block main %}
+{% timezone zone %}
+<div id="wizard" class="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
+  <section class="card card-body" aria-labelledby="confirmed-heading">
+    <div class="mb-4 flex items-center gap-3">
+      {% include "components/icon.html" with name="check-circle" class="size-8 text-green-600" %}
+      <h1 id="confirmed-heading" class="text-2xl font-bold tracking-tight">You're booked</h1>
+    </div>
+    <p class="mb-4 text-sm text-slate-700">We've sent a confirmation to the email address you gave. Your reference is <strong class="text-slate-900">{{ booking.reference }}</strong>.</p>
+    <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[auto_1fr]">
+      <dt class="font-medium text-slate-600">Service</dt>
+      <dd class="text-slate-900">{{ booking.service.name }} ({{ booking.duration_snapshot_minutes }} min)</dd>
+      <dt class="font-medium text-slate-600">With</dt>
+      <dd class="text-slate-900">{{ booking.staff.public_name }}</dd>
+      <dt class="font-medium text-slate-600">When</dt>
+      <dd class="text-slate-900">{{ booking.start_datetime|date:"l, F j, Y" }} at {{ booking.start_datetime|time:"g:i A" }} <span class="text-slate-600">({{ zone }})</span></dd>
+      {% if booking.location %}
+        <dt class="font-medium text-slate-600">Where</dt>
+        <dd class="text-slate-900">{{ booking.location.name }}{% for line in booking.location.address_lines %}<span class="block text-slate-600">{{ line }}</span>{% endfor %}</dd>
+      {% endif %}
+      <dt class="font-medium text-slate-600">Status</dt>
+      <dd class="text-slate-900">{{ booking.get_status_display }}</dd>
+    </dl>
+    <p class="mt-6"><a href="{% url 'public-booking' organization.slug %}" class="btn btn-secondary">Book another appointment</a></p>
+  </section>
+</div>
+{% endtimezone %}
+{% endblock %}

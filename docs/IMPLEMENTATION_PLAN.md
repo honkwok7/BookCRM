@@ -1255,6 +1255,22 @@ A receptionist books, reschedules and cancels without leaving the page.
 
 > **Order:** built right after M4.1 + M4.2, before M4.3–M4.5 (see the PR sequence below).
 
+> **Status: done (2026-09-30, branch `m4.6-booking-wizard`).** See
+> [PUBLIC_BOOKING.md](PUBLIC_BOOKING.md).
+> - Steps as plain pages with PRG and `hx-boost` (no JavaScript needed). State in the
+>   session keyed by organization, re-validated on every request. Single-answer steps
+>   (one location, one provider) are skipped. "Anyone available" books the first free
+>   provider at confirm time.
+> - `create_booking(source=public_booking, public=True)` with a per-run idempotency key. A
+>   slot taken between steps returns to the time step with an explanation (a redirect rather
+>   than a 409 page, so it also works with htmx).
+> - Rate limits per IP per organization and per organization, a honeypot, and confirmation at
+>   `/book/<slug>/confirmation/<public_uuid>/`.
+> - `Organization.booking_instructions` and `brand_color` (fixed AA-contrast palettes served
+>   as `/book/<slug>/theme.css` because of the CSP). `require_account` reuses the existing
+>   `allow_guest_booking`. Account creation after booking is deferred to the customer portal
+>   (M5.4). A Lighthouse run isn't automated.
+
 #### Objective
 A polished public self-booking flow.
 
