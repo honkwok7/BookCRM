@@ -1,0 +1,20 @@
+{% comment %}The choices made so far (change them with the step links above).{% endcomment %}
+<dl class="mb-4 grid gap-x-6 gap-y-1 rounded-lg bg-white px-4 py-3 text-sm ring-1 ring-slate-200 grid-cols-[auto_1fr]">
+  <dt class="font-medium text-slate-600">Where</dt>
+  <dd class="text-slate-900">{{ wizard.location.name }}</dd>
+  {% if wizard.service %}
+    <dt class="font-medium text-slate-600">What</dt>
+    <dd class="text-slate-900">{{ wizard.service.name }}</dd>
+  {% endif %}
+  {% if wizard.staff %}
+    <dt class="font-medium text-slate-600">With</dt>
+    <dd class="text-slate-900">{{ wizard.staff.public_name }}</dd>
+  {% elif wizard.any_provider %}
+    <dt class="font-medium text-slate-600">With</dt>
+    <dd class="text-slate-900">Anyone available</dd>
+  {% endif %}
+  {% if wizard.start and step != "time" %}
+    <dt class="font-medium text-slate-600">When</dt>
+    <dd class="text-slate-900">{{ wizard.start|date:"l, F j" }} at {{ wizard.start|time:"g:i A" }}</dd>
+  {% endif %}
+</dl>

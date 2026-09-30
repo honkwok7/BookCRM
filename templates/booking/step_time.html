@@ -1,0 +1,49 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Choose a date and time{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">When suits you?</h2>
+{% if notice %}<div class="mb-4">{% include "components/alert.html" with level="warning" message=notice %}</div>{% endif %}
+
+<div class="mb-3 flex items-center justify-between gap-2">
+  {% if previous_from %}
+    <a href="?from={{ previous_from|date:'Y-m-d' }}" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="chevron-left" class="size-4" %}<span>Earlier<span class="sr-only"> dates</span></span></a>
+  {% else %}<span></span>{% endif %}
+  <p class="text-sm font-medium text-slate-800">{{ days.0.date|date:"M j" }} – {% with last=days|last %}{{ last.date|date:"M j" }}{% endwith %}</p>
+  {% if next_from %}
+    <a href="?from={{ next_from|date:'Y-m-d' }}" class="btn btn-secondary btn-sm"><span>Later<span class="sr-only"> dates</span></span>{% include "components/icon.html" with name="chevron-right" class="size-4" %}</a>
+  {% else %}<span></span>{% endif %}
+</div>
+
+<ul class="mb-6 grid grid-cols-7 gap-1" aria-label="Days">
+  {% for day in days %}
+    <li>
+      {% if day.available %}
+        <a href="?from={{ days.0.date|date:'Y-m-d' }}&amp;date={{ day.date|date:'Y-m-d' }}" class="day{% if day.date == selected %} day-selected{% endif %}"{% if day.date == selected %} aria-current="date"{% endif %}>
+          <span class="text-xs">{{ day.date|date:"D" }}</span><span class="text-base font-semibold">{{ day.date|date:"j" }}</span><span class="sr-only">{{ day.date|date:"F" }}, free times</span>
+        </a>
+      {% else %}
+        <span class="day day-unavailable"><span class="text-xs">{{ day.date|date:"D" }}</span><span class="text-base font-semibold">{{ day.date|date:"j" }}</span><span class="sr-only">{{ day.date|date:"F" }}, no free times</span></span>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+
+{% if periods %}
+<form method="post" class="grid gap-5">
+  {% csrf_token %}
+  <p class="text-sm font-semibold text-slate-900">{{ selected|date:"l, F j" }}</p>
+  {% for label, times in periods %}
+    <fieldset>
+      <legend class="mb-2 text-sm font-medium text-slate-700">{{ label }}</legend>
+      <div class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {% for moment in times %}
+          <button type="submit" name="start" value="{{ moment.isoformat }}" class="slot{% if wizard.start == moment %} slot-selected{% endif %}">{{ moment|time:"g:i A" }}</button>
+        {% endfor %}
+      </div>
+    </fieldset>
+  {% endfor %}
+</form>
+{% else %}
+  <p class="text-sm text-slate-700">No free times in these days.{% if next_from %} <a href="?from={{ next_from|date:'Y-m-d' }}">Try later dates</a>.{% endif %}</p>
+{% endif %}
+{% endblock %}

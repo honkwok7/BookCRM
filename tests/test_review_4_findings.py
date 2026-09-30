@@ -13,6 +13,7 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from bookings.models import Booking
 from core.exceptions import ConflictError
 from core.models import AuditLog
 from locations.models import Location
@@ -159,18 +160,11 @@ class F4PublicPathsRequireAnOfferingTests(TestCase):
         )
 
     def test_public_page_refuses_a_provider_who_does_not_offer_the_service(self):
-        response = self.client.post(
-            "/book/glow/",
-            {
-                "service": str(self.massage.pk),
-                "staff": str(self.chiropractor.pk),
-                "start_datetime": self.start.strftime("%Y-%m-%dT%H:%M"),
-                "customer_name": "Ada Lovelace",
-                "customer_email": "ada@example.test",
-            },
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertContains(response, "Daniel doesn&#x27;t offer Massage", status_code=400)
+        # The booking wizard (M4.6) only accepts providers who offer the chosen service.
+        self.client.post("/book/glow/service/", {"service": str(self.massage.pk)})
+        response = self.client.post("/book/glow/provider/", {"staff": str(self.chiropractor.pk)})
+        self.assertEqual(response.status_code, 422)
+        self.assertFalse(Booking.objects.exists())
 
     def test_slot_api_answers_like_a_missing_pair(self):
         url = "/api/v1/availability/slots/available-slots/"

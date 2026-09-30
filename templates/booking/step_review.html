@@ -1,0 +1,35 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Review and confirm{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">Review and confirm</h2>
+<dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[auto_1fr]">
+  <dt class="font-medium text-slate-600">Service</dt>
+  <dd class="text-slate-900">{{ wizard.service.name }} <span class="text-slate-600">({{ wizard.service.duration_minutes }} min · {{ wizard.service.price }} {{ wizard.service.currency }})</span></dd>
+  <dt class="font-medium text-slate-600">With</dt>
+  <dd class="text-slate-900">{% if wizard.staff %}{{ wizard.staff.public_name }}{% else %}The first available provider{% endif %}</dd>
+  <dt class="font-medium text-slate-600">When</dt>
+  <dd class="text-slate-900">{{ wizard.start|date:"l, F j, Y" }} at {{ wizard.start|time:"g:i A" }}</dd>
+  <dt class="font-medium text-slate-600">Where</dt>
+  <dd class="text-slate-900">{{ wizard.location.name }}{% for line in wizard.location.address_lines %}<span class="block text-slate-600">{{ line }}</span>{% endfor %}</dd>
+  <dt class="font-medium text-slate-600">Your details</dt>
+  <dd class="text-slate-900">
+    {{ wizard.customer.name }}<span class="block text-slate-600">{{ wizard.customer.email }}{% if wizard.customer.phone %} · {{ wizard.customer.phone }}{% endif %}</span>
+    {% if wizard.customer.notes %}<span class="block text-slate-600">“{{ wizard.customer.notes }}”</span>{% endif %}
+    <a href="{% url 'public-booking-details' organization.slug %}" class="text-sm">Change details</a>
+  </dd>
+</dl>
+{% if wizard.service.cancellation_policy %}
+  <div class="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+    <p class="font-medium text-slate-900">Cancellation policy</p>
+    <p class="whitespace-pre-line">{{ wizard.service.cancellation_policy }}</p>
+  </div>
+{% endif %}
+{% if sign_in_required %}
+  <p class="mt-6"><a href="{% url 'login' %}?next={{ request.path|urlencode }}" class="btn btn-primary" hx-boost="false">Sign in to book</a></p>
+{% else %}
+<form method="post" class="mt-6">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-primary w-full sm:w-auto" hx-disabled-elt="this">Confirm booking</button>
+</form>
+{% endif %}
+{% endblock %}

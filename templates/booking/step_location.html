@@ -1,0 +1,23 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Choose a location{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">Where would you like to come?</h2>
+{% if locations %}
+<form method="post" class="grid gap-3">
+  {% csrf_token %}
+  {% for location in locations %}
+    <button type="submit" name="location" value="{{ location.pk }}" class="choice{% if wizard.location.pk == location.pk %} choice-selected{% endif %}">
+      <span class="flex items-start gap-3">
+        {% include "components/icon.html" with name="map-pin" class="mt-0.5 size-5 shrink-0 text-brand-600" %}
+        <span>
+          <span class="block font-semibold text-slate-900">{{ location.name }}</span>
+          {% for line in location.address_lines %}<span class="block text-sm text-slate-600">{{ line }}</span>{% endfor %}
+        </span>
+      </span>
+    </button>
+  {% endfor %}
+</form>
+{% else %}
+<p class="text-sm text-slate-700">Online booking isn't available right now. Please contact {{ organization.name }} directly.</p>
+{% endif %}
+{% endblock %}

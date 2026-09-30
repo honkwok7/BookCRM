@@ -1,0 +1,26 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Choose a service{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">What would you like to book?</h2>
+{% if groups %}
+<form method="post" class="grid gap-6">
+  {% csrf_token %}
+  {% for category, services in groups %}
+    <fieldset class="grid gap-3">
+      <legend class="mb-2 text-sm font-semibold text-slate-700">{% if category %}{{ category.name }}{% else %}Services{% endif %}</legend>
+      {% for service in services %}
+        <button type="submit" name="service" value="{{ service.pk }}" class="choice{% if wizard.service.pk == service.pk %} choice-selected{% endif %}">
+          <span class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span class="font-semibold text-slate-900">{{ service.name }}</span>
+            <span class="text-sm text-slate-700">{{ service.duration_minutes }} min · {{ service.price }} {{ service.currency }}</span>
+          </span>
+          {% if service.description %}<span class="mt-1 block text-sm text-slate-600">{{ service.description|truncatewords:30 }}</span>{% endif %}
+        </button>
+      {% endfor %}
+    </fieldset>
+  {% endfor %}
+</form>
+{% else %}
+<p class="text-sm text-slate-700">There are no services to book online at {{ wizard.location.name }} right now.</p>
+{% endif %}
+{% endblock %}

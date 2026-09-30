@@ -27,6 +27,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "booking_page_theme",
             "default_appointment_rules",
             "allow_guest_booking",
+            "booking_instructions",
+            "brand_color",
             "reminder_hours_before",
             "second_reminder_hours_before",
             "is_active",

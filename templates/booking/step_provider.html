@@ -1,0 +1,18 @@
+{% extends "booking/wizard.html" %}
+{% block step_title %}Choose who you'd like to see{% endblock %}
+{% block step %}
+<h2 id="step-heading" class="mb-4 text-lg font-semibold">Who would you like to see?</h2>
+<form method="post" class="grid gap-3">
+  {% csrf_token %}
+  <button type="submit" name="staff" value="any" class="choice{% if wizard.any_provider %} choice-selected{% endif %}">
+    <span class="block font-semibold text-slate-900">Anyone available</span>
+    <span class="block text-sm text-slate-600">See the most times; we'll match you with a provider.</span>
+  </button>
+  {% for provider in providers %}
+    <button type="submit" name="staff" value="{{ provider.pk }}" class="choice{% if wizard.staff.pk == provider.pk %} choice-selected{% endif %}">
+      <span class="block font-semibold text-slate-900">{{ provider.public_name }}</span>
+      {% if provider.job_title or provider.provider_type %}<span class="block text-sm text-slate-600">{{ provider.job_title|default:provider.provider_type }}</span>{% endif %}
+    </button>
+  {% endfor %}
+</form>
+{% endblock %}

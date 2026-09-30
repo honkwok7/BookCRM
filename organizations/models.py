@@ -9,6 +9,7 @@ from django.template.defaultfilters import slugify
 from django.utils import timezone
 
 from core.models import BaseUUIDModel
+from organizations.branding import BrandColor
 
 
 class Organization(BaseUUIDModel):
@@ -27,6 +28,12 @@ class Organization(BaseUUIDModel):
     booking_page_theme = models.JSONField(default=dict, blank=True)
     default_appointment_rules = models.JSONField(default=dict, blank=True)
     allow_guest_booking = models.BooleanField(default=True)
+    # Public booking page: shown above the steps (parking, what to bring, ...), and the brand
+    # palette (organizations.branding).
+    booking_instructions = models.TextField(blank=True)
+    brand_color = models.CharField(
+        max_length=20, choices=BrandColor.choices, blank=True, default=BrandColor.DEFAULT
+    )
     reminder_hours_before = models.PositiveIntegerField(default=24)
     second_reminder_hours_before = models.PositiveIntegerField(default=2)
     is_active = models.BooleanField(default=True)
