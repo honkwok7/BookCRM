@@ -72,6 +72,11 @@ class BookingFixtures:
             notify=False,
         )
 
+    def happening_now(self, state=Status.CONFIRMED):
+        """An appointment that started five minutes ago (check-in, no-show and so on are only
+        allowed around the appointment's time)."""
+        return f.make_current(self.existing(0, state=state))
+
     def existing(self, minutes=0, state=Status.CONFIRMED):
         return f.BookingFactory(
             organization=self.organization,
@@ -179,7 +184,7 @@ class TransitionTableTests(BookingFixtures, TestCase):
                 if new == old or new == Status.CANCELLED:
                     continue  # cancel is idempotent and has its own path
                 with self.subTest(old=old, new=new):
-                    booking = self.existing(0, state=old)
+                    booking = self.happening_now(state=old)
                     if new in ALLOWED_TRANSITIONS[old]:
                         change_booking_status(booking=booking, new_status=new)
                         booking.refresh_from_db()
@@ -232,7 +237,7 @@ class LockOrderTests(BookingFixtures, TestCase):
         self.assertNotIn("booking", calls[2:])
 
     def test_status_change_locks_only_the_booking(self):
-        booking = self.book(0)
+        booking = f.make_current(self.book(0))
         calls, patches = self.record_locks()
         with patches:
             change_booking_status(booking=booking, new_status=Status.CHECKED_IN)
@@ -373,7 +378,7 @@ class PostgreSQLBookingRaceTests(BookingFixtures, TransactionTestCase):
         self.assertEqual(self.active().count(), 1)
 
     def test_status_race_cannot_overwrite_terminal_state(self):
-        booking = self.existing(0, state=Status.CHECKED_IN)
+        booking = self.happening_now(state=Status.CHECKED_IN)
         results = self.race(
             self.status(booking, Status.COMPLETED),
             self.status(booking, Status.NO_SHOW),

@@ -94,8 +94,30 @@ caller (since M4.1). The public booking form also calls it first, to show friend
 | in_progress | completed |
 | completed, cancelled, no_show, rejected | *(terminal)* |
 
-Only `pending` and `confirmed` appointments can be rescheduled. Every status change writes a
-`BookingStatusHistory` row with who made it and an optional note.
+Only `pending` and `confirmed` appointments can be rescheduled. An illegal change is 409
+`invalid_transition`.
+
+**Timing (M4.3).** Check-in, starting and completing are allowed from an hour before the start
+time (`CHECK_IN_EARLIEST`), and a no-show only once the appointment has started. Otherwise the
+answer is 400 `too_early`. Check-in sets `checked_in_at` and completion sets `completed_at`.
+`check_in(booking)` and `check_out(booking)` are shortcuts for the two most common changes.
+
+**History.** Every status change, including the first (`"" -> confirmed`), cancellations and
+both sides of a reschedule, writes a `BookingStatusHistory` row with:
+
+- who made the change (`changed_by`);
+- `reason`: a cancellation reason, "Rescheduled", "Imported", or the reason given to
+  `update_status`;
+- `source`: the channel (`Booking.Source`). The team's API calls are `api`, and a customer
+  acting on their own appointment is `customer_portal`;
+- an optional free-text `note`.
+
+Completed and no-show appointments are added to the customer's CRM timeline.
+
+**Who may change what.** Cancelling (and rescheduling) is open to the customer for their own
+appointment, within the cancellation deadline. Every other change needs
+`appointments.manage`. Providers have it, but only reach their own appointments (the
+queryset). Reception and managers reach every appointment.
 
 ## Errors
 
@@ -109,6 +131,7 @@ returns them as `{"detail": "...", "code": "..."}`.
 | `too_far` | 400 | Online booking: beyond how far ahead the service can be booked |
 | `not_offered` | 400 | The provider doesn't offer the service at this location (or isn't bookable online) |
 | `invalid_status` | 400 | Unknown status value |
+| `too_early` | 400 | Check-in, start or completion more than an hour before the start; no-show before it starts |
 | `not_found` | 400 | Service, staff, location or customer from another organization (or inactive) |
 | `past_cancellation_deadline` | 400 | A customer cancelling or rescheduling inside the service's cancellation deadline |
 | `invalid_source` | 400 | Unknown booking source |

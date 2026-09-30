@@ -76,7 +76,9 @@ Read: `locations.view`. Write: `locations.manage`. Rules and error codes are in
     buffer snapshots.
 - `POST /api/v1/bookings/{id}/cancel/` `{"reason": "..."}` (customers: 400 `past_cancellation_deadline` inside the service's deadline)
 - `POST /api/v1/bookings/{id}/reschedule/` `{"start_datetime": "..."}` returns the **new** appointment
-- `POST /api/v1/bookings/{id}/update_status/` `{"status": "...", "note": "..."}` (needs `appointments.manage`)
+- `POST /api/v1/bookings/{id}/update_status/` `{"status": "...", "reason": "...", "note": "..."}` (needs `appointments.manage`)
+- `POST /api/v1/bookings/{id}/check-in/` and `POST /api/v1/bookings/{id}/check-out/`: confirmed to checked in, and checked in or in progress to completed (needs `appointments.manage`; 400 `too_early` more than an hour before the start)
+- `GET /api/v1/bookings/{id}/history/`: every status change with `reason`, `source`, `note`, `changed_by` (team only)
 - `/api/v1/customers/`
 - `/api/v1/waitlist/`
 

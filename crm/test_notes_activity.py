@@ -135,6 +135,7 @@ class ActivityEmissionTests(TestCase):
         booking = self.book()
         customer = booking.customer
         moved = reschedule_booking(booking=booking, new_start=self.start + timedelta(hours=2))
+        f.make_current(moved)
         change_booking_status(booking=moved, new_status="checked_in")  # not timeline-worthy
         change_booking_status(booking=moved, new_status="completed")
         second = create_booking(

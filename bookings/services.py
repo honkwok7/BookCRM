@@ -63,6 +63,11 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     Booking.Status.REJECTED: frozenset(),
 }
 RESCHEDULABLE_STATUSES = frozenset({Booking.Status.PENDING, Booking.Status.CONFIRMED})
+# Check-in, start and completion are allowed from this long before the start time.
+CHECK_IN_EARLIEST = timedelta(hours=1)
+ARRIVAL_STATUSES = frozenset(
+    {Booking.Status.CHECKED_IN, Booking.Status.IN_PROGRESS, Booking.Status.COMPLETED}
+)
 # Final statuses a past appointment can be imported with (``record_past_booking``).
 PAST_STATUSES = frozenset(
     {Booking.Status.COMPLETED, Booking.Status.NO_SHOW, Booking.Status.CANCELLED}
@@ -309,7 +314,12 @@ def create_booking(
         raise
 
     BookingStatusHistory.objects.create(
-        booking=booking, old_status="", new_status=booking.status, changed_by=actor
+        booking=booking,
+        old_status="",
+        new_status=booking.status,
+        changed_by=actor,
+        source=source,
+        reason="Rescheduled" if rescheduled_from is not None else "",
     )
     BookingActivityLog.objects.create(
         booking=booking,
@@ -402,7 +412,12 @@ def record_past_booking(
         status=status,
     )
     BookingStatusHistory.objects.create(
-        booking=booking, old_status="", new_status=status, changed_by=actor, note="Imported"
+        booking=booking,
+        old_status="",
+        new_status=status,
+        changed_by=actor,
+        source=source,
+        reason="Imported",
     )
     return booking
 
@@ -421,10 +436,15 @@ def check_cancellation_deadline(booking: Booking) -> None:
 
 @transaction.atomic
 def cancel_booking(
-    *, booking: Booking, actor=None, reason: str = "", enforce_deadline: bool = False
+    *,
+    booking: Booking,
+    actor=None,
+    reason: str = "",
+    enforce_deadline: bool = False,
+    source: str = Booking.Source.STAFF,
 ):
     """Cancel an appointment. ``enforce_deadline``: the customer is acting (their own
-    appointment), so the service's cancellation deadline applies."""
+    appointment), so the service's cancellation deadline applies. ``source``: the channel."""
     booking = lock_booking(booking)
     if booking.status == Booking.Status.CANCELLED:
         return booking
@@ -454,6 +474,8 @@ def cancel_booking(
         old_status=old_status,
         new_status=booking.status,
         changed_by=actor,
+        source=source,
+        reason=reason[:255],
         note=reason,
     )
     BookingActivityLog.objects.create(
@@ -489,24 +511,68 @@ def cancel_booking(
     return booking
 
 
+def check_timing(booking: Booking, new_status: str, now) -> None:
+    """Statuses that only make sense around the appointment's time: check-in, starting and
+    completing from an hour before it starts; no-show once it has started."""
+    early = booking.start_datetime - CHECK_IN_EARLIEST
+    if new_status in ARRIVAL_STATUSES and now < early:
+        raise DomainError(
+            "An appointment can be checked in, started or completed from an hour before it "
+            "starts.",
+            code="too_early",
+        )
+    if new_status == Booking.Status.NO_SHOW and now < booking.start_datetime:
+        raise DomainError(
+            "An appointment can only be marked as a no-show once it has started.",
+            code="too_early",
+        )
+
+
 @transaction.atomic
-def change_booking_status(*, booking: Booking, new_status: str, actor=None, note: str = ""):
+def change_booking_status(
+    *,
+    booking: Booking,
+    new_status: str,
+    actor=None,
+    note: str = "",
+    reason: str = "",
+    source: str = Booking.Source.STAFF,
+):
+    """Move an appointment along its lifecycle (``ALLOWED_TRANSITIONS``), or raise 409
+    ``invalid_transition`` / 400 ``too_early``. Check-in and completion are timestamped;
+    completed and no-show appointments go on the customer's timeline."""
     if new_status not in Booking.Status.values:
         raise DomainError(f"Unknown status '{new_status}'", code="invalid_status")
     if new_status == Booking.Status.CANCELLED:
-        return cancel_booking(booking=booking, actor=actor, reason=note)
+        return cancel_booking(booking=booking, actor=actor, reason=reason or note, source=source)
 
     booking = lock_booking(booking)
     if new_status not in ALLOWED_TRANSITIONS[booking.status]:
         raise ConflictError(
-            f"Cannot change status from {booking.status} to {new_status}",
+            f"A {booking.get_status_display().lower()} appointment can't become "
+            f"{Booking.Status(new_status).label.lower()}",
             code="invalid_transition",
         )
+    now = timezone.now()
+    check_timing(booking, new_status, now)
     old_status = booking.status
     booking.status = new_status
-    booking.save(update_fields=["status", "updated_at"])
+    fields = ["status", "updated_at"]
+    if new_status == Booking.Status.CHECKED_IN:
+        booking.checked_in_at = now
+        fields.append("checked_in_at")
+    if new_status == Booking.Status.COMPLETED:
+        booking.completed_at = now
+        fields.append("completed_at")
+    booking.save(update_fields=fields)
     BookingStatusHistory.objects.create(
-        booking=booking, old_status=old_status, new_status=new_status, changed_by=actor, note=note
+        booking=booking,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by=actor,
+        source=source,
+        reason=reason[:255],
+        note=note,
     )
     record_audit(
         AuditAction.BOOKING_STATUS_CHANGED,
@@ -514,7 +580,7 @@ def change_booking_status(*, booking: Booking, new_status: str, actor=None, note
         actor=actor,
         object_type="Booking",
         object_identifier=str(booking.id),
-        metadata={"from": old_status, "to": new_status},
+        metadata={"from": old_status, "to": new_status, "source": source},
     )
     outcome = STATUS_ACTIVITY.get(new_status)
     if outcome:
@@ -528,8 +594,29 @@ def change_booking_status(*, booking: Booking, new_status: str, actor=None, note
     return booking
 
 
+def check_in(*, booking: Booking, actor=None, source: str = Booking.Source.STAFF) -> Booking:
+    """The customer has arrived (confirmed -> checked in)."""
+    return change_booking_status(
+        booking=booking, new_status=Booking.Status.CHECKED_IN, actor=actor, source=source
+    )
+
+
+def check_out(*, booking: Booking, actor=None, source: str = Booking.Source.STAFF) -> Booking:
+    """The appointment is over (checked in or in progress -> completed)."""
+    return change_booking_status(
+        booking=booking, new_status=Booking.Status.COMPLETED, actor=actor, source=source
+    )
+
+
 @transaction.atomic
-def reschedule_booking(*, booking: Booking, new_start, actor=None, public: bool = False) -> Booking:
+def reschedule_booking(
+    *,
+    booking: Booking,
+    new_start,
+    actor=None,
+    public: bool = False,
+    source: str = Booking.Source.STAFF,
+) -> Booking:
     """Move an appointment to ``new_start``: one transaction, all-or-nothing.
 
     The old appointment is closed as cancelled ("Rescheduled") and a new one is created at the
@@ -567,6 +654,8 @@ def reschedule_booking(*, booking: Booking, new_start, actor=None, public: bool 
         old_status=old_status,
         new_status=booking.status,
         changed_by=actor,
+        source=source,
+        reason="Rescheduled",
         note="Rescheduled",
     )
 
