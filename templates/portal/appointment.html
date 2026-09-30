@@ -1,0 +1,30 @@
+{% extends "layouts/portal.html" %}
+{% comment %}One appointment (portal/views.py PortalAppointmentView). Only what the customer booked:
+never internal notes.{% endcomment %}
+{% block title %}{{ booking.service.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card" aria-labelledby="appointment-heading">
+  <div class="card-header flex flex-wrap items-center justify-between gap-3">
+    <h2 id="appointment-heading" class="card-title">{{ booking.service.name }}</h2>
+    {% include "dashboard/status_badge.html" with status=booking.status label=booking.get_status_display %}
+  </div>
+  <dl class="card-body grid gap-3 text-sm sm:grid-cols-2">
+    <div><dt class="text-slate-600">When</dt><dd class="font-medium"><time datetime="{{ booking.start_datetime|date:'c' }}">{{ booking.local_start|date:"l j F Y, H:i" }}–{{ booking.local_end|time:"H:i" }}</time> ({{ booking.zone }})</dd></div>
+    <div><dt class="text-slate-600">With</dt><dd class="font-medium">{{ booking.staff.public_name }}</dd></div>
+    {% if booking.location %}<div><dt class="text-slate-600">Where</dt><dd class="font-medium">{{ booking.location.name }}</dd></div>{% endif %}
+    <div><dt class="text-slate-600">Reference</dt><dd class="font-medium">{{ booking.reference }}</dd></div>
+    {% if booking.customer_notes %}<div class="sm:col-span-2"><dt class="text-slate-600">Your notes</dt><dd>{{ booking.customer_notes|linebreaksbr }}</dd></div>{% endif %}
+  </dl>
+  {% if policy.can_reschedule or policy.can_cancel %}
+    <div class="flex flex-wrap gap-2 border-t border-slate-100 px-4 py-3">
+      {% if policy.can_reschedule %}<a href="{% url 'portal-reschedule' organization.slug booking.pk %}" class="btn btn-secondary">Reschedule</a>{% endif %}
+      {% if policy.can_cancel %}<a href="{% url 'portal-cancel' organization.slug booking.pk %}" class="btn btn-ghost">Cancel appointment</a>{% endif %}
+    </div>
+    {% if booking.service.cancellation_deadline_hours %}<p class="px-4 pb-3 text-xs text-slate-600">You can change this appointment online until {{ booking.service.cancellation_deadline_hours }} hours before it starts.</p>{% endif %}
+  {% elif policy.reason %}
+    <p class="border-t border-slate-100 px-4 py-3 text-sm text-slate-700">{{ policy.reason }}</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% comment %}One appointment in a portal list. booking: localized (portal.policy.localize).{% endcomment %}
+<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+  <div class="min-w-0">
+    <a href="{% url 'portal-appointment' organization.slug booking.pk %}" class="font-medium">{{ booking.service.name }}</a>
+    <p class="text-sm text-slate-600">
+      <time datetime="{{ booking.start_datetime|date:'c' }}">{{ booking.local_start|date:"l j F Y, H:i" }}</time>
+      · {{ booking.staff.public_name }}{% if booking.location %} · {{ booking.location.name }}{% endif %} · ref. {{ booking.reference }}
+    </p>
+  </div>
+  {% include "dashboard/status_badge.html" with status=booking.status label=booking.get_status_display %}
+</li>

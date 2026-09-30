@@ -1,0 +1,32 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Every business where the account is a customer (portal/views.py PortalHomeView).{% endcomment %}
+{% block title %}My appointments · {{ brand_name }}{% endblock %}
+{% block page_title %}My appointments{% endblock %}
+{% block content %}
+{% if places %}
+  <div class="grid gap-6">
+    {% for place in places %}
+      {% with organization=place.organization %}
+      <section class="card" aria-labelledby="org-{{ organization.slug }}">
+        <div class="card-header flex flex-wrap items-center justify-between gap-3">
+          <h2 id="org-{{ organization.slug }}" class="card-title"><a href="{% url 'portal-organization' organization.slug %}">{{ organization.name }}</a></h2>
+          <span class="flex flex-wrap gap-2">
+            {% if organization.booking_page_enabled %}<a href="{% url 'public-booking' organization.slug %}" class="btn btn-sm btn-primary">Book</a>{% endif %}
+            <a href="{% url 'portal-appointments' organization.slug %}" class="btn btn-sm btn-secondary">All appointments</a>
+          </span>
+        </div>
+        {% if place.upcoming %}
+          <ul class="divide-y divide-slate-100">
+            {% for booking in place.upcoming %}{% include "portal/_booking.html" %}{% endfor %}
+          </ul>
+        {% else %}
+          <p class="card-body text-sm text-slate-600">Nothing booked.</p>
+        {% endif %}
+      </section>
+      {% endwith %}
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card">{% include "components/empty_state.html" with title="No appointments yet" message="Appointments you book with your account, or with this email once it is verified, appear here." icon="calendar" %}</div>
+{% endif %}
+{% endblock %}

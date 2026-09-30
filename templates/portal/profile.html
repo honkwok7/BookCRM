@@ -1,0 +1,34 @@
+{% extends "layouts/portal.html" %}
+{% comment %}The customer's details at one business (portal/views.py PortalProfileView).{% endcomment %}
+{% block title %}My details · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card" aria-labelledby="profile-heading">
+  <div class="card-header">
+    <h2 id="profile-heading" class="card-title">My details</h2>
+    <p class="mt-1 text-sm text-slate-600">What {{ organization.name }} has on file for you. Other businesses don't see it.</p>
+  </div>
+  {% if form %}
+    <form method="post" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      {% include "components/form_errors.html" with form=form %}
+      <div class="grid gap-4 *:min-w-0 sm:grid-cols-2">
+        {% include "components/field.html" with field=form.first_name %}
+        {% include "components/field.html" with field=form.last_name %}
+      </div>
+      <div class="form-field"><span class="form-label">Email</span><p class="text-sm">{{ customer.email|default:user.email }}</p><p class="form-help">Your account's email. Change it in your account settings.</p></div>
+      {% include "components/field.html" with field=form.phone %}
+      <fieldset class="grid gap-2">
+        <legend class="form-label">Communication preferences</legend>
+        {% include "components/field.html" with field=form.email_consent %}
+        {% include "components/field.html" with field=form.sms_consent %}
+        {% include "components/field.html" with field=form.marketing_consent %}
+      </fieldset>
+      <div><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  {% else %}
+    <p class="card-body text-sm text-slate-600">{{ organization.name }} has no details for your account yet. They are saved the first time you book while signed in with a verified email.</p>
+  {% endif %}
+</section>
+{% endblock %}
