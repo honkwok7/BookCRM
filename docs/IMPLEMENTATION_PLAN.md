@@ -1144,6 +1144,18 @@ The race tests are green in CI across 50 repeated runs.
 
 ### M4.3: Status workflow and history
 
+> **Status: done (2026-09-30, branch `m4.3-status-workflow`).** See
+> [BOOKING_ENGINE.md](BOOKING_ENGINE.md#lifecycle).
+> - `BookingStatusHistory.reason` and `source` (the channel) on every row, including creation,
+>   both sides of a reschedule, cancellations and imports. `note` is kept.
+> - The timing rules: check-in, start and completion from an hour before, no-show once
+>   started. `Booking.checked_in_at` and `completed_at` are stamped. `check_in` and
+>   `check_out` services, plus API actions and a `history` endpoint for the team.
+> - Transition authorization: customers may only cancel or reschedule their own appointments
+>   (deadline applies). Everything else needs `appointments.manage`, and providers only
+>   reach their own appointments. There's no separate capability per transition: the roles
+>   that manage appointments may make every legal change.
+
 #### Objective
 A strict lifecycle.
 

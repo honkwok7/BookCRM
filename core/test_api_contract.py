@@ -16,7 +16,7 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from scheduling.models import WeeklyAvailability
 from services.models import Service, ServiceCategory
 from staff.models import StaffProfile
-from tests.factories import future, make_bookable
+from tests.factories import future, make_bookable, make_current
 
 User = get_user_model()
 
@@ -249,6 +249,7 @@ class BookingApiTests(TwoTenants):
         self.assertEqual(body["internal_notes"], "Difficult client")
 
     def test_valid_transition_records_history(self):
+        make_current(self.booking)
         self.client.force_authenticate(self.receptionist_a)
         url = f"/api/v1/bookings/{self.booking.id}/update_status/"
         response = self.client.post(url, {"status": "checked_in"}, format="json")
@@ -258,6 +259,7 @@ class BookingApiTests(TwoTenants):
         self.assertEqual(history.last().changed_by, self.receptionist_a)
 
     def test_illegal_transition_is_409(self):
+        make_current(self.booking)
         self.client.force_authenticate(self.receptionist_a)
         url = f"/api/v1/bookings/{self.booking.id}/update_status/"
         self.client.post(url, {"status": "no_show"}, format="json")
@@ -275,6 +277,7 @@ class BookingApiTests(TwoTenants):
         self.assertEqual(response.status_code, 400)
 
     def test_completed_booking_cannot_be_cancelled(self):
+        make_current(self.booking)
         self.client.force_authenticate(self.receptionist_a)
         base = f"/api/v1/bookings/{self.booking.id}/"
         for step in ("checked_in", "completed"):

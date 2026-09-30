@@ -4,7 +4,7 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from bookings.models import Booking, Customer, WaitlistEntry
+from bookings.models import Booking, BookingStatusHistory, Customer, WaitlistEntry
 from bookings.selectors import bookable_services, bookable_staff
 from bookings.services import cancel_booking, create_booking
 from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
@@ -178,6 +178,8 @@ BOOKING_CUSTOMER_FIELDS = (
     "customer_notes",
     "cancellation_reason",
     "cancelled_at",
+    "checked_in_at",
+    "completed_at",
     "rescheduled_from",
     "created_at",
     "updated_at",
@@ -211,8 +213,25 @@ class BookingSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class BookingStatusHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingStatusHistory
+        fields = (
+            "id",
+            "old_status",
+            "new_status",
+            "reason",
+            "source",
+            "note",
+            "changed_by",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
 class BookingStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Booking.Status.choices)
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
@@ -319,12 +338,14 @@ class BookingCancelSerializer(serializers.Serializer):
         booking = self.context["booking"]
         request = self.context["request"]
         actor = request.user if request.user.is_authenticated else None
+        team = is_team_request(request, booking.organization)
         return cancel_booking(
             booking=booking,
             actor=actor,
             reason=self.validated_data.get("reason", ""),
             # A customer cancelling their own appointment is held to the deadline.
-            enforce_deadline=not is_team_request(request, booking.organization),
+            enforce_deadline=not team,
+            source=Booking.Source.API if team else Booking.Source.CUSTOMER_PORTAL,
         )
 
 

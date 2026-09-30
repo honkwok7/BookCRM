@@ -274,6 +274,9 @@ class Booking(BaseUUIDModel):
         related_name="cancelled_bookings",
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    # When the customer arrived and when the appointment was finished (check-in / check-out).
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     rescheduled_from = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="reschedules"
     )
@@ -307,13 +310,25 @@ class Booking(BaseUUIDModel):
 
 
 class BookingStatusHistory(BaseUUIDModel):
+    """One row per status change, written by the booking service (M4.3).
+
+    ``reason``: why (a cancellation reason, "Rescheduled", "Imported"); ``source``: the channel
+    the change came through (``Booking.Source``; blank on rows older than M4.3); ``note``: free
+    text from the person making the change.
+    """
+
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="status_history")
     old_status = models.CharField(max_length=20, blank=True)
     new_status = models.CharField(max_length=20)
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
+    reason = models.CharField(max_length=255, blank=True)
+    source = models.CharField(max_length=20, choices=Booking.Source.choices, blank=True)
     note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
 
 
 class BookingActivityLog(BaseUUIDModel):

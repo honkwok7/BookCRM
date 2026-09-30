@@ -30,7 +30,7 @@ from organizations.models import Organization, OrganizationMembership, Organizat
 from organizations.tenancy import suspend_organization
 from services.models import Service
 from staff.models import StaffProfile
-from tests.factories import future, make_bookable
+from tests.factories import future, make_bookable, make_current
 
 User = get_user_model()
 
@@ -246,7 +246,9 @@ class BookingServiceAuditTests(TestCase):
             new_start=self.booking.start_datetime + timedelta(hours=2),
             actor=self.actor,
         )
-        change_booking_status(booking=moved, new_status="checked_in", actor=self.actor)
+        change_booking_status(
+            booking=make_current(moved), new_status="checked_in", actor=self.actor
+        )
         cancel = create_booking(
             organization=self.org,
             service=self.booking.service,

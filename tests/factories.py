@@ -328,3 +328,14 @@ def future(days=2, hour=10, minute=0):
     and never crosses midnight (weekly hours are per day)."""
     moment = timezone.now() + timedelta(days=days)
     return moment.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+def make_current(booking):
+    """Move ``booking`` so it started five minutes ago (check-in, completion and no-show are
+    only allowed around the appointment's time). Test data only: it skips the booking
+    service."""
+    start = timezone.now() - timedelta(minutes=5)
+    length = booking.end_datetime - booking.start_datetime
+    Booking.objects.filter(pk=booking.pk).update(start_datetime=start, end_datetime=start + length)
+    booking.refresh_from_db()
+    return booking

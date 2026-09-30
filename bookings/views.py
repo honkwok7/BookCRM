@@ -11,11 +11,12 @@ from bookings.serializers import (
     BookingCustomerSerializer,
     BookingRescheduleSerializer,
     BookingSerializer,
+    BookingStatusHistorySerializer,
     BookingStatusSerializer,
     WaitlistEntrySerializer,
     is_team_request,
 )
-from bookings.services import change_booking_status, reschedule_booking
+from bookings.services import change_booking_status, check_in, check_out, reschedule_booking
 from core.api import AuditedModelViewSetMixin
 from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
@@ -34,6 +35,11 @@ class BookingFilter(django_filters.FilterSet):
     class Meta:
         model = Booking
         fields = ("status", "service", "staff")
+
+
+# Status changes other than cancelling are the team's (staff: their own appointments only,
+# through the queryset).
+TEAM_WRITE = [permissions.IsAuthenticated, HasCapability(write="appointments.manage")]
 
 
 class BookingViewSet(
@@ -61,6 +67,12 @@ class BookingViewSet(
     def _respond(self, booking, status_code=status.HTTP_200_OK):
         return Response(self.get_serializer(booking).data, status=status_code)
 
+    def _source(self, booking) -> str:
+        """The channel of a change: the team's API, or a customer's own portal."""
+        if is_team_request(self.request, booking.organization):
+            return Booking.Source.API
+        return Booking.Source.CUSTOMER_PORTAL
+
     def create(self, request, *args, **kwargs):
         serializer = BookingCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -85,17 +97,11 @@ class BookingViewSet(
             actor=request.user,
             # A customer moving their own appointment: online-booking rules and deadline.
             public=not is_team_request(request, booking.organization),
+            source=self._source(booking),
         )
         return self._respond(new_booking)
 
-    @action(
-        detail=True,
-        methods=["post"],
-        permission_classes=[
-            permissions.IsAuthenticated,
-            HasCapability(write="appointments.manage"),
-        ],
-    )
+    @action(detail=True, methods=["post"], permission_classes=TEAM_WRITE)
     def update_status(self, request, pk=None):
         booking = self.get_object()  # 404 before input validation
         serializer = BookingStatusSerializer(data=request.data)
@@ -104,9 +110,38 @@ class BookingViewSet(
             booking=booking,
             new_status=serializer.validated_data["status"],
             note=serializer.validated_data["note"],
+            reason=serializer.validated_data["reason"],
             actor=request.user,
+            source=self._source(booking),
         )
         return self._respond(booking)
+
+    @action(
+        detail=True,
+        methods=["get"],
+        permission_classes=[permissions.IsAuthenticated, HasCapability(read="appointments.manage")],
+    )
+    def history(self, request, pk=None):
+        """Every status change of the appointment, oldest first (team only)."""
+        booking = self.get_object()
+        rows = booking.status_history.select_related("changed_by").order_by("created_at")
+        return Response(BookingStatusHistorySerializer(rows, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="check-in", permission_classes=TEAM_WRITE)
+    def check_in(self, request, pk=None):
+        """The customer has arrived (confirmed -> checked in)."""
+        booking = self.get_object()
+        return self._respond(
+            check_in(booking=booking, actor=request.user, source=self._source(booking))
+        )
+
+    @action(detail=True, methods=["post"], url_path="check-out", permission_classes=TEAM_WRITE)
+    def check_out(self, request, pk=None):
+        """The appointment is over (checked in or in progress -> completed)."""
+        booking = self.get_object()
+        return self._respond(
+            check_out(booking=booking, actor=request.user, source=self._source(booking))
+        )
 
 
 class WaitlistViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
