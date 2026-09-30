@@ -13,8 +13,8 @@
 /* Calendar grid positions, computed in bookings/calendar.py (15-minute rows, lanes, columns) */
 @source inline("row-start-{1..96}");
 @source inline("row-span-{1..96}");
-@source inline("col-start-{1..12}");
-@source inline("grid-cols-{1..12}");
+@source inline("col-start-{1..24}");
+@source inline("grid-cols-{1..24}");
 
 @theme {
   --color-brand-50: oklch(0.97 0.02 265);

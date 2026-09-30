@@ -245,6 +245,15 @@ def find_or_create_customer(
     return customer
 
 
+def _lock_bookings_of(customer_id) -> None:
+    list(
+        Booking.objects.select_for_update(of=("self",))
+        .filter(customer_id=customer_id)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+
+
 @transaction.atomic
 def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Customer:
     """Fold ``duplicate`` into ``target``: move its appointments, fill target's blank fields.
@@ -255,7 +264,11 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         raise DomainError("A customer cannot be merged into itself", code="invalid_merge")
     if target.organization_id != duplicate.organization_id:
         raise DomainError("Customer not found", code="not_found")
-    # Lock both rows in a fixed order (primary key) so concurrent merges cannot deadlock.
+    # Lock order shared with the booking paths: appointments first, then customers. A
+    # reschedule holds its appointment and then needs the customer (the new row's foreign
+    # key); taking customers first here would deadlock with it.
+    _lock_bookings_of(duplicate.pk)
+    # Both customer rows in a fixed order (primary key) so concurrent merges cannot deadlock.
     locked = {
         c.pk: c
         for c in Customer.objects.select_for_update()
@@ -323,6 +336,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     recipients and waitlist entries under the same email. Audit history already stores
     personal fields as "changed" without values. Irreversible.
     """
+    _lock_bookings_of(customer.pk)  # appointments before the customer (see merge_customers)
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
     if customer.status == Customer.Status.ANONYMIZED:
         return customer

@@ -19,8 +19,11 @@ writes their `status`, `start_datetime` or `end_datetime`.
 `create_booking` does, in order:
 
 1. Tenant consistency: service, staff, location and customer belong to the organization.
-2. Idempotency: a repeated `idempotency_key` returns the booking made the first time (the same
-   key with a different service, staff or time is 409 `idempotency_key_reused`). Keys are
+2. Idempotency: a repeated `idempotency_key` returns the booking made the first time, but only
+   to the same caller (the same signed-in account, or nobody signed in both times) with the same
+   request (service, staff, time, customer email and location). Anything else is 409
+   `idempotency_key_reused` and reveals nothing about the existing booking: keys are chosen by
+   clients, so someone else reusing one must never receive another customer's details. Keys are
    unique per organization; the API accepts `idempotency_key` or an `Idempotency-Key` header.
 3. The location: the given one (active, and booking-enabled for the public) or the default.
 4. Locks the provider's calendar (`lock_staff`), then runs `AvailabilityService.validate_slot`
@@ -149,7 +152,8 @@ returns them as `{"detail": "...", "code": "..."}`.
 | `not_on_grid` | 400 | A public booking for a time that isn't one of the listed (15-minute grid) times |
 | `slot_unavailable` | 409 | The time isn't free: outside working or opening hours, closed, time off, or overlapping another appointment (with buffers) |
 | `invalid_transition` | 409 | The lifecycle doesn't allow the change (for example, cancelling a completed appointment) |
-| `idempotency_key_reused` | 409 | The idempotency key was already used for a different booking |
+| `idempotency_key_reused` | 409 | The idempotency key was already used, by another caller or for a different request |
+| `customer_gone` | 409 | The customer record was merged or deleted while the appointment was being made; try again |
 | `plan_limit` | 409 | The plan's monthly booking limit is reached |
 
 ## Concurrency and the no-overlap guarantee
@@ -161,7 +165,10 @@ Two layers, so a double booking needs both to fail at once:
    row exists even when the requested time is empty, so two simultaneous requests for the same
    provider queue on it: exactly one wins, and the other gets 409 `slot_unavailable`. Status
    changes and cancellations lock only the booking row. The lock order is always staff, then
-   booking, then subscription (the monthly limit), so these paths can't deadlock.
+   booking, then subscription (the monthly limit), then the customer, so these paths can't
+   deadlock. CRM writes that touch a customer's appointments (merging, anonymizing) lock those
+   appointments before the customer row for the same reason; an appointment whose customer is
+   merged away mid-booking is 409 `customer_gone`.
 2. **The database (PostgreSQL, M4.2).** The exclusion constraint `booking_staff_no_overlap`
    (migration `bookings/0010`, `btree_gist`) refuses two active appointments (pending,
    confirmed, checked in, in progress) of one staff member whose `[start, end)` ranges overlap,

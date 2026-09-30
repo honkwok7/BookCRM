@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import calendar as calendar_module
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db.models import QuerySet
@@ -23,6 +23,7 @@ DEFAULT_FIRST_HOUR = 8
 DEFAULT_LAST_HOUR = 20  # exclusive: the grid ends at 20:00
 MAX_RANGE_DAYS = 62
 COLOR_COUNT = 8  # .cal-color-0 ... .cal-color-7 in static/src/app.css
+MAX_LANES = 24  # grid-cols-* and col-start-* up to 24 in static/src/app.css
 HIDDEN_BY_DEFAULT = (Booking.Status.CANCELLED, Booking.Status.REJECTED)
 
 
@@ -132,23 +133,36 @@ def hour_bounds(events: list[tuple[datetime, datetime]]) -> tuple[int, int]:
 
 
 def place(booking, zone, day: date, first_hour: int, last_hour: int) -> PlacedEvent | None:
-    """Position ``booking`` on ``day``'s column (clipped to the day and the visible hours)."""
+    """Position ``booking`` on ``day``'s column (clipped to the day and the visible hours).
+
+    Clipping and the length use real (UTC) time; the row comes from the wall clock, which is
+    what the hour labels show. So on a daylight-saving day an appointment keeps its real
+    length: one in the repeated hour still shows, one across the missing hour isn't doubled.
+    """
     start = booking.start_datetime.astimezone(zone)
     end = booking.end_datetime.astimezone(zone)
-    day_start = datetime.combine(day, time(first_hour), tzinfo=zone)
-    day_end = datetime.combine(day, time.min, tzinfo=zone) + timedelta(hours=last_hour)
-    visible_start, visible_end = max(start, day_start), min(end, day_end)
+    wall_day_start = datetime.combine(day, time(first_hour))
+    day_start = wall_day_start.replace(tzinfo=zone).astimezone(UTC)
+    day_end = (datetime.combine(day, time.min) + timedelta(hours=last_hour)).replace(tzinfo=zone)
+    visible_start = max(booking.start_datetime.astimezone(UTC), day_start)
+    visible_end = min(booking.end_datetime.astimezone(UTC), day_end.astimezone(UTC))
     if visible_start >= visible_end:
         return None
-    offset = (visible_start - day_start).total_seconds() / 60
+    wall_start = visible_start.astimezone(zone).replace(tzinfo=None)
+    offset = (wall_start - wall_day_start).total_seconds() / 60
     length = (visible_end - visible_start).total_seconds() / 60
-    row = int(offset // SLOT_MINUTES) + 1
-    last_row = int(-(-(offset + length) // SLOT_MINUTES))  # ceiling
+    rows = (last_hour - first_hour) * 60 // SLOT_MINUTES
+    row = min(int(offset // SLOT_MINUTES) + 1, rows)
+    last_row = min(int(-(-(offset + length) // SLOT_MINUTES)), rows)  # ceiling
     return PlacedEvent(booking, start, end, row, max(1, last_row - row + 1))
 
 
 def assign_lanes(events: list[PlacedEvent]) -> int:
-    """Side-by-side lanes for overlapping events in one column; returns the lane count."""
+    """Side-by-side lanes for overlapping events in one column; returns the lane count.
+
+    At most ``MAX_LANES`` (the grid classes safelisted in static/src/app.css): with more
+    overlapping at once, the extra events share the least busy lanes and are drawn on top of
+    each other rather than breaking the grid."""
     lanes_end: list[int] = []  # the first free row in each lane
     for event in sorted(events, key=lambda item: (item.row, -item.span)):
         for index, free_from in enumerate(lanes_end):
@@ -157,8 +171,13 @@ def assign_lanes(events: list[PlacedEvent]) -> int:
                 lanes_end[index] = event.row + event.span
                 break
         else:
-            lanes_end.append(event.row + event.span)
-            event.lane = len(lanes_end)
+            if len(lanes_end) < MAX_LANES:
+                lanes_end.append(event.row + event.span)
+                event.lane = len(lanes_end)
+            else:
+                index = min(range(MAX_LANES), key=lambda i: lanes_end[i])
+                event.lane = index + 1
+                lanes_end[index] = max(lanes_end[index], event.row + event.span)
     return max(1, len(lanes_end))
 
 

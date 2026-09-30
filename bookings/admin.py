@@ -59,7 +59,7 @@ class BookingActivityLogAdmin(ReadOnlyAdmin):
 
 
 @admin.register(WaitlistEntry)
-class WaitlistEntryAdmin(admin.ModelAdmin):
+class WaitlistEntryAdmin(ReadOnlyAdmin):
     list_display = ("organization", "service", "customer_email", "status", "created_at")
     list_filter = ("organization", "status")
     search_fields = ("customer_email", "customer_name")

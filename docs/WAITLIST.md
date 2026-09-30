@@ -31,14 +31,19 @@ people it suits are emailed automatically (M4.7).
 
 - **Queuing.** `cancel_booking` (and a reschedule, when the new time no longer overlaps the
   old one) calls `schedule_matching`, which queues the `bookings.tasks.notify_waitlist` task
-  after the transaction commits. Past times are skipped, and if the provider has been booked
-  over the freed time again before the task runs, nobody is emailed.
+  after the transaction commits. Past times are skipped.
+- **Only bookable times.** Nobody is emailed unless a customer could book that exact time with
+  that provider on the booking page right now (`publicly_bookable`): the page is open, the
+  service and location are bookable online, and the engine accepts the time for the public
+  (the 15-minute grid, notice, buffers, closures, the daily limit, and not booked again
+  meanwhile). A team appointment at 10:07 that is cancelled, for example, isn't advertised.
 - **Matching.** `matching_entries` finds waiting entries for the same service whose location
   (or any location), provider (or any) and date range include the freed time, whose time of
   day contains its start, and that haven't expired. The oldest come first.
-- **Emailing.** `notify_matching_entries` emails the first `NOTIFY_LIMIT` (5). Each entry is
+- **Emailing.** `notify_matching_entries` emails up to `NOTIFY_LIMIT` (5). Each entry is
   claimed atomically (waiting → notified, `notified_at`), so an entry is emailed once, even
-  when two cancellations race.
+  when two cancellations race; entries another run claimed are skipped and the next ones
+  tried, so each freed time still reaches up to five people.
 - **The email** (`emails/waitlist_slot_available`) names the service, the time and the place,
   and links to the booking page. It never names the customer who cancelled or their
   reference. The notification log records the waitlist entry, so the sent email appears on
