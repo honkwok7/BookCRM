@@ -180,7 +180,9 @@ def set_staff_locations(*, staff: StaffProfile, locations, actor=None) -> StaffP
     dropped = staff.offerings.filter(location__isnull=False).exclude(
         location__in=[location.pk for location in locations]
     )
-    service_ids = list(dropped.values_list("service_id", flat=True))
+    # Every service they offer: an "all my locations" offering may stop (or start) fitting a
+    # service that is only offered at some locations.
+    service_ids = list(staff.offerings.values_list("service_id", flat=True))
     removed = dropped.count()
     dropped.delete()
     staff.locations.set(locations)
@@ -236,15 +238,19 @@ def _offering_metadata(offering) -> dict:
 
 def valid_offerings(service: Service):
     """The service's active offerings that still fit its rules: the provider has the
-    required type (if any), and a location-specific offering is at a location where the
-    service is offered. Offerings that stopped fitting are kept (so a fix restores them) but
-    never count."""
+    required type (if any); a location-specific offering is at a location where the service
+    is offered; an "all my locations" offering needs at least one of the provider's locations
+    to be one. Offerings that stopped fitting are kept (so a fix restores them) but never
+    count."""
     offerings = StaffServiceOffering.objects.filter(service=service, is_active=True)
     if service.required_provider_type:
         offerings = offerings.filter(staff__provider_type__iexact=service.required_provider_type)
     service_locations = list(service.locations.values_list("pk", flat=True))
     if service_locations:
-        offerings = offerings.filter(Q(location__isnull=True) | Q(location__in=service_locations))
+        offerings = offerings.filter(
+            Q(location__in=service_locations)
+            | Q(location__isnull=True, staff__locations__in=service_locations)
+        ).distinct()
     return offerings
 
 
@@ -302,6 +308,9 @@ def update_offering(*, offering: StaffServiceOffering, actor=None, **changes):
     if unknown:
         raise DomainError(f"Unknown offering fields: {', '.join(sorted(unknown))}", code="invalid")
     offering = StaffServiceOffering.objects.select_for_update().get(pk=offering.pk)
+    if changes.get("is_active") and not offering.is_active:
+        # Reactivating: the offering must fit the service's rules as they are now.
+        _check_offering(offering.staff, offering.service, offering.location)
     before = snapshot(offering)
     for name, value in changes.items():
         setattr(offering, name, value)
@@ -409,10 +418,15 @@ def set_service_providers(*, service: Service, staff_members, actor=None) -> Non
     keep = {staff.pk for staff in staff_members}
     for offering in StaffServiceOffering.objects.filter(service=service).exclude(staff_id__in=keep):
         remove_offering(offering=offering, actor=actor)
-    offered = set(
-        StaffServiceOffering.objects.filter(service=service).values_list("staff_id", flat=True)
-    )
+    existing = StaffServiceOffering.objects.filter(service=service)
+    active = set(existing.filter(is_active=True).values_list("staff_id", flat=True))
     for staff in staff_members:
-        if staff.pk not in offered:
+        if staff.pk in active:
+            continue
+        inactive = list(existing.filter(staff=staff, is_active=False))
+        if inactive:  # listed again: switch their offering back on (checked against the rules)
+            for offering in inactive:
+                update_offering(offering=offering, is_active=True, actor=actor)
+        else:
             add_offering(staff=staff, service=service, actor=actor)
     sync_service_mirrors([service.pk])

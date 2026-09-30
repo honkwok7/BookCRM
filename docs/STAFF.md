@@ -40,8 +40,10 @@ service from M4.1.
 
 `Service.assigned_staff_members` is the older way to say who offers a service. It is kept as a
 mirror of the *valid* offerings (active, matching the service's required provider type and
-locations; see `valid_offerings`) and is rebuilt whenever offerings, a service's rules or a
-provider type change. It is only written by
+locations; an "all my locations" offering counts only if the person works at one of the
+service's locations; see `valid_offerings`) and is rebuilt whenever offerings, a service's
+rules, a provider type or a person's locations change. Listing someone whose offering was
+switched off switches it back on, after checking it against the current rules. It is only written by
 `staff/services.py`. Writing it through the services API still works: each listed person
 offers the service at all their locations, and anyone left out stops offering it. It will be
 removed in M11.3.

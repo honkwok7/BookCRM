@@ -20,7 +20,7 @@ from django.utils.dateparse import parse_datetime
 
 from locations.models import Location
 from services.selectors import services_bookable_at
-from staff.selectors import list_providers_for
+from staff.selectors import list_providers_for, with_providers
 
 ANY_PROVIDER = "any"
 STEPS = ("location", "service", "provider", "time", "details", "review")
@@ -70,16 +70,16 @@ class Wizard:
         """Public services at the location that at least one visible provider offers there."""
         if self.location is None:
             return []
-        services = (
-            services_bookable_at(self.organization, self.location, public=True)
-            .select_related("category")
-            .order_by("category__sort_order", "category__name", "name")
+        services = with_providers(
+            services_bookable_at(self.organization, self.location, public=True),
+            self.location,
+            public=True,
         )
-        return [
-            service
-            for service in services
-            if list_providers_for(service, self.location, public=True).exists()
-        ]
+        return list(
+            services.select_related("category").order_by(
+                "category__sort_order", "category__name", "name"
+            )
+        )
 
     def providers(self) -> list:
         if self.location is None or self.service is None:

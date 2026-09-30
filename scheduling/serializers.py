@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as ModelValidationError
 from rest_framework import serializers
 
 from core.api import TenantScopedModelSerializer
@@ -9,6 +10,28 @@ from scheduling.models import (
 )
 
 READ_ONLY = ("id", "organization", "created_at", "updated_at")
+
+
+class ModelCleanMixin:
+    """Run the model's ``clean()`` (its interval rules) on the merged data: DRF doesn't."""
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        model = self.Meta.model
+        values = {}
+        for field in self.clean_fields:
+            if field in attrs:
+                values[field] = attrs[field]
+            elif self.instance is not None:
+                values[field] = getattr(self.instance, field)
+            else:  # creating without it: the model's default applies
+                values[field] = model._meta.get_field(field).get_default()
+        instance = model(**values)
+        try:
+            instance.clean()
+        except ModelValidationError as error:
+            raise serializers.ValidationError({"non_field_errors": error.messages}) from error
+        return attrs
 
 
 class WeeklyAvailabilitySerializer(TenantScopedModelSerializer):
@@ -42,7 +65,9 @@ class WeeklyAvailabilitySerializer(TenantScopedModelSerializer):
         return attrs
 
 
-class AvailabilityExceptionSerializer(TenantScopedModelSerializer):
+class AvailabilityExceptionSerializer(ModelCleanMixin, TenantScopedModelSerializer):
+    clean_fields = ("unavailable_all_day", "start_time", "end_time")
+
     class Meta:
         model = AvailabilityException
         fields = (
@@ -57,7 +82,9 @@ class AvailabilityExceptionSerializer(TenantScopedModelSerializer):
         read_only_fields = READ_ONLY
 
 
-class TimeOffSerializer(TenantScopedModelSerializer):
+class TimeOffSerializer(ModelCleanMixin, TenantScopedModelSerializer):
+    clean_fields = ("start_datetime", "end_datetime")
+
     class Meta:
         model = TimeOff
         fields = (
@@ -71,7 +98,9 @@ class TimeOffSerializer(TenantScopedModelSerializer):
         read_only_fields = READ_ONLY
 
 
-class OrganizationHolidaySerializer(TenantScopedModelSerializer):
+class OrganizationHolidaySerializer(ModelCleanMixin, TenantScopedModelSerializer):
+    clean_fields = ("full_day_closure", "start_time", "end_time")
+
     class Meta:
         model = OrganizationHoliday
         fields = (*READ_ONLY, "date", "name", "full_day_closure", "start_time", "end_time")

@@ -198,17 +198,28 @@ class AvailabilityService:
                         by_start[start].append(Candidate(provider, start + duration))
                         start += self.step
             day += timedelta(days=1)
+        # "Anyone available" books the first candidate: the provider with the fewest
+        # appointments that day, then a stable order, so work is spread and repeatable.
+        for start, candidates in by_start.items():
+            local_day = start.astimezone(self.zone).date()
+            candidates.sort(
+                key=lambda item: (data.daily_count[(item.staff.pk, local_day)], str(item.staff.pk))
+            )
         return [Slot(start, tuple(by_start[start])) for start in sorted(by_start)]
 
     def validate_slot(self, staff, start: datetime, *, ignore_booking=None) -> Candidate:
         """Check that ``staff`` can be booked for the service at ``start``; return who and until
         when, or raise ``DomainError``/``ConflictError`` with a stable code.
 
-        The start doesn't have to be on the step grid: the team may book any free time.
-        ``ignore_booking`` leaves one appointment out (rescheduling it).
+        The team may book any free time; the public only the times ``get_available_slots``
+        lists (on the step grid). ``ignore_booking`` leaves one appointment out (rescheduling
+        it).
         """
         if timezone.is_naive(start):
             raise DomainError("The start time needs a time zone", code="invalid_time")
+        # Real elapsed time from here on: adding a duration to a local (ZoneInfo) datetime is
+        # wall-clock arithmetic, which is wrong across a DST change.
+        start = start.astimezone(UTC)
         if start <= self.now:
             raise DomainError("Cannot book in the past", code="in_past")
         if self.public:
@@ -219,6 +230,8 @@ class AvailabilityService:
                 )
             if latest is not None and start > latest:
                 raise DomainError("That time is too far ahead to book online.", code="too_far")
+            if self._first_on_grid(start) != start:
+                raise DomainError("Choose one of the times listed.", code="not_on_grid")
         providers = self.providers(staff)
         if not providers:
             raise DomainError(
@@ -248,7 +261,8 @@ class AvailabilityService:
 
     def _load(self, providers, start_date, end_date, *, ignore_booking=None) -> _Data:
         staff_ids = [provider.pk for provider in providers]
-        # A little margin either side: appointments and buffers from the neighbouring days.
+        # A day's margin either side: appointments whose buffers (at most a day,
+        # services.services.MAX_BUFFER_MINUTES) reach into the range.
         range_start = self._local(start_date, time.min) - timedelta(days=1)
         range_end = self._local(end_date + timedelta(days=1), time.min) + timedelta(days=1)
         data = _Data()
@@ -299,14 +313,16 @@ class AvailabilityService:
             status__in=ACTIVE_STATUSES,
             start_datetime__lt=range_end,
             end_datetime__gt=range_start,
-        ).select_related("service")
+        )
         if ignore_booking is not None:
             bookings = bookings.exclude(pk=ignore_booking.pk)
         before_new = timedelta(minutes=self.service.buffer_before_minutes)
         after_new = timedelta(minutes=self.service.buffer_after_minutes)
         for booking in bookings:
-            before = max(timedelta(minutes=booking.service.buffer_before_minutes), after_new)
-            after = max(timedelta(minutes=booking.service.buffer_after_minutes), before_new)
+            # The buffers the appointment was booked with: editing the service later
+            # doesn't change the gaps around appointments already made.
+            before = max(timedelta(minutes=booking.buffer_before_minutes), after_new)
+            after = max(timedelta(minutes=booking.buffer_after_minutes), before_new)
             data.busy[booking.staff_id].append(
                 (booking.start_datetime - before, booking.end_datetime + after)
             )
@@ -362,16 +378,28 @@ class AvailabilityService:
         return subtract(windows, closed + data.busy[provider.pk])
 
     def _first_on_grid(self, moment: datetime) -> datetime:
-        """The first step-grid time (on the location's wall clock) at or after ``moment``."""
-        local = moment.astimezone(self.zone)
-        midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Same tzinfo on both sides: Python subtracts wall-clock times, which is the grid.
-        elapsed = local - midnight
+        """The first step-grid time (on the location's wall clock) at or after ``moment``.
+
+        When clocks go back, a wall-clock time happens twice. Both occurrences are grid times;
+        this returns the earliest real instant that isn't before ``moment`` (never one in the
+        first, already past, occurrence).
+        """
+        moment = moment.astimezone(UTC)
+        wall = moment.astimezone(self.zone).replace(tzinfo=None)
+        midnight = wall.replace(hour=0, minute=0, second=0, microsecond=0)
         step = self.step.total_seconds()
-        remainder = elapsed.total_seconds() % step
-        if remainder:
-            local = local + timedelta(seconds=step - remainder)
-        return local.astimezone(UTC)
+        remainder = (wall - midnight).total_seconds() % step
+        if not remainder:
+            return moment
+        target = wall + timedelta(seconds=step - remainder)
+        candidates = sorted(
+            target.replace(tzinfo=self.zone, fold=fold).astimezone(UTC) for fold in (0, 1)
+        )
+        for candidate in candidates:
+            if candidate >= moment:
+                return candidate
+        # Not reachable on real zones; stay safe: never return a time before ``moment``.
+        return self._first_on_grid(candidates[-1] + self.step)
 
 
 class _Data:

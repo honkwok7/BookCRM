@@ -13,6 +13,7 @@ claimed; that would need a separate formal review.
 | Account and invitation emails via Celery after commit; links built from `SITE_URL`, never the Host header | ✅ | `accounts/tasks.py`, `organizations/tasks.py` |
 | Invitations never change an existing member's role, and each is used once (row lock) | ✅ | `organizations/services.py` |
 | Django admin shows bookings and customers read-only: changes go through the services (tenant checks, locking, audit) | ✅ | `bookings/admin.py` |
+| Django admin shows locations, closures, staff, services, categories and schedules read-only, so plan limits, validation, audit and the service/staff mirror can't be bypassed | ✅ | `core/admin_mixins.py` |
 | Django admin shows organizations, memberships and invitations read-only (invitation tokens hidden); suspend and reactivate are audited admin actions | ✅ | `organizations/admin.py` |
 | `seed_demo` (published demo passwords, a platform superuser) refuses to run unless `DEBUG` is on or `--allow-without-debug` is passed | ✅ | `core/management/commands/seed_demo.py` |
 | JWT rotation + blacklist | ✅ | `SIMPLE_JWT` |

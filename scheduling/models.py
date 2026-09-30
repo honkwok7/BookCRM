@@ -58,8 +58,12 @@ class AvailabilityException(BaseUUIDModel):
     reason = models.CharField(max_length=255, blank=True)
 
     def clean(self):
-        if not self.unavailable_all_day and (not self.start_time or not self.end_time):
+        if self.unavailable_all_day:
+            return
+        if not self.start_time or not self.end_time:
             raise ValidationError("start_time and end_time are required for partial availability")
+        if self.start_time >= self.end_time:
+            raise ValidationError("start_time must be before end_time")
 
 
 class TimeOff(BaseUUIDModel):
@@ -91,3 +95,11 @@ class OrganizationHoliday(BaseUUIDModel):
 
     class Meta:
         unique_together = ("organization", "date", "name")
+
+    def clean(self):
+        if self.full_day_closure:
+            return
+        if not self.start_time or not self.end_time:
+            raise ValidationError("start_time and end_time are required for a partial closure")
+        if self.start_time >= self.end_time:
+            raise ValidationError("start_time must be before end_time")

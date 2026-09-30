@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from django.db.models import Prefetch, Q, QuerySet
+from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet
+from django.db.models.functions import Upper
 
 from locations.models import Location
 from services.selectors import service_offered_at
@@ -25,6 +26,29 @@ def _offering_filter(service, location) -> Q:
     if location is not None:
         condition &= Q(location=location) | Q(location__isnull=True)
     return condition
+
+
+def with_providers(services, location, *, public: bool = False):
+    """``services`` (a queryset) narrowed to those at least one provider can be booked for at
+    ``location``: the same rule as ``list_providers_for``, but one query for all of them.
+    The caller has already limited ``services`` to those offered at ``location``."""
+    offerings = (
+        StaffServiceOffering.objects.filter(service=OuterRef("pk"), is_active=True)
+        .filter(Q(location=location) | Q(location__isnull=True))
+        .filter(
+            staff__is_active=True,
+            staff__is_accepting_bookings=True,
+            staff__locations=location,
+        )
+        .annotate(provider_type=Upper("staff__provider_type"))
+        .filter(
+            Q(service__required_provider_type="")
+            | Q(provider_type=Upper(OuterRef("required_provider_type")))
+        )
+    )
+    if public:
+        offerings = offerings.filter(staff__online_booking_visible=True)
+    return services.filter(Exists(offerings))
 
 
 def list_providers_for(service, location=None, *, public: bool = False):

@@ -47,6 +47,8 @@ SERVICE_FIELDS = frozenset(
     }
 )
 CATEGORY_FIELDS = frozenset({"name", "color", "sort_order"})
+# Buffers are at most a day: the availability engine loads a day's margin of appointments.
+MAX_BUFFER_MINUTES = 24 * 60
 
 
 def _unique_slug(model, organization, name: str, exclude_pk=None) -> str:
@@ -83,6 +85,11 @@ def _check_service(service: Service) -> None:
         raise DomainError("The tax rate must be between 0 and 100", code="invalid_tax_rate")
     if (service.capacity or 0) < 1:
         raise DomainError("Capacity must be at least 1", code="invalid_capacity")
+    for field in ("buffer_before_minutes", "buffer_after_minutes"):
+        if not 0 <= (getattr(service, field) or 0) <= MAX_BUFFER_MINUTES:
+            raise DomainError(
+                "A buffer can be at most 24 hours (1440 minutes)", code="invalid_buffer"
+            )
     if service.category is not None and service.category.organization_id != (
         service.organization_id
     ):

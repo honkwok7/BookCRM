@@ -1,5 +1,8 @@
+"""Schedules are changed in the web app or the API (validated there): read-only here."""
+
 from django.contrib import admin
 
+from core.admin_mixins import ReadOnlyAdmin
 from scheduling.models import (
     AvailabilityException,
     OrganizationHoliday,
@@ -9,14 +12,14 @@ from scheduling.models import (
 
 
 @admin.register(WeeklyAvailability)
-class WeeklyAvailabilityAdmin(admin.ModelAdmin):
+class WeeklyAvailabilityAdmin(ReadOnlyAdmin):
     list_display = ("organization", "staff", "day_of_week", "start_time", "end_time", "is_active")
     list_filter = ("organization", "day_of_week", "is_active")
     autocomplete_fields = ("organization", "staff")
 
 
 @admin.register(AvailabilityException)
-class AvailabilityExceptionAdmin(admin.ModelAdmin):
+class AvailabilityExceptionAdmin(ReadOnlyAdmin):
     list_display = (
         "organization",
         "staff",
@@ -30,14 +33,14 @@ class AvailabilityExceptionAdmin(admin.ModelAdmin):
 
 
 @admin.register(TimeOff)
-class TimeOffAdmin(admin.ModelAdmin):
+class TimeOffAdmin(ReadOnlyAdmin):
     list_display = ("organization", "staff", "start_datetime", "end_datetime", "approval_status")
     list_filter = ("organization", "approval_status")
     autocomplete_fields = ("organization", "staff")
 
 
 @admin.register(OrganizationHoliday)
-class OrganizationHolidayAdmin(admin.ModelAdmin):
+class OrganizationHolidayAdmin(ReadOnlyAdmin):
     list_display = ("organization", "date", "name", "full_day_closure")
     list_filter = ("organization", "full_day_closure")
     autocomplete_fields = ("organization",)
