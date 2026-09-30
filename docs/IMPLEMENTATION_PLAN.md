@@ -1397,6 +1397,20 @@ A cancellation produces notifications to matching waitlisted customers (once eac
 
 ### M5.1: Owner and manager dashboard
 
+> **Status: done (2026-09-30, branch `m5.1-owner-dashboard`).** See [DASHBOARD.md](DASHBOARD.md).
+> - `dashboard/reporting.py` (`dashboard_report`, `Filters`): the widgets in 5 aggregate queries,
+>   cached for 60 s per organization, day and filters (period 7/30/90 days, location,
+>   provider). The whole page renders in 12 queries or fewer (tested).
+> - The rates show "Not enough data yet" below 20 past appointments. Revenue is labelled as
+>   an estimate from completed appointments.
+> - **Deviation:** the volume chart is server-drawn SVG (CSP-safe, no dependency) instead of
+>   vendored Chart.js, which can come with reports if interactive charts are needed.
+> - "Upcoming appointments" includes the appointment in progress, since the list is appointments
+>   that haven't finished yet.
+> - **Bug fixed along the way:** the shared filter bar only listened to its first dropdown
+>   (`from:find select` picks a single element). Every dropdown now refreshes the list; this
+>   also affected the waitlist's service filter.
+
 #### Objective
 The organization dashboard.
 
