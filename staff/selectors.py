@@ -6,8 +6,44 @@ from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet
 from django.db.models.functions import Upper
 
 from locations.models import Location
+from organizations.models import OrganizationRole
 from services.selectors import service_offered_at
 from staff.models import StaffProfile, StaffServiceOffering
+
+_UNSET = object()
+
+
+def own_profile(tenant) -> StaffProfile | None:
+    """The signed-in member's active staff profile in this organization, if they take
+    appointments (any role: an owner can be a provider too). Cached on the membership for the
+    request, since the sidebar asks as well as the page."""
+    membership = tenant.membership
+    cached = getattr(membership, "_own_staff_profile", _UNSET)
+    if cached is _UNSET:
+        cached = (
+            StaffProfile.objects.filter(
+                organization=tenant.organization, user=tenant.user, is_active=True
+            )
+            .select_related("user", "organization")
+            .first()
+        )
+        membership._own_staff_profile = cached
+    return cached
+
+
+def is_provider_here(tenant) -> bool:
+    if tenant is None:
+        return False
+    known = getattr(tenant.membership, "has_staff_profile", None)  # see organizations.tenancy
+    return known if known is not None else own_profile(tenant) is not None
+
+
+def can_open_provider_day(tenant) -> bool:
+    """``/staff/dashboard/``: providers, and staff-role members without a profile yet (it is
+    where they land; they get an empty state)."""
+    return is_provider_here(tenant) or (
+        tenant is not None and tenant.role == OrganizationRole.STAFF
+    )
 
 
 def staff_for(organization) -> QuerySet[StaffProfile]:

@@ -67,6 +67,19 @@ class AvailabilityException(BaseUUIDModel):
 
 
 class TimeOff(BaseUUIDModel):
+    """Time a provider is away. Only approved time off blocks the calendar.
+
+    Providers request time off (pending until someone with ``staff.manage`` approves or rejects
+    it) and block short stretches of their own day (approved at once, if nothing is booked
+    then). Writes go through ``scheduling.services``.
+    """
+
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled"
+
     organization = models.ForeignKey(
         "organizations.Organization", on_delete=models.CASCADE, related_name="time_off_entries"
     )
@@ -76,7 +89,9 @@ class TimeOff(BaseUUIDModel):
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
     reason = models.CharField(max_length=255, blank=True)
-    approval_status = models.CharField(max_length=30, default="approved")
+    approval_status = models.CharField(
+        max_length=30, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED
+    )
 
     def clean(self):
         if self.start_datetime >= self.end_datetime:

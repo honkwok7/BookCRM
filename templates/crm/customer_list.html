@@ -1,6 +1,6 @@
 {% extends "layouts/app.html" %}
-{% block title %}Customers · {{ organization.name }}{% endblock %}
-{% block page_title %}Customers{% endblock %}
+{% block title %}{{ heading }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ heading }}{% endblock %}
 {% block page_description %}<p class="mt-1 text-sm text-slate-600">{% if can_manage %}Find, add and update customer records.{% else %}The customers you work with.{% endif %}</p>{% endblock %}
 {% block page_actions %}
   {% if can_manage %}

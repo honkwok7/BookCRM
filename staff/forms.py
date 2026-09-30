@@ -4,6 +4,8 @@ views attach to the form."""
 
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta
+
 from django import forms
 from django.contrib.auth import get_user_model
 
@@ -261,3 +263,51 @@ class StaffServicesForm(ServiceErrorsMixin, forms.Form):
             }
             for n, service in enumerate(self.services)
         ]
+
+
+# -- Provider area (M5.3): time off and blocked time ----------------------------------------
+
+
+class BlockTimeForm(forms.Form):
+    """Part of one day, in the organization's time zone."""
+
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    start = forms.TimeField(label="From", widget=forms.TimeInput(attrs={"type": "time"}))
+    end = forms.TimeField(label="Until", widget=forms.TimeInput(attrs={"type": "time"}))
+    reason = forms.CharField(required=False, max_length=255, help_text="For example: lunch.")
+
+    def __init__(self, *args, zone, **kwargs):
+        super().__init__(*args, prefix="block", **kwargs)
+        self.zone = zone
+
+    def period(self):
+        data = self.cleaned_data
+        return (
+            datetime.combine(data["date"], data["start"], tzinfo=self.zone),
+            datetime.combine(data["date"], data["end"], tzinfo=self.zone),
+        )
+
+
+class TimeOffRequestForm(forms.Form):
+    """Whole days, first to last, in the organization's time zone."""
+
+    first_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    last_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(required=False, max_length=255)
+
+    def __init__(self, *args, zone, **kwargs):
+        super().__init__(*args, prefix="request", **kwargs)
+        self.zone = zone
+
+    def clean(self):
+        data = super().clean()
+        if data.get("first_day") and data.get("last_day") and data["last_day"] < data["first_day"]:
+            self.add_error("last_day", "The last day can't be before the first.")
+        return data
+
+    def period(self):
+        data = self.cleaned_data
+        return (
+            datetime.combine(data["first_day"], time.min, tzinfo=self.zone),
+            datetime.combine(data["last_day"] + timedelta(days=1), time.min, tzinfo=self.zone),
+        )

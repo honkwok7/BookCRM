@@ -16,7 +16,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.apps import apps
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
@@ -78,9 +80,15 @@ def resolve_tenant(request) -> TenantContext | None:
 
 
 def _resolve(request, user) -> TenantContext | None:
+    staff_profiles = apps.get_model("staff", "StaffProfile").objects.filter(
+        organization=OuterRef("organization"), user=OuterRef("user"), is_active=True
+    )
     memberships = (
         OrganizationMembership.objects.select_related("organization", "user")
         .filter(user=user, is_active=True, organization__is_active=True)
+        # Whether they take appointments here (the provider area and its sidebar links),
+        # without a query of its own on every page.
+        .annotate(has_staff_profile=Exists(staff_profiles))
         .order_by("created_at")
     )
 

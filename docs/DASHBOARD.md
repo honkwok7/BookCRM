@@ -72,10 +72,40 @@ location, or the one chosen with the location filter when the organization has s
   free times load separately, refresh every 5 minutes and are cached for a minute, because
   they run the availability engine once per service.
 - **Actions** are plain forms posting to the appointment action view with `next` pointing back
-  here. The action view only follows a `next` that is a page of this app (`/app/…` on the same
-  host); anything else goes to the appointment. Everything works without JavaScript.
+  here. The action view only follows a `next` that is a page of this app (`/app/…` or
+  `/staff/…` on the same host); anything else goes to the appointment. Everything works without JavaScript.
 - **Walk-in:** from the front desk, click Walk-in, then submit the form. The appointment is
   created and checked in (the plan's target was three interactions or fewer).
 - **Settings and billing:** receptionists hold neither `organization.manage` nor
   `billing.manage`, and the front desk links to neither. The settings and subscription pages
   themselves come in later phases, with their own tests.
+
+# Provider area (M5.3)
+
+`/staff/` is the signed-in member's own work. Every page is scoped to **their own staff
+profile, whatever their role**: an owner who also takes appointments sees everyone in `/app/`,
+but only their own here. Members without a staff profile are refused (403), except staff-role
+members, who land on an empty "My day".
+
+| Page | What it shows |
+|---|---|
+| `/staff/dashboard/` (My day) | "Good morning, {first name}", what is on now or next, today's count, this week's count, customers seen in the last 30 days; today's appointments with Check in, Start, Check out and No-show; the rest of the week; cancellations in the last 7 days; upcoming time off. 4 queries of its own (`staff.provider.provider_day`). |
+| `/staff/calendar/` | The calendar, narrowed to their own appointments (a `staff=` for someone else is ignored). |
+| `/staff/customers/` | The customer list, narrowed to customers assigned to them or seen by them. No "New customer" here. |
+| `/staff/availability/` | Their weekly hours (read-only: a manager sets them), their time off, **Block time** and **Request time off**. |
+
+**Time off** (`scheduling.services`; `TimeOff.approval_status` is now pending, approved,
+rejected or cancelled; only approved time off blocks the calendar):
+
+- **Block time:** part of one day, up to 12 hours, approved at once. Refused if the provider
+  has an appointment then. It locks the provider's calendar row like booking does, so a block
+  and a booking for the same time can't both succeed.
+- **Request time off:** whole days, up to 90, pending until someone with `staff.manage`
+  approves or rejects it on the staff member's Time off tab. The tab says how many appointments
+  are booked then; approving doesn't move them.
+- The provider can cancel a request, or approved time off that hasn't started.
+- Every step is audited (`time_off.requested`, `.blocked`, `.approved`, `.rejected`,
+  `.cancelled`).
+
+Another provider's appointment is a 404 for a provider (the appointment page and its actions);
+another provider's time off is a 404 on cancel.

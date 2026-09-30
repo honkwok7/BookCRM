@@ -1,0 +1,113 @@
+{% extends "layouts/app.html" %}
+{% load tz %}
+{% comment %}
+The provider's day (staff/provider_views.py, staff/provider.py). Only their own appointments.
+Row actions are plain forms posting to the appointment action view with next= back here.
+{% endcomment %}
+{% block title %}My day · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if day %}{{ day.greeting }}, {{ day.name }}{% else %}My day{% endif %}{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">{% now "l j F Y" %}{% if day %} · times in {{ day.zone }}{% endif %}</p>{% endblock %}
+{% block content %}
+{% if not day %}
+  <div class="card card-body">{% include "components/empty_state.html" with title="You don't take appointments here" message="Your day appears here once you have a staff profile in this organization." icon="calendar" %}</div>
+{% else %}
+{% timezone day.zone %}
+<nav aria-label="Quick actions" class="mb-4 flex flex-wrap gap-2">
+  <a href="{% url 'staff-availability' %}#block-heading" class="btn btn-primary">{% include "components/icon.html" with name="clock" class="size-4" %}Block time</a>
+  <a href="{% url 'staff-availability' %}#request-heading" class="btn btn-secondary">Request time off</a>
+  <a href="{% url 'staff-calendar' %}" class="btn btn-secondary">{% include "components/icon.html" with name="calendar" class="size-4" %}My calendar</a>
+  <a href="{% url 'staff-customers' %}" class="btn btn-ghost">My customers</a>
+</nav>
+
+<dl class="mb-6 grid gap-4 *:min-w-0 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="card card-body">
+    <dt class="text-sm text-slate-600">{% if day.current %}Now{% else %}Next{% endif %}</dt>
+    <dd class="mt-1 font-semibold">
+      {% with appointment=day.current|default:day.next %}
+        {% if appointment %}{{ appointment.start_datetime|time:"H:i" }} · {{ appointment.customer_name }}<span class="block text-sm font-normal text-slate-600">{{ appointment.service.name }}{% if appointment.start_datetime|date:"Y-m-d" != day.today|date:"Y-m-d" %}, {{ appointment.start_datetime|date:"D j M" }}{% endif %}</span>{% else %}Nothing coming up{% endif %}
+      {% endwith %}
+    </dd>
+  </div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Today</dt><dd class="mt-1 text-2xl font-semibold tabular-nums">{{ day.today_rows|length }}</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">This week</dt><dd class="mt-1 text-2xl font-semibold tabular-nums">{{ day.week_count }}</dd></div>
+  <div class="card card-body"><dt class="text-sm text-slate-600">Customers seen, last {{ day.seen_days }} days</dt><dd class="mt-1 text-2xl font-semibold tabular-nums">{{ day.seen_count }}</dd></div>
+</dl>
+
+<div class="grid gap-6 *:min-w-0 xl:grid-cols-3">
+  <section class="card self-start xl:col-span-2" aria-labelledby="today-heading">
+    <div class="card-header"><h2 id="today-heading" class="card-title">Today</h2></div>
+    {% if day.today_rows %}
+      <ol class="divide-y divide-slate-100">
+        {% for booking in day.today_rows %}
+          <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3{% if booking.status == 'no_show' %} opacity-60{% endif %}">
+            <span class="w-24 shrink-0 font-semibold tabular-nums">{{ booking.start_datetime|time:"H:i" }}–{{ booking.end_datetime|time:"H:i" }}</span>
+            <span class="min-w-0 flex-1">
+              <a href="{% url 'app-appointment' booking.pk %}" class="font-medium">{{ booking.customer_name }}</a>
+              <span class="block text-sm text-slate-600">{{ booking.service.name }}{% if booking.location %} · {{ booking.location.name }}{% endif %}</span>
+            </span>
+            {% include "components/badge.html" with label=booking.get_status_display level=booking.status_level %}
+            <span class="flex flex-wrap gap-2">
+              {% for action, label in booking.row_actions %}
+                <form method="post" action="{% url 'app-appointment-action' booking.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="{{ action }}">
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button type="submit" class="btn btn-sm {% if action == 'no_show' %}btn-ghost{% else %}btn-secondary{% endif %}">{{ label }}</button>
+                </form>
+              {% endfor %}
+            </span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="card-body">{% include "components/empty_state.html" with title="Nothing booked today" icon="calendar" %}</div>
+    {% endif %}
+  </section>
+
+  <div class="grid content-start gap-6 *:min-w-0">
+    <section class="card" aria-labelledby="later-heading">
+      <div class="card-header"><h2 id="later-heading" class="card-title">Coming up</h2></div>
+      {% if day.later %}
+        <ul class="divide-y divide-slate-100">
+          {% for booking in day.later %}
+            <li class="px-4 py-2 text-sm"><a href="{% url 'app-appointment' booking.pk %}" class="font-medium">{{ booking.start_datetime|date:"D j M" }}, {{ booking.start_datetime|time:"H:i" }}</a><span class="block text-slate-600">{{ booking.customer_name }} · {{ booking.service.name }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="card-body text-sm text-slate-600">Nothing else in the next week.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="cancelled-heading">
+      <div class="card-header"><h2 id="cancelled-heading" class="card-title">Cancelled, last {{ day.cancelled_days }} days</h2></div>
+      {% if day.cancelled %}
+        <ul class="divide-y divide-slate-100">
+          {% for booking in day.cancelled %}
+            <li class="px-4 py-2 text-sm"><span class="font-medium">{{ booking.customer_name }}</span><span class="block text-slate-600">{{ booking.service.name }}, {{ booking.start_datetime|date:"D j M H:i" }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="card-body text-sm text-slate-600">No cancellations.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="away-heading">
+      <div class="card-header flex items-center justify-between gap-3"><h2 id="away-heading" class="card-title">Time off</h2><a href="{% url 'staff-availability' %}" class="text-sm">Manage</a></div>
+      {% if day.time_off %}
+        <ul class="divide-y divide-slate-100">
+          {% for entry in day.time_off %}
+            <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+              <span class="min-w-0">{{ entry.start_datetime|date:"D j M H:i" }} – {{ entry.end_datetime|date:"D j M H:i" }}{% if entry.reason %}<span class="block text-slate-600">{{ entry.reason }}</span>{% endif %}</span>
+              {% if entry.approval_status == "pending" %}{% include "components/badge.html" with label="Requested" level="warning" %}{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="card-body text-sm text-slate-600">No time off planned.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endtimezone %}
+{% endif %}
+{% endblock %}

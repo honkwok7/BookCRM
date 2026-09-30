@@ -17,6 +17,7 @@ from bookings.calendar import can_use_calendar
 from crm.permissions import can_browse_customers
 from organizations.permissions import Capability
 from organizations.tenancy import TenantContext
+from staff.selectors import can_open_provider_day, is_provider_here
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,15 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
                 "clipboard",
                 (Capability.APPOINTMENTS_MANAGE, Capability.APPOINTMENTS_VIEW_ALL),
             ),
-            NavItem("My schedule", "staff-dashboard", "calendar"),
+        ),
+    ),
+    NavSection(
+        "My work",
+        (
+            NavItem("My day", "staff-dashboard", "home", allow=can_open_provider_day),
+            NavItem("My calendar", "staff-calendar", "calendar", allow=is_provider_here),
+            NavItem("My customers", "staff-customers", "users", allow=is_provider_here),
+            NavItem("My availability", "staff-availability", "clock", allow=is_provider_here),
         ),
     ),
     NavSection(

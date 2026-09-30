@@ -1,0 +1,99 @@
+{% extends "layouts/app.html" %}
+{% load tz %}
+{% comment %}
+The provider's availability (staff/provider_views.py): weekly hours (set by a manager), their
+time off, the block-time quick action and time-off requests. Two plain forms, told apart by the
+"form" field; each field set has its own prefix.
+{% endcomment %}
+{% block title %}My availability · {{ organization.name }}{% endblock %}
+{% block page_title %}My availability{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Times in {{ zone }}</p>{% endblock %}
+{% block content %}
+{% timezone zone %}
+<div class="grid gap-6 *:min-w-0 xl:grid-cols-2">
+  <section class="card" aria-labelledby="block-heading">
+    <div class="card-header"><h2 id="block-heading" class="card-title">Block time</h2></div>
+    <form method="post" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="form" value="block">
+      {% include "components/form_errors.html" with form=block_form %}
+      <div class="grid gap-4 *:min-w-0 sm:grid-cols-3">
+        {% include "components/field.html" with field=block_form.date %}
+        {% include "components/field.html" with field=block_form.start %}
+        {% include "components/field.html" with field=block_form.end %}
+      </div>
+      {% include "components/field.html" with field=block_form.reason %}
+      <p class="text-sm text-slate-600">Up to 12 hours on one day. It blocks your calendar at once, unless you have appointments then.</p>
+      <div><button type="submit" class="btn btn-primary">Block time</button></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="request-heading">
+    <div class="card-header"><h2 id="request-heading" class="card-title">Request time off</h2></div>
+    <form method="post" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="form" value="request">
+      {% include "components/form_errors.html" with form=request_form %}
+      <div class="grid gap-4 *:min-w-0 sm:grid-cols-2">
+        {% include "components/field.html" with field=request_form.first_day %}
+        {% include "components/field.html" with field=request_form.last_day %}
+      </div>
+      {% include "components/field.html" with field=request_form.reason %}
+      <p class="text-sm text-slate-600">Whole days. A manager approves it; until then your calendar stays open.</p>
+      <div><button type="submit" class="btn btn-secondary">Send request</button></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="entries-heading">
+    <div class="card-header"><h2 id="entries-heading" class="card-title">Your time off</h2></div>
+    {% if entries %}
+      <ul class="divide-y divide-slate-100">
+        {% for entry in entries %}
+          <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+            <span class="min-w-0">
+              <span class="font-medium">{{ entry.start_datetime|date:"D j M Y, H:i" }} – {{ entry.end_datetime|date:"D j M Y, H:i" }}</span>
+              {% if entry.reason %}<span class="block text-slate-600">{{ entry.reason }}</span>{% endif %}
+            </span>
+            <span class="flex items-center gap-2">
+              {% if entry.approval_status == "pending" %}{% include "components/badge.html" with label="Requested" level="warning" %}
+              {% elif entry.approval_status == "approved" %}{% include "components/badge.html" with label="Approved" level="success" %}
+              {% elif entry.approval_status == "rejected" %}{% include "components/badge.html" with label="Rejected" level="danger" %}
+              {% else %}{% include "components/badge.html" with label="Cancelled" %}{% endif %}
+              {% if entry.cancellable %}
+                <form method="post" action="{% url 'staff-time-off-cancel' entry.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-ghost">Cancel</button>
+                </form>
+              {% endif %}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="card-body">{% include "components/empty_state.html" with title="No time off yet" icon="calendar" %}</div>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="hours-heading">
+    <div class="card-header"><h2 id="hours-heading" class="card-title">Weekly hours</h2></div>
+    {% if has_availability %}
+      <dl class="divide-y divide-slate-100">
+        {% for row in week %}
+          <div class="flex justify-between gap-4 px-4 py-2.5 text-sm">
+            <dt>{{ row.label }}</dt>
+            <dd class="text-right">
+              {% for start, end, where in row.periods %}
+                <span class="block"><span class="whitespace-nowrap">{{ start|time:"H:i" }}–{{ end|time:"H:i" }}</span> <span class="text-slate-600">· {{ where }}</span></span>
+              {% empty %}<span class="text-slate-600">Not working</span>{% endfor %}
+            </dd>
+          </div>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <div class="card-body">{% include "components/empty_state.html" with title="No weekly hours yet" message="Ask a manager to set your working hours." icon="clock" %}</div>
+    {% endif %}
+    <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600">A manager sets your weekly hours.</p>
+  </section>
+</div>
+{% endtimezone %}
+{% endblock %}
