@@ -1,6 +1,6 @@
 from django.urls import path
 
-from saas import views
+from saas import impersonation, views, web
 
 urlpatterns = [
     path("saas/", views.DashboardView.as_view(), name="saas-dashboard"),
@@ -32,4 +32,35 @@ urlpatterns = [
     path("saas/users/", views.UserListView.as_view(), name="saas-users"),
     path("saas/users/<int:pk>/", views.UserDetailView.as_view(), name="saas-user"),
     path("saas/audit/", views.AuditLogView.as_view(), name="saas-audit"),
+    path(
+        "saas/users/<int:pk>/impersonate/",
+        views.ImpersonateView.as_view(),
+        name="saas-impersonate",
+    ),
+    path(
+        "saas/announcements/",
+        views.AnnouncementListView.as_view(),
+        name="saas-announcements",
+    ),
+    path(
+        "saas/announcements/new/",
+        views.AnnouncementFormView.as_view(),
+        name="saas-announcement-new",
+    ),
+    path(
+        "saas/announcements/<uuid:pk>/",
+        views.AnnouncementFormView.as_view(),
+        name="saas-announcement",
+    ),
+    path("saas/flags/", views.FlagListView.as_view(), name="saas-flags"),
+    path("saas/flags/<uuid:pk>/", views.FlagDetailView.as_view(), name="saas-flag"),
+    # Outside /saas/ (blocked while impersonating): the banner's End button and the
+    # announcements every signed-in page loads.
+    path("impersonation/end/", impersonation.end_view, name="impersonation-end"),
+    path("announcements/", web.announcements, name="announcements"),
+    path(
+        "announcements/<uuid:pk>/dismiss/",
+        web.dismiss,
+        name="announcement-dismiss",
+    ),
 ]

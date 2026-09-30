@@ -1,0 +1,16 @@
+{% comment %}Platform announcements for this person (saas/announcements.py), loaded by htmx.{% endcomment %}
+<div id="announcements" class="{% if announcements %}mb-6 grid gap-2{% endif %}">
+  {% for announcement in announcements %}
+    <div class="alert alert-{{ announcement.level }}" role="status">
+      {% if announcement.level == "warning" %}{% include "components/icon.html" with name="warning" %}{% else %}{% include "components/icon.html" with name="info" %}{% endif %}
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold">{{ announcement.title }}</p>
+        {% if announcement.body %}<p>{{ announcement.body|linebreaksbr }}</p>{% endif %}
+      </div>
+      <form method="post" action="{% url 'announcement-dismiss' announcement.pk %}" hx-post="{% url 'announcement-dismiss' announcement.pk %}" hx-target="closest .alert" hx-swap="outerHTML">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-ghost">Dismiss</button>
+      </form>
+    </div>
+  {% endfor %}
+</div>

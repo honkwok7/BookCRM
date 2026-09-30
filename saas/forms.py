@@ -54,3 +54,52 @@ class PlanForm(forms.ModelForm):
 
 class UserSearchForm(forms.Form):
     q = forms.CharField(required=False)
+
+
+# -- M5.5b --------------------------------------------------------------------------------------
+
+
+class AnnouncementForm(forms.ModelForm):
+    class Meta:
+        from saas.models import Announcement
+
+        model = Announcement
+        fields = ("title", "body", "audience", "level", "starts_at", "ends_at", "is_active")
+        widgets = {
+            "body": forms.Textarea(attrs={"rows": 3}),
+            "starts_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "ends_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+        }
+        labels = {"is_active": "Show it"}
+
+
+class FlagForm(forms.Form):
+    key = forms.SlugField(
+        max_length=80, help_text='Used in code: is_enabled("<key>", organization).'
+    )
+    description = forms.CharField(max_length=255, required=False)
+    enabled = forms.BooleanField(required=False, label="On for everyone")
+
+
+class OverrideForm(forms.Form):
+    organization = forms.SlugField(label="Organization address")
+    state = forms.ChoiceField(
+        choices=(("on", "On"), ("off", "Off"), ("default", "Remove the override"))
+    )
+
+
+class ImpersonateForm(forms.Form):
+    organization = forms.ModelChoiceField(queryset=None, empty_label=None)
+    reason = forms.CharField(
+        max_length=255, help_text="Kept with the session, e.g. the support ticket."
+    )
+    minutes = forms.TypedChoiceField(
+        coerce=int, choices=[(15, "15 minutes"), (30, "30 minutes"), (60, "1 hour")], initial=30
+    )
+    password = forms.CharField(
+        label="Your password", widget=forms.PasswordInput, help_text="Confirm it's you."
+    )
+
+    def __init__(self, *args, organizations, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["organization"].queryset = organizations

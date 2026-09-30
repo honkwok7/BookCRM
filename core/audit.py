@@ -70,6 +70,11 @@ class AuditAction(StrEnum):
     USER_REACTIVATED = "user.reactivated"
     PLATFORM_STAFF_GRANTED = "platform_staff.granted"
     PLATFORM_STAFF_REVOKED = "platform_staff.revoked"
+    ANNOUNCEMENT_SAVED = "announcement.saved"
+    FEATURE_FLAG_CHANGED = "feature_flag.changed"
+    IMPERSONATION_STARTED = "impersonation.started"
+    IMPERSONATION_ENDED = "impersonation.ended"
+    IMPERSONATION_REQUEST = "impersonation.request"
     # Catalogue and team
     SERVICE_CREATED = "service.created"
     SERVICE_UPDATED = "service.updated"
@@ -230,10 +235,17 @@ def record_audit(
     payload = scrub(dict(metadata or {}))
     if changes:
         payload["changes"] = changes
+    # Acting as someone else (saas.impersonation): the admin is kept with every row they cause.
+    impersonator = getattr(request, "impersonator", None) if request is not None else None
+    if impersonator is not None and (actor is None or actor == request_user):
+        payload.setdefault("impersonated_by", impersonator.email)
+    else:
+        impersonator = None
 
     return AuditLog.objects.create(
         organization=organization,
         user=actor,
+        impersonator=impersonator,
         actor_type=actor_type,
         action=action.value,
         object_type=object_type,

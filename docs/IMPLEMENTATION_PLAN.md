@@ -1580,7 +1580,10 @@ A customer books, reschedules and cancels within policy from the portal.
 >   trialing and paying, MRR, sign-ups, plan mix, appointment volume, active accounts, failed
 >   notifications, worker heartbeat), organizations (create, suspend and reactivate with a
 >   reason), subscriptions, plans, users, audit log. All audited as platform actions.
-> - Part two (M5.5b): announcements, feature flags, impersonation.
+> - **Part two done (branch `m5.5b-saas-tools`):** `saas.Announcement`, `saas.FeatureFlag` (+ per-organization overrides) and
+>   `saas.ImpersonationSession`; impersonation with step-up (password again), a reason, a time limit, a banner,
+>   audit rows carrying the impersonator, and the API, admin, platform and account pages refused while it runs.
+> - **Deviation:** no separate platform settings page yet (flags and announcements cover it for now).
 
 #### Objective
 A separate platform admin UI.
