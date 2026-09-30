@@ -9,6 +9,7 @@ from django.template.defaultfilters import slugify
 from django.utils import timezone
 
 from core.models import BaseUUIDModel
+from core.validators import validate_timezone
 from organizations.branding import BrandColor
 
 
@@ -22,7 +23,7 @@ class Organization(BaseUUIDModel):
     phone = models.CharField(max_length=30, blank=True)
     website = models.URLField(blank=True)
     address = models.TextField(blank=True)
-    timezone = models.CharField(max_length=64, default="UTC")
+    timezone = models.CharField(max_length=64, default="UTC", validators=[validate_timezone])
     currency = models.CharField(max_length=10, default="USD")
     booking_page_enabled = models.BooleanField(default=True)
     booking_page_theme = models.JSONField(default=dict, blank=True)
@@ -51,6 +52,11 @@ class Organization(BaseUUIDModel):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def accepts_members(self) -> bool:
+        """New members can join (invitations are sent and accepted) only while active."""
+        return self.is_active and not self.is_suspended
 
 
 class OrganizationRole(models.TextChoices):

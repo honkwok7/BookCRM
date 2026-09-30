@@ -11,8 +11,9 @@ both. Locations (Downtown / North York) arrive with M3.1.
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -153,7 +154,21 @@ PAST_OUTCOME_ACTIVITY = {
 class Command(BaseCommand):
     help = "Seed idempotent demo data (Harmony Wellness Centre and Serenity Spa)."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--allow-without-debug",
+            action="store_true",
+            help="Seed even though DEBUG is off. Never on a production database: the demo "
+            "accounts, including a platform superuser, have published passwords.",
+        )
+
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options["allow_without_debug"]:
+            raise CommandError(
+                "seed_demo creates accounts with published passwords (including a platform "
+                "superuser) and is for local development only. Run it with DJANGO_DEBUG=True, "
+                "or pass --allow-without-debug if this is definitely not a production database."
+            )
         with transaction.atomic():
             self._platform_admin()
             plans = self._plans()

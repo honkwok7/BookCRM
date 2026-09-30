@@ -26,6 +26,8 @@ def accept_invitation(*, invitation: OrganizationInvitation, user: User) -> Orga
     invitation = OrganizationInvitation.objects.select_for_update().get(pk=invitation.pk)
     if not invitation.is_usable:
         raise ValueError("Invitation is expired or already used")
+    if not invitation.organization.accepts_members:
+        raise ValueError("This organization isn't accepting new members right now")
 
     membership = (
         OrganizationMembership.objects.select_for_update()
@@ -39,9 +41,21 @@ def accept_invitation(*, invitation: OrganizationInvitation, user: User) -> Orga
             organization=invitation.organization, user=user, role=invitation.role
         )
     else:  # a former member, re-invited: reactivate with the invited role
+        # Only the invited role: capability overrides from the old membership were granted
+        # for a role and time that no longer apply, and the inviter couldn't have granted them.
         membership.role = invitation.role
         membership.is_active = True
-        membership.save(update_fields=["role", "is_active", "updated_at"])
+        membership.granted_permissions = []
+        membership.revoked_permissions = []
+        membership.save(
+            update_fields=[
+                "role",
+                "is_active",
+                "granted_permissions",
+                "revoked_permissions",
+                "updated_at",
+            ]
+        )
 
     invitation.accepted_at = timezone.now()
     invitation.accepted_by = user

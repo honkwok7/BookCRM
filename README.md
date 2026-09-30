@@ -115,7 +115,9 @@ pytest --cov=. --cov-report=html --cov-report=term
 - ReDoc: `/api/redoc/`
 
 ## Demo credentials
-After `python manage.py seed_demo` (idempotent; safe to re-run):
+After `python manage.py seed_demo` (idempotent; safe to re-run). It only runs with
+`DJANGO_DEBUG=True` (as in `.env.example`): these passwords are public, so never seed a
+production database.
 
 | Who | Email | Password |
 |---|---|---|

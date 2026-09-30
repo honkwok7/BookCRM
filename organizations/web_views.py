@@ -40,7 +40,11 @@ class AcceptInvitationView(View):
             .filter(token=request.GET.get("token", ""))
             .first()
         )
-        if self.invitation is None or not self.invitation.is_usable:
+        if (
+            self.invitation is None
+            or not self.invitation.is_usable
+            or not self.invitation.organization.accepts_members
+        ):
             return self.render({"state": "invalid"}, status=400)
         return super().dispatch(request, *args, **kwargs)
 
