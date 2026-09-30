@@ -104,7 +104,8 @@ def _build(organization, filters: Filters, zone, today: date, now: datetime) -> 
             filter=completed & Q(start_datetime__gte=month_start, start_datetime__lt=day_end),
         ),
         revenue_recent=Sum(
-            "price_snapshot", filter=completed & Q(start_datetime__gte=recent_start)
+            "price_snapshot",
+            filter=completed & Q(start_datetime__gte=recent_start, start_datetime__lt=day_end),
         ),
     )
 

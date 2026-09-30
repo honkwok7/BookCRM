@@ -9,7 +9,7 @@ they may see. The filter bar refreshes #dashboard through htmx (the "dashboard" 
 {% block page_description %}<p class="mt-1 text-sm text-slate-600">{{ today|date:"l j F Y" }} · times in {{ zone }}</p>{% endblock %}
 {% block content %}
 {% if report %}
-  <div class="mb-4">{% include "components/filter_bar.html" with target="#dashboard" filters=filter_bar %}</div>
+  <div class="mb-4">{% include "components/filter_bar.html" with target="#dashboard" swap="outerHTML" filters=filter_bar %}</div>
 {% endif %}
 {% partialdef dashboard inline %}
 <div id="dashboard" class="grid gap-6 *:min-w-0">

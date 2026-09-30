@@ -46,6 +46,12 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
         "",
         (
             NavItem("Dashboard", "app-dashboard", "home"),
+            NavItem(
+                "Reception",
+                "app-reception",
+                "clipboard",
+                (Capability.APPOINTMENTS_MANAGE, Capability.APPOINTMENTS_VIEW_ALL),
+            ),
             NavItem("My schedule", "staff-dashboard", "calendar"),
         ),
     ),

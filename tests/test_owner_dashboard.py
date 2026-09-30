@@ -147,6 +147,20 @@ class FilterTests(Fixtures, TestCase):
         self.assertEqual((filters.location, filters.days), (None, 30))
         self.assertEqual(response.context["report"]["today"], 2)
 
+    def test_a_linked_period_stays_selected_and_the_filter_replaces_the_widgets(self):
+        owner = f.MembershipFactory(organization=self.org, role=OrganizationRole.OWNER).user
+        self.client.force_login(owner)
+        page = self.client.get(reverse("app-dashboard"), {"days": "7"}).content.decode()
+        self.assertIn('<option value="7" selected>', page)
+        self.assertIn('hx-target="#dashboard" hx-swap="outerHTML"', page)
+        self.assertEqual(page.count('id="dashboard"'), 1)
+
+    def test_recent_revenue_stops_at_the_end_of_today(self):
+        # Completed early (allowed up to an hour before the start), but it is tomorrow's.
+        self.at(-1, status=Booking.Status.COMPLETED, price_snapshot=70)
+        self.at(0, status=Booking.Status.COMPLETED, price_snapshot=50)
+        self.assertEqual(self.report()["revenue_recent"], Decimal(50))
+
     def test_htmx_refresh_returns_only_the_widgets(self):
         owner = f.MembershipFactory(organization=self.org, role=OrganizationRole.OWNER).user
         self.client.force_login(owner)

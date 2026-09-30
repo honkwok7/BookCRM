@@ -1,9 +1,15 @@
 from django.urls import path
 
-from bookings import appointment_views, calendar_views, waitlist_views
+from bookings import appointment_views, calendar_views, reception_views, waitlist_views
 from bookings import web_views as views
 
 urlpatterns = [
+    path("app/reception/", reception_views.ReceptionView.as_view(), name="app-reception"),
+    path(
+        "app/reception/next-free/",
+        reception_views.NextFreeView.as_view(),
+        name="app-reception-next-free",
+    ),
     path("app/waitlist/", waitlist_views.WaitlistListView.as_view(), name="app-waitlist"),
     path("app/waitlist/new/", waitlist_views.WaitlistAddView.as_view(), name="app-waitlist-new"),
     path(

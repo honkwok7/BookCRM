@@ -44,6 +44,8 @@ def home(request):
         return redirect("portal-home")
     if tenant.role == OrganizationRole.STAFF:
         return redirect("staff-dashboard")
+    if tenant.role == OrganizationRole.RECEPTIONIST:
+        return redirect("app-reception")
     return redirect("app-dashboard")
 
 

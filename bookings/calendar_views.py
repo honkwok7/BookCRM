@@ -22,6 +22,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from bookings.calendar import (
@@ -244,9 +245,21 @@ class AppointmentView(AppointmentMixin, View):
 
 
 class AppointmentActionView(AppointmentMixin, View):
-    """POST ``action`` (check_in, check_out, no_show, cancel, ...) and an optional ``reason``."""
+    """POST ``action`` (check_in, check_out, no_show, cancel, ...) and an optional ``reason``.
+
+    Without htmx the answer is a redirect: to ``next`` when it is a page of this app (the
+    reception dashboard sends one), otherwise to the appointment.
+    """
 
     required_capabilities = (Capability.APPOINTMENTS_MANAGE,)
+
+    @staticmethod
+    def back_to(request) -> str | None:
+        target = request.POST.get("next", "")
+        safe = url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        )
+        return target if safe and target.startswith("/app/") else None
 
     def post(self, request, pk):
         booking = self.get_booking(pk)
@@ -271,12 +284,12 @@ class AppointmentActionView(AppointmentMixin, View):
         except DomainError as error:
             if not is_htmx(request):
                 messages.error(request, error.message)
-                return redirect("app-appointment", pk=booking.pk)
+                return redirect(self.back_to(request) or reverse("app-appointment", args=[pk]))
             return self.render_panel(self.get_booking(pk), error=error.message, status=422)
         booking = self.get_booking(pk)
         if not is_htmx(request):
             messages.success(request, f"Appointment {booking.get_status_display().lower()}.")
-            return redirect("app-appointment", pk=booking.pk)
+            return redirect(self.back_to(request) or reverse("app-appointment", args=[pk]))
         response = self.render_panel(booking)
         response["HX-Trigger"] = "calendar-refresh"
         return response
