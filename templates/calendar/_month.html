@@ -1,0 +1,26 @@
+{% comment %}Month: up to three appointments per day, then "+N more" (the day view).{% endcomment %}
+<div class="card overflow-x-auto">
+  <table class="w-full min-w-[42rem] table-fixed border-collapse text-sm">
+    <caption class="sr-only">{{ title }}</caption>
+    <thead>
+      <tr>{% for name in weekday_names %}<th scope="col" class="border-b border-slate-200 py-2 text-xs font-semibold text-slate-600">{{ name }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for week in weeks %}
+        <tr>
+          {% for day in week %}
+            <td class="h-28 border border-slate-100 p-1 align-top {% if not day.in_month %}bg-slate-50{% endif %}">
+              <a href="{{ day_url }}&amp;date={{ day.date|date:'Y-m-d' }}" class="mb-1 inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold no-underline {% if day.is_today %}bg-brand-600 text-white{% elif day.in_month %}text-slate-800{% else %}text-slate-500{% endif %}"{% if day.is_today %} aria-current="date"{% endif %} aria-label="{{ day.date|date:'l, F j' }}: {{ day.events|length }} appointment{{ day.events|length|pluralize }}">{{ day.date.day }}</a>
+              <ul class="grid min-w-0 grid-cols-1 gap-0.5">
+                {% for event in day.shown %}
+                  <li class="min-w-0"><a href="{% url 'app-appointment' event.booking.pk %}" hx-get="{% url 'app-appointment' event.booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML" class="cal-chip cal-color-{{ event.color }} cal-status-{{ event.booking.status }}">{{ event.start|time:"g:i" }} {{ event.booking.customer_name }}</a></li>
+                {% endfor %}
+                {% if day.more %}<li><a href="{{ day_url }}&amp;date={{ day.date|date:'Y-m-d' }}" class="text-xs">+{{ day.more }} more</a></li>{% endif %}
+              </ul>
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

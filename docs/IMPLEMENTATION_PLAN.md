@@ -1192,6 +1192,16 @@ An illegal transition → 409. Every status change has a history row.
 
 ### M4.4: Calendar
 
+> **Status: done (2026-09-30, branch `m4.4-calendar`).** See [CALENDAR.md](CALENDAR.md).
+> - Server-rendered day (provider columns), week and month views with htmx, instead of
+>   FullCalendar: its resource views are commercial and it injects inline styles, which the
+>   CSP forbids. Layout in `bookings/calendar.py`, grid classes safelisted in the stylesheet.
+> - Filters (location, provider, service, status), colours per provider, the appointment
+>   panel with lifecycle actions through the booking service, and
+>   `/app/calendar/events.json` (62-day cap, minimal fields, no internal notes).
+> - Scoping: `appointments.view_all` sees everything, providers their own. The query count
+>   is constant (tested). Drag-and-drop stays deferred.
+
 #### Objective
 Day, week and month calendars.
 

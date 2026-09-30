@@ -1,0 +1,71 @@
+{% extends "layouts/app.html" %}
+{% load tz %}
+{% comment %}
+The calendar (bookings/calendar_views.py). #calendar swaps on filter changes and navigation
+(htmx) and refreshes itself after a status change (the calendar-refresh event). Appointments
+open in #calendar-panel. Without JavaScript every link is a page and the filters have a button.
+{% endcomment %}
+{% block title %}Calendar · {{ organization.name }}{% endblock %}
+{% block page_title %}Calendar{% endblock %}
+{% block content %}
+{% timezone zone %}
+<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+<div id="calendar" class="min-w-0" hx-disinherit="*" hx-get="{{ request.get_full_path }}" hx-trigger="calendar-refresh from:body" hx-select="#calendar" hx-swap="outerHTML">
+  <form method="get" action="{% url 'app-calendar' %}" class="mb-3 flex flex-wrap items-end gap-3" hx-get="{% url 'app-calendar' %}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
+    <input type="hidden" name="view" value="{{ view }}">
+    <input type="hidden" name="date" value="{{ anchor|date:'Y-m-d' }}">
+    {% if locations|length > 1 %}
+      <div class="form-field"><label class="form-label" for="cal-location">Location</label>
+        <select id="cal-location" name="location" class="input">
+          <option value="">All locations</option>
+          {% for item in locations %}<option value="{{ item.pk }}"{% if location.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+        </select></div>
+    {% endif %}
+    {% if sees_everyone %}
+      <div class="form-field"><label class="form-label" for="cal-staff">Provider</label>
+        <select id="cal-staff" name="staff" class="input">
+          <option value="">Everyone</option>
+          {% for item in staff_options %}<option value="{{ item.pk }}"{% if staff.pk == item.pk %} selected{% endif %}>{{ item.public_name }}</option>{% endfor %}
+        </select></div>
+    {% endif %}
+    <div class="form-field"><label class="form-label" for="cal-service">Service</label>
+      <select id="cal-service" name="service" class="input">
+        <option value="">All services</option>
+        {% for item in service_options %}<option value="{{ item.pk }}"{% if service.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+      </select></div>
+    <div class="form-field"><label class="form-label" for="cal-status">Status</label>
+      <select id="cal-status" name="status" class="input">
+        <option value="">Active and past (not cancelled)</option>
+        {% for value, label in status_options %}<option value="{{ value }}"{% if value in statuses %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+  </form>
+
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-3" hx-boost="true" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML">
+    <div class="flex items-center gap-2">
+      <a href="{{ urls.previous }}" class="btn btn-secondary btn-sm" aria-label="Previous {{ view }}">{% include "components/icon.html" with name="chevron-left" class="size-4" %}</a>
+      <a href="{{ urls.today }}" class="btn btn-secondary btn-sm">Today</a>
+      <a href="{{ urls.next }}" class="btn btn-secondary btn-sm" aria-label="Next {{ view }}">{% include "components/icon.html" with name="chevron-right" class="size-4" %}</a>
+      <h2 class="ml-2 text-lg font-semibold text-slate-900" aria-live="polite">{{ title }}</h2>
+    </div>
+    <nav aria-label="Calendar view" class="inline-flex rounded-md shadow-sm">
+      <a href="{{ urls.day }}" class="btn btn-sm rounded-r-none {% if view == 'day' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "day" %} aria-current="page"{% endif %}>Day</a>
+      <a href="{{ urls.week }}" class="btn btn-sm rounded-none {% if view == 'week' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "week" %} aria-current="page"{% endif %}>Week</a>
+      <a href="{{ urls.month }}" class="btn btn-sm rounded-l-none {% if view == 'month' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "month" %} aria-current="page"{% endif %}>Month</a>
+    </nav>
+  </div>
+
+  {% if view == "month" %}
+    {% include "calendar/_month.html" %}
+  {% else %}
+    {% include "calendar/_time_grid.html" %}
+  {% endif %}
+  <p class="mt-2 text-xs text-slate-600">Times in {{ zone }}.</p>
+</div>
+
+<aside id="calendar-panel" aria-label="Appointment" class="min-w-0">
+  <div class="card card-body text-sm text-slate-600">Select an appointment to see its details.</div>
+</aside>
+</div>
+{% endtimezone %}
+{% endblock %}

@@ -1,8 +1,25 @@
 from django.urls import path
 
+from bookings import calendar_views
 from bookings import web_views as views
 
 urlpatterns = [
+    path("app/calendar/", calendar_views.CalendarView.as_view(), name="app-calendar"),
+    path(
+        "app/calendar/events.json",
+        calendar_views.CalendarEventsView.as_view(),
+        name="app-calendar-events",
+    ),
+    path(
+        "app/appointments/<uuid:pk>/",
+        calendar_views.AppointmentView.as_view(),
+        name="app-appointment",
+    ),
+    path(
+        "app/appointments/<uuid:pk>/action/",
+        calendar_views.AppointmentActionView.as_view(),
+        name="app-appointment-action",
+    ),
     path("book/<slug:slug>/", views.LocationStepView.as_view(), name="public-booking"),
     path(
         "book/<slug:slug>/service/",

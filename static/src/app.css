@@ -10,6 +10,11 @@
 @source "../js";
 /* Tag colour dots (crm/templatetags/crm_tags.py PALETTE) */
 @source inline("bg-{red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose,slate}-500");
+/* Calendar grid positions, computed in bookings/calendar.py (15-minute rows, lanes, columns) */
+@source inline("row-start-{1..96}");
+@source inline("row-span-{1..96}");
+@source inline("col-start-{1..12}");
+@source inline("grid-cols-{1..12}");
 
 @theme {
   --color-brand-50: oklch(0.97 0.02 265);
@@ -185,6 +190,30 @@
   .htmx-request.htmx-indicator {
     @apply opacity-100;
   }
+
+  /* Calendar events: one colour per provider (bookings/calendar.py COLOR_COUNT), status marks */
+  .cal-event {
+    @apply z-10 overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-xs leading-tight no-underline
+      shadow-sm hover:no-underline focus-visible:z-20;
+  }
+  .cal-chip {
+    @apply block truncate rounded border-l-4 px-1 text-xs leading-5 no-underline hover:no-underline;
+  }
+  .cal-color-0 { @apply border-sky-500 bg-sky-50 text-sky-900 hover:bg-sky-100; }
+  .cal-color-1 { @apply border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100; }
+  .cal-color-2 { @apply border-violet-500 bg-violet-50 text-violet-900 hover:bg-violet-100; }
+  .cal-color-3 { @apply border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100; }
+  .cal-color-4 { @apply border-rose-500 bg-rose-50 text-rose-900 hover:bg-rose-100; }
+  .cal-color-5 { @apply border-teal-500 bg-teal-50 text-teal-900 hover:bg-teal-100; }
+  .cal-color-6 { @apply border-indigo-500 bg-indigo-50 text-indigo-900 hover:bg-indigo-100; }
+  .cal-color-7 { @apply border-orange-500 bg-orange-50 text-orange-900 hover:bg-orange-100; }
+  .cal-status-pending { @apply border-dashed; }
+  .cal-status-checked_in,
+  .cal-status-in_progress { @apply ring-2 ring-green-600 ring-inset; }
+  .cal-status-completed { @apply opacity-70; }
+  .cal-status-no_show,
+  .cal-status-cancelled,
+  .cal-status-rejected { @apply line-through opacity-60; }
 
   /* Public booking wizard: one-tap choices, the day strip and time slots */
   .choice {
