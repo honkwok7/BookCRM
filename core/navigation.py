@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from django.urls import reverse
 
+from bookings.calendar import can_use_calendar
 from crm.permissions import can_browse_customers
 from organizations.permissions import Capability
 from organizations.tenancy import TenantContext
@@ -47,6 +48,10 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
             NavItem("Dashboard", "app-dashboard", "home"),
             NavItem("My schedule", "staff-dashboard", "calendar"),
         ),
+    ),
+    NavSection(
+        "Appointments",
+        (NavItem("Calendar", "app-calendar", "calendar", allow=can_use_calendar),),
     ),
     NavSection(
         "CRM",
