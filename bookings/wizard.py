@@ -3,9 +3,11 @@
 Steps: location → service → provider (or anyone) → time → details → review → confirmation.
 Each request rebuilds the choices from the session and re-checks them against the current
 data (the location is still bookable, the service still public there, the provider still
-offers it, the time is still free), so a stale or tampered session can never book something
-the page wouldn't offer. A choice that is no longer valid is dropped, and the wizard sends the
-visitor back to the first step that needs an answer.
+offers it). A choice that is no longer valid is dropped, and the wizard sends the visitor back
+to the first step that needs an answer. The time is checked against availability when it is
+chosen and again on Confirm (by the booking service, under the lock), not on every request in
+between: if it was taken meanwhile, Confirm says so and sends the visitor back to pick another
+time. So a stale or tampered session can never book something the page wouldn't offer.
 
 The state is keyed by organization, so wizards for two organizations in one browser don't mix.
 """

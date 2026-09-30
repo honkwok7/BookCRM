@@ -11,7 +11,7 @@
   overlap pre-check and a lock-free race that only the constraint can stop.
 """
 
-import re
+import ast
 from concurrent.futures import ThreadPoolExecutor
 from datetime import time, timedelta
 from importlib import import_module
@@ -414,17 +414,78 @@ class RecordPastBookingTests(Fixtures, TestCase):
 
 
 class OnlyTheBookingServiceWritesTests(TestCase):
-    """Acceptance criterion of M4.1: appointment times and statuses change only in
-    ``bookings/services.py``. A source scan, so a new shortcut fails CI."""
+    """Acceptance criterion of M4.1: appointments, their status history and waitlist entries
+    are written only by their services. A syntax-tree scan of every module, so a new shortcut
+    fails CI whatever its formatting (calls split over lines, imported aliases, related
+    managers)."""
 
-    WRITES = re.compile(
-        # Creating booking rows (always sets their times and status).
-        r"Booking\.objects[^\n]*?\.(create|bulk_create|get_or_create|update_or_create)\(|"
-        # Bulk updates of times or status on a booking queryset.
-        r"(Booking\.objects|bookings)[^\n]*?\.update\([^)]*\b(status|start_datetime|end_datetime)=|"
-        # Assigning them on an instance.
-        r"\bbooking\.(status|start_datetime|end_datetime)\s*=[^=]"
-    )
+    MODELS = {"Booking", "BookingStatusHistory", "WaitlistEntry"}
+    # Related managers and querysets that hold those rows.
+    RELATED = {"bookings", "status_history", "waitlist_entries"}
+    WRITES = {
+        "create",
+        "bulk_create",
+        "get_or_create",
+        "update_or_create",
+        "update",
+        "bulk_update",
+        "delete",
+    }
+    FIELDS = {"status", "start_datetime", "end_datetime"}
+    ALLOWED = {
+        "bookings/services.py",  # appointments and their history
+        "bookings/waitlist.py",  # waitlist entries
+        "crm/services.py",  # anonymize and merge scrub or move the customer's rows
+    }
+
+    def _aliases(self, tree) -> set[str]:
+        """Names the module uses for the guarded models (``import ... as`` included)."""
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in self.MODELS:
+                        names.add(alias.asname or alias.name)
+        return names | self.MODELS
+
+    def _receiver_names(self, node) -> set[str]:
+        """Every name and attribute along a call chain: ``Booking.objects.filter(...)``."""
+        names = set()
+        while True:
+            if isinstance(node, ast.Call):
+                node = node.func
+            elif isinstance(node, ast.Attribute):
+                names.add(node.attr)
+                node = node.value
+            elif isinstance(node, ast.Name):
+                names.add(node.id)
+                return names
+            else:
+                return names
+
+    def offenders_in(self, source: str) -> list[str]:
+        tree = ast.parse(source)
+        guarded = self._aliases(tree) | self.RELATED
+        found = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in self.WRITES
+                and self._receiver_names(node.func.value) & guarded
+            ):
+                found.append(f"line {node.lineno}: .{node.func.attr}()")
+            if isinstance(node, ast.Assign | ast.AugAssign):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and target.attr in self.FIELDS
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id in {"booking", "new_booking", "appointment"}
+                    ):
+                        found.append(f"line {node.lineno}: {target.value.id}.{target.attr} =")
+        return found
 
     def test_no_other_module_writes_bookings(self):
         root = Path(settings.BASE_DIR)
@@ -432,15 +493,29 @@ class OnlyTheBookingServiceWritesTests(TestCase):
         for path in root.rglob("*.py"):
             relative = path.relative_to(root).as_posix()
             if (
-                relative.startswith((".venv/", "tests/", "node_modules/"))
+                relative.startswith((".venv/", "tests/", "node_modules/", ".tailwind/"))
                 or "/migrations/" in relative
                 or path.name.startswith("test")
-                or relative == "bookings/services.py"
+                or relative in self.ALLOWED
             ):
                 continue
             text = path.read_text(encoding="utf-8")
-            offenders += [f"{relative}: {m.group(0)}" for m in self.WRITES.finditer(text)]
+            offenders += [f"{relative} {item}" for item in self.offenders_in(text)]
         self.assertEqual(offenders, [])
+
+    def test_the_scan_sees_through_formatting_and_aliases(self):
+        sneaky = [
+            "Booking.objects.filter(pk=1).update(\n    status='confirmed'\n)",
+            "from bookings.models import Booking as B\nB.objects.create(reference='x')",
+            "customer.bookings.all().delete()",
+            "WaitlistEntry.objects.filter(pk=1).update(status='notified')",
+            "booking.status_history.create(new_status='x')",
+            "booking.start_datetime = moment",
+        ]
+        for source in sneaky:
+            with self.subTest(source=source):
+                self.assertNotEqual(self.offenders_in(source), [])
+        self.assertEqual(self.offenders_in("Booking.objects.filter(pk=1).exists()"), [])
 
 
 @POSTGRES

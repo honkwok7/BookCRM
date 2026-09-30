@@ -208,7 +208,6 @@ def close_entry(*, entry: WaitlistEntry, actor=None) -> WaitlistEntry:
 
 def matching_entries(booking: Booking, *, now=None) -> list[WaitlistEntry]:
     """Waiting entries that the time freed by ``booking`` suits, first come first served."""
-    from staff.selectors import provides
 
     now = now or timezone.now()
     if booking.start_datetime <= now:
@@ -234,34 +233,48 @@ def matching_entries(booking: Booking, *, now=None) -> list[WaitlistEntry]:
         if hours and not hours[0] <= local.hour < hours[1]:
             continue
         matches.append(entry)
-    if matches and not provides(booking.staff, booking.service, booking.location):
-        return []  # the freed provider no longer offers it: nothing to offer
-    if matches and _taken_again(booking):
-        return []  # booked again before the task ran: nothing was freed after all
+    if matches and not publicly_bookable(booking):
+        return []  # the public couldn't book this time now: don't advertise it
     return matches
 
 
-def _taken_again(booking: Booking) -> bool:
-    """Does another active appointment of the provider now overlap the freed time?"""
-    from bookings.services import ACTIVE_BOOKING_STATUSES
+def publicly_bookable(booking: Booking) -> bool:
+    """Could a customer book ``booking``'s time with its provider on the booking page right
+    now? The same checks as the page: the page is open, the service and location are
+    bookable online, and the engine accepts the time for the public (the grid, notice,
+    buffers, closures, the daily limit, and not taken again since it was freed)."""
+    from organizations.tenancy import get_public_organization
+    from scheduling.availability import AvailabilityService
 
-    return (
-        Booking.objects.filter(
-            staff_id=booking.staff_id,
-            status__in=ACTIVE_BOOKING_STATUSES,
-            start_datetime__lt=booking.end_datetime,
-            end_datetime__gt=booking.start_datetime,
+    organization = get_public_organization(booking.organization.slug)
+    service, location = booking.service, booking.location
+    if organization is None or location is None:
+        return False
+    if not (service.is_public and service.is_active and not service.is_archived):
+        return False
+    if not (location.is_active and location.booking_enabled):
+        return False
+    try:
+        AvailabilityService(organization, service, location=location, public=True).validate_slot(
+            booking.staff,
+            booking.start_datetime,
+            ignore_booking=booking,  # the freed appointment itself never blocks its own time
         )
-        .exclude(pk=booking.pk)
-        .exists()
-    )
+    except DomainError:
+        return False
+    return True
 
 
 @transaction.atomic
 def notify_matching_entries(booking: Booking) -> list[WaitlistEntry]:
-    """Email up to ``NOTIFY_LIMIT`` matching entries about the time ``booking`` freed."""
+    """Email up to ``NOTIFY_LIMIT`` matching entries about the time ``booking`` freed.
+
+    Entries another run claims meanwhile are skipped and the next ones tried, so each freed
+    time reaches up to ``NOTIFY_LIMIT`` people even when cancellations overlap."""
     notified = []
-    for entry in matching_entries(booking)[:NOTIFY_LIMIT]:
+    for entry in matching_entries(booking):
+        if len(notified) >= NOTIFY_LIMIT:
+            break
         # Claim the entry: a concurrent run (another cancellation) can't notify it twice.
         claimed = WaitlistEntry.objects.filter(
             pk=entry.pk, status=WaitlistEntry.Status.WAITING

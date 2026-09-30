@@ -116,6 +116,9 @@ def lock_booking(booking: Booking) -> Booking:
 
 
 DEADLOCK_SQLSTATE = "40P01"
+# The foreign key from an appointment to its customer (Django's generated constraint name
+# contains the column).
+CUSTOMER_FK = "customer_id"
 
 
 def _constraint_conflict(error: IntegrityError | OperationalError) -> ConflictError | None:
@@ -157,9 +160,24 @@ def _booking_location(organization, location, *, public: bool) -> Location:
     return location
 
 
-def _replayed(organization, idempotency_key, *, service, staff_profile, start_datetime):
-    """The booking made earlier with this key, or None. The same key with a different request
-    is refused rather than silently returning an unrelated booking."""
+def _replayed(
+    organization,
+    idempotency_key,
+    *,
+    service,
+    staff_profile,
+    start_datetime,
+    customer_email,
+    actor,
+    location=None,
+):
+    """The booking made earlier with this key, or None.
+
+    A replay is returned only to the caller who made it (the same signed-in account, or no
+    account for both) and only for the same request (service, provider, time, customer email,
+    location). Anything else is refused without revealing the booking: keys are chosen by
+    clients, and another customer reusing one must never receive someone else's details.
+    """
     if not idempotency_key:
         return None
     booking = Booking.objects.filter(
@@ -167,11 +185,16 @@ def _replayed(organization, idempotency_key, *, service, staff_profile, start_da
     ).first()
     if booking is None:
         return None
-    if (booking.service_id, booking.staff_id, booking.start_datetime) != (
-        service.pk,
-        staff_profile.pk,
-        start_datetime,
-    ):
+    caller = actor.pk if actor is not None and actor.is_authenticated else None
+    same_request = (
+        booking.service_id == service.pk
+        and booking.staff_id == staff_profile.pk
+        and booking.start_datetime == start_datetime
+        and booking.customer_email.strip().lower() == customer_email.strip().lower()
+        and (location is None or booking.location_id == location.pk)
+        and booking.created_by_id == caller
+    )
+    if not same_request:
         raise ConflictError(
             "This idempotency key was already used for a different booking",
             code="idempotency_key_reused",
@@ -233,28 +256,24 @@ def create_booking(
         raise DomainError("Customer not found", code="not_found")
     if source not in Booking.Source.values:
         raise DomainError(f"Unknown booking source '{source}'", code="invalid_source")
-    replay = _replayed(
-        organization,
-        idempotency_key,
-        service=service,
-        staff_profile=staff_profile,
-        start_datetime=start_datetime,
-    )
+    replay_request = {
+        "service": service,
+        "staff_profile": staff_profile,
+        "start_datetime": start_datetime,
+        "customer_email": customer_email,
+        "actor": actor,
+    }
+    replay = _replayed(organization, idempotency_key, location=location, **replay_request)
     if replay is not None:
         return replay
     location = _booking_location(organization, location, public=public)
+    replay_request["location"] = location
 
     # Serialize writers to this calendar, then check the time against committed data: hours,
     # location, closures, time off, other appointments with buffers, the daily limit.
     lock_staff(staff_profile.pk)
     # A retry with the same key that waited for the lock finds the booking made meanwhile.
-    replay = _replayed(
-        organization,
-        idempotency_key,
-        service=service,
-        staff_profile=staff_profile,
-        start_datetime=start_datetime,
-    )
+    replay = _replayed(organization, idempotency_key, **replay_request)
     if replay is not None:
         return replay
     engine = AvailabilityService(organization, service, location=location, public=public)
@@ -309,13 +328,12 @@ def create_booking(
     except IntegrityError as error:
         if IDEMPOTENCY_CONSTRAINT in str(error):
             # A concurrent request with the same key won: return its booking.
-            return _replayed(
-                organization,
-                idempotency_key,
-                service=service,
-                staff_profile=staff_profile,
-                start_datetime=start_datetime,
-            )
+            return _replayed(organization, idempotency_key, **replay_request)
+        if CUSTOMER_FK in str(error):
+            # The customer was merged away or deleted while this booking was being made.
+            raise ConflictError(
+                "The customer record changed meanwhile. Please try again.", code="customer_gone"
+            ) from error
         conflict = _constraint_conflict(error)
         if conflict is not None:
             raise conflict from error

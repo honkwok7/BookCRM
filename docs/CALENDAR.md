@@ -48,8 +48,12 @@ it works without JavaScript. htmx swaps the calendar on navigation and filter ch
 loads the panel. There's no inline style (the Content Security Policy forbids it), and no
 calendar library (FullCalendar's resource views need a commercial licence and it injects
 styles). Each row is 15 minutes. An event's row, span and lane become Tailwind grid classes,
-listed with `@source inline(...)` in `static/src/app.css`. The page uses a fixed number of
-queries however many appointments it shows, and a test checks this.
+listed with `@source inline(...)` in `static/src/app.css`. At most `MAX_LANES` (24)
+appointments sit side by side in one column; more at the same moment share lanes. On a
+daylight-saving day an appointment's row follows the wall clock (the hour labels) and its
+length is its real duration, so one in the repeated hour still shows and one across the
+missing hour isn't doubled. The page uses a fixed number of queries however many appointments
+it shows, and a test checks this.
 
 Drag-and-drop rescheduling isn't built. It would call `reschedule_booking`.
 
