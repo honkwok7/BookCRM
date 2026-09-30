@@ -67,19 +67,28 @@ A provider's free time on a date:
 3. limited by the location's opening hours, when it has any;
 4. minus location closures and organization holidays (all day, or certain times);
 5. minus approved time off and active appointments. An appointment blocks its own time plus,
-   on each side, the larger of its service's buffer and the new service's buffer. Buffers only
-   separate appointments; they aren't needed at the edges of working hours;
+   on each side, the larger of its own buffer (the snapshot taken when it was booked, so
+   editing the service later doesn't change it) and the new service's buffer. Buffers only
+   separate appointments; they aren't needed at the edges of working hours. A buffer is at most
+   24 hours (400 `invalid_buffer`), which is the margin the engine loads around a range;
 6. nothing on a day they already have `max_daily_appointments` appointments.
 
 A slot starts on a 15-minute grid on the location's wall clock and must fit entirely in free
 time, using the provider's own duration (`StaffServiceOffering.custom_duration_minutes`) when
 set. Only providers from `list_providers_for(service, location, public=)` are considered. Public
 callers are also held to the service's `min_notice_minutes` and `max_advance_days`; the team is
-only kept out of the past, and `validate_slot` accepts team times off the grid.
+only kept out of the past, and `validate_slot` accepts team times off the grid. Public callers
+can only book listed times: a start off the grid is 400 `not_on_grid`.
+
+**"Anyone available"** books a slot's first candidate. Candidates are ordered by how many
+appointments the provider already has that day (fewest first), then by a fixed id order, so
+work is spread and the choice is repeatable.
 
 Daylight-saving changes are handled by working in UTC instants: on a spring-forward day the
 missing hour has no slots, and on a fall-back day the repeated hour is offered twice (two
-distinct instants). Everything is loaded up front: a calculation uses at most `QUERY_BUDGET`
+distinct instants). `validate_slot` converts the start to UTC before adding the duration, so an
+ambiguous local start still lasts its real duration, and rounding to the grid never moves back
+into the first, already past, occurrence of a repeated hour. Everything is loaded up front: a calculation uses at most `QUERY_BUDGET`
 (10) queries whatever the range and number of providers (tested with 10 providers over 30 days).
 
 Where it is used: the public slot API, and `create_booking`/`reschedule_booking` for every
@@ -137,6 +146,7 @@ returns them as `{"detail": "...", "code": "..."}`.
 | `past_cancellation_deadline` | 400 | A customer cancelling or rescheduling inside the service's cancellation deadline |
 | `invalid_source` | 400 | Unknown booking source |
 | `same_time` | 400 | A reschedule to the appointment's current time |
+| `not_on_grid` | 400 | A public booking for a time that isn't one of the listed (15-minute grid) times |
 | `slot_unavailable` | 409 | The time isn't free: outside working or opening hours, closed, time off, or overlapping another appointment (with buffers) |
 | `invalid_transition` | 409 | The lifecycle doesn't allow the change (for example, cancelling a completed appointment) |
 | `idempotency_key_reused` | 409 | The idempotency key was already used for a different booking |

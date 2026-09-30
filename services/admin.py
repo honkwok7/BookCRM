@@ -1,17 +1,20 @@
+"""Services are changed in the web app or the API (``services.services``): read-only here."""
+
 from django.contrib import admin
 
+from core.admin_mixins import ReadOnlyAdmin
 from services.models import Service, ServiceCategory
 
 
 @admin.register(ServiceCategory)
-class ServiceCategoryAdmin(admin.ModelAdmin):
+class ServiceCategoryAdmin(ReadOnlyAdmin):
     list_display = ("name", "organization", "slug")
     list_filter = ("organization",)
     search_fields = ("name", "slug", "organization__name")
 
 
 @admin.register(Service)
-class ServiceAdmin(admin.ModelAdmin):
+class ServiceAdmin(ReadOnlyAdmin):
     list_display = (
         "name",
         "organization",
@@ -23,4 +26,3 @@ class ServiceAdmin(admin.ModelAdmin):
     )
     list_filter = ("organization", "is_active", "is_archived", "is_public")
     search_fields = ("name", "slug", "description", "organization__name")
-    autocomplete_fields = ("organization", "category", "assigned_staff_members")

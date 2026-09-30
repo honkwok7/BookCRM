@@ -112,7 +112,8 @@ class SlotTests(EngineTestCase):
         )
         self.service.buffer_after_minutes = 10
         self.service.save()
-        self.book(at(MONDAY, 11), service=buffered)  # blocks 10:50-12:15
+        # The factory skips the booking service: give it the buffer snapshot the service takes.
+        self.book(at(MONDAY, 11), service=buffered, buffer_after_minutes=15)  # 10:50-12:15
         times = local_times(self.slots())
         self.assertIn("09:45", times)
         self.assertNotIn("10:00", times)  # would end at 11:00, inside the 10-minute gap

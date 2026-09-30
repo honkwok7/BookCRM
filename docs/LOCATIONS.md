@@ -9,7 +9,7 @@ all go through them.
 
 | Rule | Where it is enforced |
 |---|---|
-| Every organization has **exactly one default location**. It is created as "Main" when the organization is created, from the organization's address, time zone, phone and email. | `locations.signals` (new organizations), migration `locations/0002` (existing ones), and a partial unique index (at most one default per organization). |
+| Every organization has **exactly one default location**. It is created as "Main" when the organization is created, from the organization's address, time zone, phone and email. | `locations.signals` (new organizations), migration `locations/0002` (existing ones), and a partial unique index (at most one default per organization). `loaddata` skips signals: run `manage.py ensure_default_locations` after loading organization fixtures. |
 | The default location is **always active**. It can't be deactivated or deleted: make another location the default first. | Service (`default_location`, 409) and a database check constraint. |
 | Only an active location can become the default. | Service (`inactive`, 409). |
 | **Active** locations count towards the plan's `maximum_locations`. Creating or reactivating a location beyond the limit is refused. Inactive locations don't count. An organization without a subscription has no limit. | Service (`plan_limit`, 409) through `subscriptions.services.enforce_plan_limit(organization, "locations")`. The organization row is locked, so two parallel requests can't both take the last place. |
