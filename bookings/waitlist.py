@@ -22,7 +22,7 @@ from datetime import datetime, time, timedelta
 from functools import partial
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -35,6 +35,8 @@ from notifications.services import queue_waitlist_notification
 logger = logging.getLogger(__name__)
 
 NOTIFY_LIMIT = 5
+# At most one waiting entry per customer and service (see ``WaitlistEntry.Meta``).
+ONE_WAITING_CONSTRAINT = "waitlist_one_waiting_entry_per_customer"
 DEFAULT_WAIT = timedelta(days=60)
 TIME_OF_DAY_HOURS = {
     WaitlistEntry.TimeOfDay.MORNING: (0, 12),
@@ -81,6 +83,7 @@ def join_waitlist(
         raise DomainError("This service can't be booked", code="not_found")
     if time_of_day not in WaitlistEntry.TimeOfDay.values:
         raise DomainError("Unknown time of day", code="invalid_time_of_day")
+    _check_preferences(service, location, preferred_staff)
     customer_email = customer_email.strip()
     if not customer_email:
         raise DomainError(
@@ -117,30 +120,30 @@ def join_waitlist(
         "time_of_day": time_of_day,
         "expires_at": expires_at,
     }
-    entry = (
-        WaitlistEntry.objects.select_for_update()
-        .filter(
-            organization=organization,
-            service=service,
-            customer=customer,
-            status=WaitlistEntry.Status.WAITING,
-        )
-        .first()
-    )
-    if entry is not None:
+    entry = _waiting_entry(organization, service, customer)
+    action = AuditAction.WAITLIST_ENTRY_UPDATED
+    if entry is None:
+        try:
+            with transaction.atomic():  # savepoint: a lost race leaves the rest usable
+                entry = WaitlistEntry.objects.create(
+                    organization=organization,
+                    service=service,
+                    customer=customer,
+                    source=source,
+                    **fields,
+                )
+            action = AuditAction.WAITLIST_ENTRY_CREATED
+        except IntegrityError as error:
+            if ONE_WAITING_CONSTRAINT not in str(error):
+                raise
+            # A concurrent join for the same customer and service won: update its entry.
+            entry = _waiting_entry(organization, service, customer)
+            if entry is None:
+                raise
+    if action == AuditAction.WAITLIST_ENTRY_UPDATED:
         for name, value in fields.items():
             setattr(entry, name, value)
         entry.save()
-        action = AuditAction.WAITLIST_ENTRY_UPDATED
-    else:
-        entry = WaitlistEntry.objects.create(
-            organization=organization,
-            service=service,
-            customer=customer,
-            source=source,
-            **fields,
-        )
-        action = AuditAction.WAITLIST_ENTRY_CREATED
     record_audit(
         action,
         organization=organization,
@@ -150,6 +153,37 @@ def join_waitlist(
         metadata={"service": str(service.pk), "source": source},
     )
     return entry
+
+
+def _waiting_entry(organization, service, customer) -> WaitlistEntry | None:
+    return (
+        WaitlistEntry.objects.select_for_update()
+        .filter(
+            organization=organization,
+            service=service,
+            customer=customer,
+            status=WaitlistEntry.Status.WAITING,
+        )
+        .first()
+    )
+
+
+def _check_preferences(service, location, preferred_staff) -> None:
+    """Refuse preferences that no freed time could ever match: a provider who doesn't offer
+    the service (at the location), or a location where nobody does."""
+    from staff.selectors import list_providers_for, provides
+
+    if preferred_staff is not None:
+        if not provides(preferred_staff, service, location):
+            where = f" at {location.name}" if location is not None else ""
+            raise DomainError(
+                f"{preferred_staff.public_name} doesn't offer {service.name}{where}.",
+                code="invalid_preferences",
+            )
+    elif location is not None and not list_providers_for(service, location).exists():
+        raise DomainError(
+            f"{service.name} isn't offered at {location.name}.", code="invalid_preferences"
+        )
 
 
 @transaction.atomic
@@ -202,7 +236,25 @@ def matching_entries(booking: Booking, *, now=None) -> list[WaitlistEntry]:
         matches.append(entry)
     if matches and not provides(booking.staff, booking.service, booking.location):
         return []  # the freed provider no longer offers it: nothing to offer
+    if matches and _taken_again(booking):
+        return []  # booked again before the task ran: nothing was freed after all
     return matches
+
+
+def _taken_again(booking: Booking) -> bool:
+    """Does another active appointment of the provider now overlap the freed time?"""
+    from bookings.services import ACTIVE_BOOKING_STATUSES
+
+    return (
+        Booking.objects.filter(
+            staff_id=booking.staff_id,
+            status__in=ACTIVE_BOOKING_STATUSES,
+            start_datetime__lt=booking.end_datetime,
+            end_datetime__gt=booking.start_datetime,
+        )
+        .exclude(pk=booking.pk)
+        .exists()
+    )
 
 
 @transaction.atomic

@@ -18,13 +18,21 @@ people it suits are emailed automatically (M4.7).
   everything belongs to the organization, requires an email address (that's how people are
   told), links the entry to the CRM customer (found or created like a booking's), and sets
   `expires_at` to the day after the last preferred date, or 60 days from now. Joining again
-  for the same service updates the waiting entry.
+  for the same service updates the waiting entry. A database constraint
+  (`waitlist_one_waiting_entry_per_customer`) keeps it to one waiting entry per customer and
+  service even when two joins race. Preferences that could never match (a provider who doesn't
+  offer the service there, a location where nobody does) are refused with
+  `invalid_preferences`.
+- **Over the API.** `/api/v1/waitlist/` joins through the same service and closes with
+  `close/`. It has no generic edit or delete, so status and notification fields can't be set by
+  hand.
 
 ## When a time frees up
 
-- **Queuing.** `cancel_booking` (and a reschedule, for the time it leaves) calls
-  `schedule_matching`, which queues the `bookings.tasks.notify_waitlist` task after the
-  transaction commits. Past times are skipped.
+- **Queuing.** `cancel_booking` (and a reschedule, when the new time no longer overlaps the
+  old one) calls `schedule_matching`, which queues the `bookings.tasks.notify_waitlist` task
+  after the transaction commits. Past times are skipped, and if the provider has been booked
+  over the freed time again before the task runs, nobody is emailed.
 - **Matching.** `matching_entries` finds waiting entries for the same service whose location
   (or any location), provider (or any) and date range include the freed time, whose time of
   day contains its start, and that haven't expired. The oldest come first.
@@ -42,4 +50,5 @@ organization.
 ## Existing entries
 
 Migration `bookings/0013` links existing entries to the CRM customer with the same email in
-the same organization.
+the same organization. Migration `bookings/0014` closes duplicate waiting entries (the oldest
+keeps its place) before adding the one-waiting-entry constraint.

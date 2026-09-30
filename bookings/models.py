@@ -402,3 +402,11 @@ class WaitlistEntry(BaseUUIDModel):
 
     class Meta:
         indexes = [models.Index(fields=["organization", "service", "status"])]
+        constraints = [
+            # One waiting entry per customer and service: joining again updates it.
+            models.UniqueConstraint(
+                fields=["organization", "service", "customer"],
+                condition=models.Q(status="waiting"),
+                name="waitlist_one_waiting_entry_per_customer",
+            )
+        ]

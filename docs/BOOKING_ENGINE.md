@@ -29,7 +29,8 @@ writes their `status`, `start_datetime` or `end_datetime`.
    that the provider offers the service there. `public=True` (customers) adds the minimum
    notice and booking window; the team is only kept out of the past.
 5. The plan's monthly booking limit (bookings created this calendar month, in the
-   organization's time zone): 409 `plan_limit`.
+   organization's time zone): 409 `plan_limit`. The subscription row is locked before counting,
+   so two bookings with different providers can't both take the last one of the month.
 6. Finds or creates the CRM customer (their CRM source follows the booking source).
 7. Uses the provider's own duration and price for the service (their offering), and
    snapshots price, duration and the service's buffers on the booking.
@@ -95,7 +96,7 @@ caller (since M4.1). The public booking form also calls it first, to show friend
 | completed, cancelled, no_show, rejected | *(terminal)* |
 
 Only `pending` and `confirmed` appointments can be rescheduled. An illegal change is 409
-`invalid_transition`.
+`invalid_transition`. Rescheduling to the time it already has is 400 `same_time`.
 
 **Timing (M4.3).** Check-in, starting and completing are allowed from an hour before the start
 time (`CHECK_IN_EARLIEST`), and a no-show only once the appointment has started. Otherwise the
@@ -135,6 +136,7 @@ returns them as `{"detail": "...", "code": "..."}`.
 | `not_found` | 400 | Service, staff, location or customer from another organization (or inactive) |
 | `past_cancellation_deadline` | 400 | A customer cancelling or rescheduling inside the service's cancellation deadline |
 | `invalid_source` | 400 | Unknown booking source |
+| `same_time` | 400 | A reschedule to the appointment's current time |
 | `slot_unavailable` | 409 | The time isn't free: outside working or opening hours, closed, time off, or overlapping another appointment (with buffers) |
 | `invalid_transition` | 409 | The lifecycle doesn't allow the change (for example, cancelling a completed appointment) |
 | `idempotency_key_reused` | 409 | The idempotency key was already used for a different booking |
@@ -149,7 +151,7 @@ Two layers, so a double booking needs both to fail at once:
    row exists even when the requested time is empty, so two simultaneous requests for the same
    provider queue on it: exactly one wins, and the other gets 409 `slot_unavailable`. Status
    changes and cancellations lock only the booking row. The lock order is always staff, then
-   booking, so these paths can't deadlock.
+   booking, then subscription (the monthly limit), so these paths can't deadlock.
 2. **The database (PostgreSQL, M4.2).** The exclusion constraint `booking_staff_no_overlap`
    (migration `bookings/0010`, `btree_gist`) refuses two active appointments (pending,
    confirmed, checked in, in progress) of one staff member whose `[start, end)` ranges overlap,

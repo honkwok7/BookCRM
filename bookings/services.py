@@ -111,7 +111,8 @@ def lock_booking(booking: Booking) -> Booking:
     )
 
 
-# Lock order, to rule out deadlocks: staff calendar first, then the booking row.
+# Lock order, to rule out deadlocks: staff calendar first, then the booking row, then the
+# organization's subscription (the monthly allowance).
 
 
 DEADLOCK_SQLSTATE = "40P01"
@@ -129,8 +130,16 @@ def _constraint_conflict(error: IntegrityError | OperationalError) -> ConflictEr
 
 
 def _check_monthly_limit(organization) -> None:
+    """Refuse the booking when the monthly allowance is used up.
+
+    The staff lock doesn't cover this: bookings with different providers run side by side.
+    Locking the subscription row serializes every booking of the organization from the
+    count to the commit, so two requests can't both take the last booking of the month.
+    """
+    from subscriptions.models import Subscription
     from subscriptions.services import enforce_plan_limit
 
+    Subscription.objects.select_for_update().filter(organization=organization).first()
     try:
         enforce_plan_limit(organization, "bookings")
     except ValueError as error:
@@ -640,6 +649,8 @@ def reschedule_booking(
         )
     if public:
         check_cancellation_deadline(booking)
+    if new_start == booking.start_datetime:
+        raise DomainError("The appointment is already at that time.", code="same_time")
 
     old_status = booking.status
     booking.status = Booking.Status.CANCELLED
@@ -664,7 +675,6 @@ def reschedule_booking(
         reason="Rescheduled",
         note="Rescheduled",
     )
-    schedule_matching(booking)
 
     new_booking = create_booking(
         organization=booking.organization,
@@ -687,6 +697,12 @@ def reschedule_booking(
         rescheduled_from=booking,
         history_source=source,  # the channel of this change; the booking keeps its origin
     )
+    if not (
+        new_booking.start_datetime < booking.end_datetime
+        and new_booking.end_datetime > booking.start_datetime
+    ):
+        # Only a time the appointment really left is offered to the waitlist.
+        schedule_matching(booking)
     record_audit(
         AuditAction.BOOKING_RESCHEDULED,
         organization=booking.organization,
