@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+{% comment %}Reschedule with the same provider: pick a date, then one of their free times.{% endcomment %}
+{% block title %}Reschedule {{ booking.reference }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Reschedule {{ booking.customer_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-4" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Reschedule {{ booking.customer_name }}</h2>{% endif %}
+  {% csrf_token %}
+  <p class="text-sm text-slate-700">{{ booking.service.name }} with {{ booking.staff.public_name }}. The current time is released when you save.</p>
+  {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
+  {% include "components/form_errors.html" with form=form %}
+  <div hx-post="{{ action }}" hx-vals='{"refresh": "1"}' hx-include="closest form" hx-target="closest form" hx-swap="outerHTML" hx-trigger="change">
+    {% include "components/field.html" with field=form.date %}
+  </div>
+  {% if form.start.field.choices %}
+    {% include "components/field.html" with field=form.start %}
+  {% else %}
+    <p class="text-sm text-slate-700">No free times on this day. Try another day.</p>
+  {% endif %}
+  <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+    <noscript><button type="submit" name="refresh" value="1" class="btn btn-secondary">Update</button></noscript>
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Close</button>
+    {% else %}
+      <a href="{% url 'app-appointment' booking.pk %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Reschedule</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

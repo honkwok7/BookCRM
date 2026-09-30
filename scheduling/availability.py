@@ -172,15 +172,18 @@ class AvailabilityService:
             providers = providers.filter(pk=staff.pk)
         return list(providers)
 
-    def get_available_slots(self, start_date: date, end_date: date, staff=None) -> list[Slot]:
+    def get_available_slots(
+        self, start_date: date, end_date: date, staff=None, *, ignore_booking=None
+    ) -> list[Slot]:
         """Slots from ``start_date`` to ``end_date`` (inclusive, the location's dates), for
-        ``staff`` or, when None, for any provider (each slot lists who is free)."""
+        ``staff`` or, when None, for any provider (each slot lists who is free).
+        ``ignore_booking`` leaves one appointment out (the one being rescheduled)."""
         if end_date < start_date:
             return []
         providers = self.providers(staff)
         if not providers:
             return []
-        data = self._load(providers, start_date, end_date)
+        data = self._load(providers, start_date, end_date, ignore_booking=ignore_booking)
         earliest, latest = self._bounds()
         by_start: dict[datetime, list[Candidate]] = defaultdict(list)
         day = start_date

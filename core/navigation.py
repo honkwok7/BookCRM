@@ -51,7 +51,10 @@ APP_NAVIGATION: tuple[NavSection, ...] = (
     ),
     NavSection(
         "Appointments",
-        (NavItem("Calendar", "app-calendar", "calendar", allow=can_use_calendar),),
+        (
+            NavItem("Calendar", "app-calendar", "calendar", allow=can_use_calendar),
+            NavItem("Appointments", "app-appointment-list", "clipboard", allow=can_use_calendar),
+        ),
     ),
     NavSection(
         "CRM",

@@ -2,7 +2,8 @@
 {% load tz %}
 {% comment %}
 An appointment: its details, status actions and history. The "panel" partial is what the
-calendar loads into #calendar-panel (htmx); without JavaScript this is a page of its own.
+calendar loads into #calendar-panel (htmx), where the actions re-render the panel; as a page
+of its own (a link, or no JavaScript) the actions are plain forms.
 {% endcomment %}
 {% block title %}{{ booking.customer_name }} · {{ booking.reference }}{% endblock %}
 {% block page_title %}Appointment {{ booking.reference }}{% endblock %}
@@ -42,12 +43,15 @@ calendar loads into #calendar-panel (htmx); without JavaScript this is a page of
     {% if show_internal_notes and booking.internal_notes %}<dt class="font-medium text-slate-600">Internal notes</dt><dd class="whitespace-pre-line text-slate-900">{{ booking.internal_notes }}</dd>{% endif %}
   </dl>
 
-  {% if actions or can_cancel %}
+  {% if actions or can_cancel or can_reschedule %}
   <div class="grid gap-3 border-t border-slate-200 pt-4">
+    {% if can_reschedule %}
+      <p><a href="{% url 'app-appointment-reschedule' booking.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-appointment-reschedule' booking.pk %}" hx-target="#modal-body">Reschedule</a></p>
+    {% endif %}
     {% if actions %}
     <div class="flex flex-wrap gap-2">
       {% for action, label in actions %}
-        <form method="post" action="{% url 'app-appointment-action' booking.pk %}" hx-post="{% url 'app-appointment-action' booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML">
+        <form method="post" action="{% url 'app-appointment-action' booking.pk %}"{% if in_panel %} hx-post="{% url 'app-appointment-action' booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}<input type="hidden" name="action" value="{{ action }}">
           <button type="submit" class="btn btn-sm {% if forloop.first %}btn-primary{% else %}btn-secondary{% endif %}">{{ label }}</button>
         </form>
@@ -55,7 +59,7 @@ calendar loads into #calendar-panel (htmx); without JavaScript this is a page of
     </div>
     {% endif %}
     {% if can_cancel %}
-    <form method="post" action="{% url 'app-appointment-action' booking.pk %}" hx-post="{% url 'app-appointment-action' booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML" class="flex flex-wrap items-end gap-2">
+    <form method="post" action="{% url 'app-appointment-action' booking.pk %}"{% if in_panel %} hx-post="{% url 'app-appointment-action' booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML"{% endif %} class="flex flex-wrap items-end gap-2">
       {% csrf_token %}<input type="hidden" name="action" value="cancel">
       <div class="form-field min-w-40 flex-1"><label class="form-label" for="cancel-reason-{{ booking.pk }}">Cancellation reason <span class="font-normal text-slate-600">(optional)</span></label><input id="cancel-reason-{{ booking.pk }}" name="reason" maxlength="255"></div>
       <button type="submit" class="btn btn-danger btn-sm">Cancel appointment</button>

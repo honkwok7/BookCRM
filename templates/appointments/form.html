@@ -1,0 +1,76 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+New appointment or walk-in (bookings/appointment_views.py). Opened in the page dialog by htmx
+(the "form" partial) or as a page. A change to the customer search, location, service,
+provider or date re-posts the form with "refresh" to rebuild the choices; the Update button
+does the same without JavaScript.
+{% endcomment %}
+{% block title %}{{ title }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-5" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{{ title }}</h2>{% endif %}
+  {% csrf_token %}
+  {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
+  {% include "components/form_errors.html" with form=form %}
+
+  <fieldset class="grid gap-3">
+    <legend class="mb-1 text-sm font-semibold text-slate-900">Customer</legend>
+    {% if form.q %}
+      <div class="form-field">
+        <label class="form-label" for="{{ form.q.id_for_label }}">{{ form.q.label }}</label>
+        <div class="flex gap-2">
+          <input type="search" name="q" id="{{ form.q.id_for_label }}" value="{{ form.q.value|default:'' }}" placeholder="Name, email or phone" autocomplete="off"
+                 hx-post="{{ action }}" hx-vals='{"refresh": "1"}' hx-include="closest form" hx-target="closest form" hx-swap="outerHTML" hx-trigger="input changed delay:400ms">
+          <button type="submit" name="refresh" value="1" class="btn btn-secondary">Search</button>
+        </div>
+      </div>
+      {% if form.customer.field.queryset %}
+        <div class="grid gap-1" role="group" aria-label="Matching customers">
+          {% for choice in form.customer %}<label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>{% endfor %}
+        </div>
+      {% endif %}
+      <p class="text-xs text-slate-600">Or enter a new customer:</p>
+    {% endif %}
+    <div class="grid gap-3 sm:grid-cols-3">
+      {% include "components/field.html" with field=form.name %}
+      {% include "components/field.html" with field=form.email %}
+      {% include "components/field.html" with field=form.phone %}
+    </div>
+  </fieldset>
+
+  <fieldset class="grid gap-3">
+    <legend class="mb-1 text-sm font-semibold text-slate-900">Appointment</legend>
+    <div class="grid gap-3 sm:grid-cols-2" hx-post="{{ action }}" hx-vals='{"refresh": "1"}' hx-include="closest form" hx-target="closest form" hx-swap="outerHTML" hx-trigger="change">
+      {% include "components/field.html" with field=form.location %}
+      {% include "components/field.html" with field=form.service %}
+      {% include "components/field.html" with field=form.staff %}
+      {% if form.date %}{% include "components/field.html" with field=form.date %}{% endif %}
+    </div>
+    {% if form.start %}
+      {% if form.start.field.choices %}
+        {% include "components/field.html" with field=form.start %}
+      {% elif form.service.value %}
+        <p class="text-sm text-slate-700">No free times on this day. Try another day or provider.</p>
+      {% endif %}
+    {% else %}
+      <p class="text-sm text-slate-700">The appointment starts now and the customer is checked in.</p>
+    {% endif %}
+    {% include "components/field.html" with field=form.customer_notes %}
+  </fieldset>
+
+  <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+    <noscript><button type="submit" name="refresh" value="1" class="btn btn-secondary">Update</button></noscript>
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Close</button>
+    {% else %}
+      <a href="{% url 'app-appointment-list' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if walk_in %}Check in walk-in{% else %}Book appointment{% endif %}</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

@@ -37,6 +37,7 @@ from bookings.calendar import (
 from bookings.models import Booking
 from bookings.services import (
     ALLOWED_TRANSITIONS,
+    RESCHEDULABLE_STATUSES,
     cancel_booking,
     change_booking_status,
 )
@@ -223,11 +224,13 @@ class AppointmentMixin(CalendarAccessMixin):
                 if can_manage and target in allowed
             ],
             "can_cancel": can_manage and Booking.Status.CANCELLED in allowed,
+            "can_reschedule": can_manage and booking.status in RESCHEDULABLE_STATUSES,
             "show_internal_notes": tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE),
             "customer_link": booking.customer_id and can_browse_customers(tenant),
             "history": booking.status_history.select_related("changed_by").order_by("created_at"),
             "status_level": STATUS_LEVEL.get(booking.status, "neutral"),
             "error": error,
+            "in_panel": is_htmx(self.request),
         }
         template = "calendar/appointment.html"
         if is_htmx(self.request):
