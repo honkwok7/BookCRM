@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
@@ -123,6 +124,7 @@ def get_public_organization(slug: str | None) -> Organization | None:
     ).first()
 
 
+@transaction.atomic
 def suspend_organization(*, organization: Organization, reason: str, actor=None) -> None:
     from core.audit import AuditAction, record_audit
 
@@ -142,6 +144,7 @@ def suspend_organization(*, organization: Organization, reason: str, actor=None)
     )
 
 
+@transaction.atomic
 def reactivate_organization(*, organization: Organization, actor=None) -> None:
     from core.audit import AuditAction, record_audit
 

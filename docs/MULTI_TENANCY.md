@@ -41,8 +41,12 @@ with `booking_page_enabled=True`. It never creates a tenant context.
 ## Suspension
 
 `suspend_organization(organization=, reason=, actor=)` and `reactivate_organization(...)`
-set `is_suspended`, `suspended_at` and `suspension_reason`, and write an audit log entry.
-Tenant users can't change `is_active` or `is_suspended` through the API.
+set `is_suspended`, `suspended_at` and `suspension_reason`, and write an audit log entry, in
+one transaction (no change without its audit entry). Tenant users can't change `is_active` or
+`is_suspended` through the API. Platform admins suspend and reactivate from the Django admin's
+organization list (actions that call these services); the organization, membership and
+invitation admin pages are otherwise read-only. While an organization is suspended or inactive,
+its pending invitations aren't sent and can't be accepted.
 
 ## Writing relations safely
 

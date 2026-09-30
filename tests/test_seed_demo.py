@@ -12,7 +12,7 @@ from organizations.models import Organization
 
 class SeedDemoTests(TestCase):
     def seed(self):
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", allow_without_debug=True, stdout=StringIO())
 
     def counts(self):
         return (
@@ -59,7 +59,7 @@ class UserUsernameTests(TestCase):
 
 class SeedDemoBookingTests(TestCase):
     def test_every_customer_gets_an_upcoming_appointment_through_the_booking_service(self):
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", allow_without_debug=True, stdout=StringIO())
         harmony = Organization.objects.get(slug="harmony-wellness")
         upcoming = Booking.objects.filter(organization=harmony, status=Booking.Status.CONFIRMED)
         self.assertEqual(

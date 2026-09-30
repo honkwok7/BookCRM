@@ -343,7 +343,7 @@ class SeededTimelineTests(TestCase):
 
         from django.core.management import call_command
 
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", allow_without_debug=True, stdout=StringIO())
         seeded = set(CustomerActivity.objects.values_list("kind", flat=True))
         for kind in (
             Kind.CUSTOMER_CREATED,

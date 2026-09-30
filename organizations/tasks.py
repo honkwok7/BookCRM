@@ -14,9 +14,9 @@ from organizations.models import OrganizationInvitation
 @app.task(bind=True, max_retries=3)
 def send_invitation_email(self, *, invitation_id):
     invitation = OrganizationInvitation.objects.select_related("organization").get(pk=invitation_id)
-    if not invitation.is_usable:
-        return
     organization = invitation.organization
+    if not invitation.is_usable or not organization.accepts_members:
+        return
     url = f"{settings.SITE_URL}/accept-invitation/?token={invitation.token}"
     try:
         send_mail(

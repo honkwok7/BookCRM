@@ -14,7 +14,10 @@ Rules that sit outside the matrix:
   organization. A client-supplied organization slug only selects among the user's own
   memberships (see `organizations/tenancy.py`).
 - Platform superusers have **no** implicit access to tenant data.
-- Invitations: a member can only invite roles at or below their own role.
+- Invitations: a member can only invite roles at or below their own role. A former
+  member who is re-invited gets the invited role only: their old granted and revoked
+  capabilities are cleared.
+- Invitations to an inactive or suspended organization are neither emailed nor accepted.
 - Staff without `appointments.view_all` see only appointments assigned to them;
   customers see only their own appointments (linked account or verified email).
 

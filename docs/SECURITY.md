@@ -13,6 +13,8 @@ claimed; that would need a separate formal review.
 | Account and invitation emails via Celery after commit; links built from `SITE_URL`, never the Host header | ✅ | `accounts/tasks.py`, `organizations/tasks.py` |
 | Invitations never change an existing member's role, and each is used once (row lock) | ✅ | `organizations/services.py` |
 | Django admin shows bookings and customers read-only: changes go through the services (tenant checks, locking, audit) | ✅ | `bookings/admin.py` |
+| Django admin shows organizations, memberships and invitations read-only (invitation tokens hidden); suspend and reactivate are audited admin actions | ✅ | `organizations/admin.py` |
+| `seed_demo` (published demo passwords, a platform superuser) refuses to run unless `DEBUG` is on or `--allow-without-debug` is passed | ✅ | `core/management/commands/seed_demo.py` |
 | JWT rotation + blacklist | ✅ | `SIMPLE_JWT` |
 | Tenant isolation: membership-backed tenant resolution, no superuser bypass | ✅ | `organizations/tenancy.py`, [MULTI_TENANCY.md](MULTI_TENANCY.md) |
 | Capability-based authorization on every tenant endpoint | ✅ | `organizations/permissions.py`, [PERMISSIONS.md](PERMISSIONS.md) |

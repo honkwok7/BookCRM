@@ -7,13 +7,11 @@ applies the plan limit, keeps a single default, validates hours and closures, an
 
 from __future__ import annotations
 
-import zoneinfo
-
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 
 from core.models import BaseUUIDModel
+from core.validators import validate_timezone  # noqa: F401 - migrations refer to it here
 
 
 class Weekday(models.IntegerChoices):
@@ -25,11 +23,6 @@ class Weekday(models.IntegerChoices):
     FRIDAY = 4, "Friday"
     SATURDAY = 5, "Saturday"
     SUNDAY = 6, "Sunday"
-
-
-def validate_timezone(value: str) -> None:
-    if value not in zoneinfo.available_timezones():
-        raise ValidationError(f"“{value}” is not a known time zone.", code="invalid_timezone")
 
 
 class Location(BaseUUIDModel):
