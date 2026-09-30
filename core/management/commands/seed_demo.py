@@ -143,6 +143,9 @@ PLANS = [
     ("business", "Business", 149, 1490, 100, 500, 20000, 20, True),
 ]
 PASSWORD = "Demo12345!"
+# A customer account for the portal (M5.4): Alex is a customer of both organizations, so the
+# portal shows two separate businesses. Found by the verified email; no membership.
+PORTAL_CUSTOMER = ("alex@example.test", "Alex", "Morgan")
 CATEGORY_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ec4899"]
 PAST_OUTCOME_ACTIVITY = {
     Booking.Status.COMPLETED: Kind.APPOINTMENT_COMPLETED,
@@ -174,6 +177,7 @@ class Command(BaseCommand):
             plans = self._plans()
             for spec in ORGANIZATIONS:
                 self._organization(spec, plans)
+            self._user(*PORTAL_CUSTOMER)
         self._report()
 
     # -- building blocks ---------------------------------------------------------------------
@@ -453,4 +457,5 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"    {role:<13} {email}" + (f"  ({job_title})" if job_title else "")
                 )
+        self.stdout.write(f"  Customer portal (/portal/): {PORTAL_CUSTOMER[0]} / {PASSWORD}")
         self.stdout.write("  Development-only credentials.")

@@ -1,0 +1,41 @@
+{% extends "layouts/portal.html" %}
+{% comment %}One business in the portal (portal/views.py PortalOrganizationView).{% endcomment %}
+{% block title %}{{ organization.name }} · {{ brand_name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card mb-6" aria-labelledby="next-heading">
+  <div class="card-header flex flex-wrap items-center justify-between gap-3">
+    <h2 id="next-heading" class="card-title">Next appointment</h2>
+    {% if can_book %}<a href="{% url 'public-booking' organization.slug %}" class="btn btn-primary">Book an appointment</a>{% endif %}
+  </div>
+  {% if next %}
+    <div class="card-body">
+      <p class="text-lg font-semibold"><a href="{% url 'portal-appointment' organization.slug next.pk %}">{{ next.service.name }}</a></p>
+      <p class="text-slate-700"><time datetime="{{ next.start_datetime|date:'c' }}">{{ next.local_start|date:"l j F Y, H:i" }}</time> ({{ next.zone }})</p>
+      <p class="text-sm text-slate-600">With {{ next.staff.public_name }}{% if next.location %} at {{ next.location.name }}{% endif %} · ref. {{ next.reference }}</p>
+    </div>
+  {% else %}
+    <p class="card-body text-sm text-slate-600">Nothing booked.</p>
+  {% endif %}
+</section>
+
+<div class="grid gap-6 *:min-w-0 md:grid-cols-2">
+  <section class="card" aria-labelledby="upcoming-heading">
+    <div class="card-header"><h2 id="upcoming-heading" class="card-title">Also coming up</h2></div>
+    {% if upcoming %}
+      <ul class="divide-y divide-slate-100">{% for booking in upcoming %}{% include "portal/_booking.html" %}{% endfor %}</ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">Nothing else booked.</p>
+    {% endif %}
+  </section>
+  <section class="card" aria-labelledby="recent-heading">
+    <div class="card-header"><h2 id="recent-heading" class="card-title">Recent visits</h2></div>
+    {% if recent %}
+      <ul class="divide-y divide-slate-100">{% for booking in recent %}{% include "portal/_booking.html" %}{% endfor %}</ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">No visits yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

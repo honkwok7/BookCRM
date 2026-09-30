@@ -1,0 +1,39 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Upcoming and past appointments at one business (portal/views.py PortalAppointmentsView).{% endcomment %}
+{% block title %}Appointments · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card mb-6" aria-labelledby="upcoming-heading">
+  <div class="card-header"><h2 id="upcoming-heading" class="card-title">Upcoming</h2></div>
+  {% if upcoming %}
+    <ul class="divide-y divide-slate-100">
+      {% for booking in upcoming %}
+        <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div class="min-w-0">
+            <a href="{% url 'portal-appointment' organization.slug booking.pk %}" class="font-medium">{{ booking.service.name }}</a>
+            <p class="text-sm text-slate-600"><time datetime="{{ booking.start_datetime|date:'c' }}">{{ booking.local_start|date:"l j F Y, H:i" }}</time> · {{ booking.staff.public_name }}</p>
+          </div>
+          <span class="flex flex-wrap items-center gap-2">
+            {% include "dashboard/status_badge.html" with status=booking.status label=booking.get_status_display %}
+            {% if booking.policy.can_reschedule %}<a href="{% url 'portal-reschedule' organization.slug booking.pk %}" class="btn btn-sm btn-secondary">Reschedule</a>{% endif %}
+            {% if booking.policy.can_cancel %}<a href="{% url 'portal-cancel' organization.slug booking.pk %}" class="btn btn-sm btn-ghost">Cancel</a>{% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="card-body text-sm text-slate-600">Nothing booked.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="history-heading">
+  <div class="card-header"><h2 id="history-heading" class="card-title">History</h2></div>
+  {% if page_obj.object_list %}
+    <ul class="divide-y divide-slate-100">{% for booking in page_obj.object_list %}{% include "portal/_booking.html" %}{% endfor %}</ul>
+    {% include "components/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    <p class="card-body text-sm text-slate-600">No past appointments.</p>
+  {% endif %}
+</section>
+{% endblock %}

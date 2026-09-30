@@ -1535,6 +1535,14 @@ A provider sees only their own schedule and customers.
 
 ### M5.4: Customer portal
 
+> **Status: done (2026-09-30, branch `m5.4-portal`).** See [PORTAL.md](PORTAL.md).
+> - `portal/`: overview of every business, then per business: overview, appointments (cancel
+>   and reschedule within the cancellation deadline), details and communication preferences.
+>   Book is the public wizard. Everything per business is filtered by that business.
+> - Tests: the same email at two businesses, unverified emails, 404s, nothing internal shown,
+>   policy (inside the deadline, taken or off-grid times), consents, local times.
+> - **Deviation:** forms wait for M6.2. `seed_demo` adds a portal customer.
+
 #### Objective
 Customer self-service.
 

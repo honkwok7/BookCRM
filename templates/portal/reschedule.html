@@ -1,0 +1,34 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Move an appointment (portal/views.py PortalRescheduleView): one day of free times with
+the same provider at the same place. Each time is a submit button; no JavaScript needed.{% endcomment %}
+{% block title %}Reschedule · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card" aria-labelledby="reschedule-heading">
+  <div class="card-header">
+    <h2 id="reschedule-heading" class="card-title">Choose a new time</h2>
+    <p class="mt-1 text-sm text-slate-600">{{ booking.service.name }} with {{ booking.staff.public_name }}, now <time datetime="{{ booking.start_datetime|date:'c' }}">{{ booking.local_start|date:"l j F, H:i" }}</time>. Times in {{ booking.zone }}.</p>
+  </div>
+  <div class="card-body grid gap-4">
+    {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      {% if previous_url %}<a href="{{ previous_url }}" class="btn btn-sm btn-secondary">Previous day</a>{% else %}<span></span>{% endif %}
+      <p class="font-semibold">{{ day|date:"l j F Y" }}</p>
+      <a href="{{ next_url }}" class="btn btn-sm btn-secondary">Next day</a>
+    </div>
+    {% if times %}
+      <form method="post" class="flex flex-wrap gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+        {% for time in times %}
+          <button type="submit" name="start" value="{{ time.value }}" class="btn btn-secondary tabular-nums">{{ time.label|time:"H:i" }}</button>
+        {% endfor %}
+      </form>
+    {% else %}
+      <p class="text-sm text-slate-600">No free times this day. Try another day.</p>
+    {% endif %}
+    <p><a href="{% url 'portal-appointment' organization.slug booking.pk %}">Keep the current time</a></p>
+  </div>
+</section>
+{% endblock %}

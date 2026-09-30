@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import redirect
@@ -16,7 +15,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView
 
 from bookings.models import Booking
-from bookings.selectors import bookings_for_customer_account, bookings_visible_to
+from bookings.selectors import bookings_visible_to
 from core.web import (
     HtmxPartialMixin,
     PlatformAdminMixin,
@@ -162,21 +161,6 @@ def volume_chart(volume: list[dict], highest: int) -> dict:
             }
         )
     return {"bars": bars, "width": len(volume) * BAR_WIDTH, "height": CHART_HEIGHT}
-
-
-class PortalHomeView(LoginRequiredMixin, TemplateView):
-    """Customer portal. Lists the account's own upcoming bookings in every organization."""
-
-    template_name = "dashboard/portal_home.html"
-
-    def get_context_data(self, **kwargs):
-        upcoming = (
-            bookings_for_customer_account(self.request.user)
-            .filter(start_datetime__gte=timezone.now())
-            .exclude(status__in=INACTIVE_STATUSES)
-            .order_by("start_datetime")[:20]
-        )
-        return super().get_context_data(**kwargs) | {"upcoming": upcoming}
 
 
 class SaasDashboardView(PlatformAdminMixin, TemplateView):

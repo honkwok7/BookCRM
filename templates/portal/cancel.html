@@ -1,0 +1,20 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Cancel an appointment (portal/views.py PortalCancelView).{% endcomment %}
+{% block title %}Cancel · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<section class="card" aria-labelledby="cancel-heading">
+  <div class="card-header"><h2 id="cancel-heading" class="card-title">Cancel this appointment?</h2></div>
+  <form method="post" class="card-body grid gap-4" novalidate>
+    {% csrf_token %}
+    {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
+    <p>{{ booking.service.name }} with {{ booking.staff.public_name }}, <time datetime="{{ booking.start_datetime|date:'c' }}">{{ booking.local_start|date:"l j F Y, H:i" }}</time> ({{ booking.zone }}).</p>
+    {% include "components/field.html" with field=form.reason %}
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn btn-danger">Cancel appointment</button>
+      <a href="{% url 'portal-appointment' organization.slug booking.pk %}" class="btn btn-secondary">Keep it</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
