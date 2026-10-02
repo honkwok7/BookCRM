@@ -81,6 +81,15 @@ class LogoutView(auth_views.LogoutView):
     """POST only (Django's LogoutView refuses GET), so a link or image cannot sign you out."""
 
     def post(self, request, *args, **kwargs):
+        impersonation = getattr(request, "impersonation", None)
+        if impersonation is not None:
+            # Signing out while impersonating ends the impersonation only (the admin stays
+            # signed in); saas.impersonation.ImpersonationMiddleware passes it on.
+            from saas.impersonation import end
+
+            end(request, impersonation)
+            messages.success(request, "Impersonation ended.")
+            return redirect("saas-user", pk=impersonation.target_user_id)
         response = super().post(request, *args, **kwargs)
         messages.success(request, "You've signed out.")
         return response

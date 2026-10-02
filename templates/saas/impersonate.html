@@ -1,0 +1,22 @@
+{% extends "layouts/saas.html" %}
+{% comment %}Start impersonating (saas/views.py ImpersonateView, saas/impersonation.py).{% endcomment %}
+{% block title %}Impersonate {{ account.email }} · Platform{% endblock %}
+{% block page_title %}Impersonate {{ account.email }}{% endblock %}
+{% block content %}
+<form method="post" class="card card-body grid max-w-2xl gap-4" novalidate>
+  {% csrf_token %}
+  {% include "components/alert.html" with level="warning" message="You'll see the app as this person, with their access, in one organization. It ends when the time is up or you end it. Every change you make is recorded with your name." %}
+  {% include "components/form_errors.html" with form=form %}
+  {% if form.organization.field.queryset.exists %}
+    <div class="grid gap-4 *:min-w-0 sm:grid-cols-2">
+      {% include "components/field.html" with field=form.organization %}
+      {% include "components/field.html" with field=form.minutes %}
+    </div>
+    {% include "components/field.html" with field=form.reason %}
+    {% include "components/field.html" with field=form.password %}
+    <div class="flex gap-2"><button type="submit" class="btn btn-danger">Start impersonating</button><a href="{% url 'saas-user' account.pk %}" class="btn btn-secondary">Cancel</a></div>
+  {% else %}
+    <p class="text-sm text-slate-700">They aren't an active member of an active organization.</p>
+  {% endif %}
+</form>
+{% endblock %}

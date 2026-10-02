@@ -1,0 +1,10 @@
+{% comment %}Shown on every page while a platform admin impersonates someone (saas/impersonation.py).{% endcomment %}
+<div role="status" class="sticky top-0 z-[60] bg-amber-500 text-slate-950">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm sm:px-6">
+    <p class="min-w-0"><span class="font-semibold">Impersonating {{ session.target_user.email }}</span> at {{ session.organization.name }} · ends {{ session.expires_at|date:"H:i" }} UTC · everything you do is audited.</p>
+    <form method="post" action="{% url 'impersonation-end' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-secondary">End impersonation</button>
+    </form>
+  </div>
+</div>

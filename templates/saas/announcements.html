@@ -1,0 +1,24 @@
+{% extends "layouts/saas.html" %}
+{% block title %}Announcements · Platform{% endblock %}
+{% block page_title %}Announcements{% endblock %}
+{% block page_actions %}<a href="{% url 'saas-announcement-new' %}" class="btn btn-primary">New announcement</a>{% endblock %}
+{% block content %}
+<div class="card overflow-x-auto">
+  <table class="table">
+    <thead><tr><th scope="col">Title</th><th scope="col">Audience</th><th scope="col">From (UTC)</th><th scope="col">Until (UTC)</th><th scope="col">State</th></tr></thead>
+    <tbody>
+      {% for announcement in announcements %}
+        <tr>
+          <td><a href="{% url 'saas-announcement' announcement.pk %}" class="font-medium">{{ announcement.title }}</a><span class="block text-xs text-slate-600">{{ announcement.get_level_display }}</span></td>
+          <td>{{ announcement.get_audience_display }}</td>
+          <td class="whitespace-nowrap">{{ announcement.starts_at|date:"j M Y H:i" }}</td>
+          <td class="whitespace-nowrap">{{ announcement.ends_at|date:"j M Y H:i"|default:"Until turned off" }}</td>
+          <td>{% if announcement.is_running %}{% include "components/badge.html" with label="Showing" level="success" %}{% elif announcement.is_active %}{% include "components/badge.html" with label="Scheduled or over" %}{% else %}{% include "components/badge.html" with label="Off" %}{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-slate-600">No announcements yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

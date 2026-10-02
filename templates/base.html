@@ -19,6 +19,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <a href="#main" class="sr-only z-50 rounded-md bg-white px-3 py-2 text-sm font-semibold shadow focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to main content</a>
+  {% if request.impersonation %}{% include "saas/_impersonation_banner.html" with session=request.impersonation %}{% endif %}
   {% block body %}{% endblock %}
   {% include "components/toasts.html" %}
 </body>

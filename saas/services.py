@@ -192,7 +192,8 @@ def set_user_active(*, user, active: bool, reason: str, actor) -> None:
     """Deactivate (can't sign in; their data stays) or reactivate an account."""
     if user.pk == actor.pk:
         raise PermissionDenied("You can't change your own account here.")
-    if user.is_platform_user and not actor.is_superuser:
+    # Not is_platform_user: that is False for a deactivated account, which must stay protected.
+    if (user.is_superuser or user.is_platform_staff) and not actor.is_superuser:
         raise PermissionDenied("Only a superuser can change another platform account.")
     reason = reason.strip()
     if not reason:
@@ -222,4 +223,84 @@ def set_platform_staff(*, user, value: bool, actor) -> None:
         AuditAction.PLATFORM_STAFF_GRANTED if value else AuditAction.PLATFORM_STAFF_REVOKED,
         actor=actor,
         target=user,
+    )
+
+
+# -- Announcements and feature flags (M5.5b) --------------------------------------------------
+
+ANNOUNCEMENT_FIELDS = ("title", "body", "audience", "level", "starts_at", "ends_at", "is_active")
+
+
+@transaction.atomic
+def save_announcement(*, announcement=None, actor, **fields):
+    from saas.announcements import forget_running
+    from saas.models import Announcement
+
+    created = announcement is None
+    announcement = announcement or Announcement(created_by=actor)
+    for field, value in fields.items():
+        if field not in ANNOUNCEMENT_FIELDS:
+            raise ValidationError(f"Unknown field: {field}")
+        setattr(announcement, field, value)
+    if announcement.ends_at and announcement.ends_at <= announcement.starts_at:
+        raise ValidationError("It must end after it starts.")
+    announcement.full_clean()
+    announcement.save()
+    transaction.on_commit(forget_running)
+    _audit(
+        AuditAction.ANNOUNCEMENT_SAVED,
+        actor=actor,
+        target=announcement,
+        created=created,
+        title=announcement.title,
+        audience=announcement.audience,
+        active=announcement.is_active,
+    )
+    return announcement
+
+
+@transaction.atomic
+def save_flag(*, flag=None, actor, key: str, description: str = "", enabled: bool = False):
+    from saas.flags import forget
+    from saas.models import FeatureFlag
+
+    flag = flag or FeatureFlag()
+    before = None if flag.pk is None else flag.enabled
+    old_key = flag.key
+    flag.key, flag.description, flag.enabled = key, description, enabled
+    flag.full_clean()
+    flag.save()
+    # A renamed flag: the old name must stop answering from the cache at once.
+    keys = {flag.key, old_key} - {""}
+    transaction.on_commit(lambda: [forget(name) for name in keys])
+    _audit(
+        AuditAction.FEATURE_FLAG_CHANGED,
+        actor=actor,
+        target=flag,
+        key=flag.key,
+        enabled={"from": before, "to": enabled},
+    )
+    return flag
+
+
+@transaction.atomic
+def set_flag_override(*, flag, organization, enabled: bool | None, actor) -> None:
+    """``enabled`` None removes the organization's override (the global setting applies)."""
+    from saas.flags import forget
+    from saas.models import FeatureFlagOverride
+
+    if enabled is None:
+        FeatureFlagOverride.objects.filter(flag=flag, organization=organization).delete()
+    else:
+        FeatureFlagOverride.objects.update_or_create(
+            flag=flag, organization=organization, defaults={"enabled": enabled}
+        )
+    transaction.on_commit(lambda: forget(flag.key))
+    _audit(
+        AuditAction.FEATURE_FLAG_CHANGED,
+        actor=actor,
+        organization=organization,
+        target=flag,
+        key=flag.key,
+        override=enabled,
     )

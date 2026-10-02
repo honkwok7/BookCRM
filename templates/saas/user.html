@@ -2,6 +2,7 @@
 {% comment %}One account (saas/views.py UserDetailView). "account": "user" is the signed-in admin.{% endcomment %}
 {% block title %}{{ account.email }} · Platform{% endblock %}
 {% block page_title %}{{ account.email }}{% endblock %}
+{% block page_actions %}{% if can_impersonate %}<a href="{% url 'saas-impersonate' account.pk %}" class="btn btn-secondary">Impersonate</a>{% endif %}{% endblock %}
 {% block content %}
 <div class="grid gap-6 *:min-w-0 lg:grid-cols-2">
   <section class="card" aria-labelledby="account-heading">
@@ -52,5 +53,17 @@
   </section>
   {% endif %}
   {% endif %}
+  <section class="card lg:col-span-2" aria-labelledby="sessions-heading">
+    <div class="card-header"><h2 id="sessions-heading" class="card-title">Impersonation sessions</h2></div>
+    {% if sessions %}
+      <ul class="divide-y divide-slate-100">
+        {% for session in sessions %}
+          <li class="px-4 py-2 text-sm"><span class="font-medium">{{ session.admin.email }}</span> at {{ session.organization.name }} · {{ session.reason }}<span class="block text-slate-600">{{ session.started_at|date:"j M Y H:i" }} UTC, {% if session.ended_at %}ended {{ session.ended_at|date:"H:i" }} ({{ session.get_end_reason_display }}){% else %}until {{ session.expires_at|date:"H:i" }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">None.</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

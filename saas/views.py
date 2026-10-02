@@ -30,9 +30,19 @@ from organizations.models import (
     OrganizationMembership,
     OrganizationRole,
 )
-from saas import services
-from saas.forms import OrganizationCreateForm, PlanForm, ReasonForm, SubscriptionForm
+from saas import impersonation, services
+from saas.forms import (
+    AnnouncementForm,
+    FlagForm,
+    ImpersonateForm,
+    OrganizationCreateForm,
+    OverrideForm,
+    PlanForm,
+    ReasonForm,
+    SubscriptionForm,
+)
 from saas.metrics import monthly_value, platform_overview
+from saas.models import Announcement, FeatureFlag, ImpersonationSession
 from staff.models import StaffProfile
 from subscriptions.models import Plan, Subscription
 
@@ -44,6 +54,8 @@ SECTIONS = (
     ("subscriptions", "Subscriptions", "saas-subscriptions"),
     ("plans", "Plans", "saas-plans"),
     ("users", "Users", "saas-users"),
+    ("announcements", "Announcements", "saas-announcements"),
+    ("flags", "Feature flags", "saas-flags"),
     ("audit", "Audit log", "saas-audit"),
 )
 
@@ -342,6 +354,14 @@ class UserDetailView(PlatformPage, View):
                 .order_by("organization__name")
             ),
             "reason_form": extra.pop("reason_form", ReasonForm()),
+            "sessions": list(
+                ImpersonationSession.objects.filter(target_user=account)
+                .select_related("admin", "organization")
+                .order_by("-started_at")[:10]
+            ),
+            "can_impersonate": account.is_active
+            and not account.is_platform_user
+            and account.pk != self.request.user.pk,
             **extra,
         }
 
@@ -408,3 +428,182 @@ class AuditLogView(PlatformPage, View):
                 "platform_type": AuditLog.ActorType.PLATFORM_ADMIN,
             },
         )
+
+
+# -- Announcements, feature flags, impersonation (M5.5b) --------------------------------------
+
+
+class AnnouncementListView(PlatformPage, View):
+    section = "announcements"
+
+    def get(self, request):
+        announcements = Announcement.objects.select_related("created_by")
+        return self.page("saas/announcements.html", {"announcements": announcements})
+
+
+class AnnouncementFormView(PlatformPage, View):
+    section = "announcements"
+
+    def get_announcement(self, pk):
+        if pk is None:
+            return None
+        announcement = Announcement.objects.filter(pk=pk).first()
+        if announcement is None:
+            raise Http404("Announcement not found")
+        return announcement
+
+    def get(self, request, pk=None):
+        announcement = self.get_announcement(pk)
+        return self.page(
+            "saas/announcement_form.html",
+            {"announcement": announcement, "form": AnnouncementForm(instance=announcement)},
+        )
+
+    def post(self, request, pk=None):
+        announcement = self.get_announcement(pk)
+        form = AnnouncementForm(
+            request.POST,
+            instance=Announcement.objects.get(pk=announcement.pk) if announcement else None,
+        )
+        if form.is_valid():
+            try:
+                services.save_announcement(
+                    announcement=announcement, actor=request.user, **form.cleaned_data
+                )
+            except ValidationError as error:
+                form.add_error(None, error_text(error))
+            else:
+                messages.success(request, "Announcement saved.")
+                return redirect("saas-announcements")
+        return self.page(
+            "saas/announcement_form.html",
+            {"announcement": announcement, "form": form},
+            status=422,
+        )
+
+
+class FlagListView(PlatformPage, View):
+    section = "flags"
+
+    def render_list(self, form, *, status=200):
+        flags = FeatureFlag.objects.annotate(override_count=Count("overrides"))
+        return self.page("saas/flags.html", {"flags": flags, "form": form}, status=status)
+
+    def get(self, request):
+        return self.render_list(FlagForm())
+
+    def post(self, request):
+        form = FlagForm(request.POST)
+        if form.is_valid():
+            try:
+                flag = services.save_flag(actor=request.user, **form.cleaned_data)
+            except ValidationError as error:
+                form.add_error(None, error_text(error))
+            else:
+                messages.success(request, f"Flag {flag.key} created.")
+                return redirect("saas-flag", pk=flag.pk)
+        return self.render_list(form, status=422)
+
+
+class FlagDetailView(PlatformPage, View):
+    section = "flags"
+
+    def get_flag(self, pk):
+        flag = FeatureFlag.objects.filter(pk=pk).first()
+        if flag is None:
+            raise Http404("Flag not found")
+        return flag
+
+    def render_flag(self, flag, *, flag_form=None, override_form=None, status=200):
+        initial = {"key": flag.key, "description": flag.description, "enabled": flag.enabled}
+        return self.page(
+            "saas/flag.html",
+            {
+                "flag": flag,
+                "flag_form": flag_form or FlagForm(initial=initial),
+                "override_form": override_form or OverrideForm(),
+                "overrides": flag.overrides.select_related("organization").order_by(
+                    "organization__name"
+                ),
+            },
+            status=status,
+        )
+
+    def get(self, request, pk):
+        return self.render_flag(self.get_flag(pk))
+
+    def post(self, request, pk):
+        flag = self.get_flag(pk)
+        if "organization" in request.POST:
+            form = OverrideForm(request.POST)
+            if form.is_valid():
+                organization = Organization.objects.filter(
+                    slug=form.cleaned_data["organization"]
+                ).first()
+                if organization is None:
+                    form.add_error("organization", "No organization has that address.")
+                else:
+                    state = form.cleaned_data["state"]
+                    services.set_flag_override(
+                        flag=flag,
+                        organization=organization,
+                        enabled=None if state == "default" else state == "on",
+                        actor=request.user,
+                    )
+                    messages.success(request, "Override saved.")
+                    return redirect("saas-flag", pk=pk)
+            return self.render_flag(flag, override_form=form, status=422)
+        form = FlagForm(request.POST)
+        if form.is_valid():
+            try:
+                services.save_flag(flag=flag, actor=request.user, **form.cleaned_data)
+            except ValidationError as error:
+                form.add_error(None, error_text(error))
+            else:
+                messages.success(request, "Flag saved.")
+                return redirect("saas-flag", pk=pk)
+        return self.render_flag(flag, flag_form=form, status=422)
+
+
+class ImpersonateView(UserDetailView):
+    """Start impersonating ``pk`` in one of their organizations. Step-up: the admin types their
+    password again. The form has its own page, away from the account page."""
+
+    def organizations(self, account):
+        return Organization.objects.filter(
+            memberships__user=account,
+            memberships__is_active=True,
+            is_active=True,
+            is_suspended=False,
+        ).order_by("name")
+
+    def render_form(self, account, form, *, status=200):
+        return self.page("saas/impersonate.html", {"account": account, "form": form}, status=status)
+
+    def get(self, request, pk):
+        account = self.get_user(pk)
+        return self.render_form(account, ImpersonateForm(organizations=self.organizations(account)))
+
+    def post(self, request, pk):
+        account = self.get_user(pk)
+        form = ImpersonateForm(request.POST, organizations=self.organizations(account))
+        if form.is_valid():
+            data = form.cleaned_data
+            try:
+                impersonation.start(
+                    request=request,
+                    admin=request.user,
+                    target=account,
+                    organization=data["organization"],
+                    reason=data["reason"],
+                    password=data["password"],
+                    minutes=data["minutes"],
+                )
+            except PermissionDenied as error:
+                form.add_error(None, str(error))
+                return self.render_form(account, form, status=403)
+            except ValidationError as error:
+                form.add_error(None, error_text(error))
+            else:
+                return redirect("home")
+        return self.render_form(account, form, status=422)

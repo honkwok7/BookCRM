@@ -1,0 +1,34 @@
+{% extends "layouts/saas.html" %}
+{% block title %}Feature flags · Platform{% endblock %}
+{% block page_title %}Feature flags{% endblock %}
+{% block content %}
+<div class="grid gap-6 *:min-w-0 lg:grid-cols-3">
+  <div class="card overflow-x-auto lg:col-span-2">
+    <table class="table">
+      <thead><tr><th scope="col">Flag</th><th scope="col">For everyone</th><th scope="col">Overrides</th></tr></thead>
+      <tbody>
+        {% for flag in flags %}
+          <tr>
+            <td><a href="{% url 'saas-flag' flag.pk %}" class="font-medium">{{ flag.key }}</a><span class="block text-xs text-slate-600">{{ flag.description }}</span></td>
+            <td>{% if flag.enabled %}{% include "components/badge.html" with label="On" level="success" %}{% else %}{% include "components/badge.html" with label="Off" %}{% endif %}</td>
+            <td class="tabular-nums">{{ flag.override_count }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="text-slate-600">No flags yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <section class="card" aria-labelledby="new-flag-heading">
+    <div class="card-header"><h2 id="new-flag-heading" class="card-title">New flag</h2></div>
+    <form method="post" class="card-body grid gap-4" novalidate>
+      {% csrf_token %}
+      {% include "components/form_errors.html" with form=form %}
+      {% include "components/field.html" with field=form.key %}
+      {% include "components/field.html" with field=form.description %}
+      {% include "components/field.html" with field=form.enabled %}
+      <div><button type="submit" class="btn btn-primary">Create flag</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

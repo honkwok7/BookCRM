@@ -4,7 +4,7 @@ views attach to the form."""
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -268,6 +268,18 @@ class StaffServicesForm(ServiceErrorsMixin, forms.Form):
 # -- Provider area (M5.3): time off and blocked time ----------------------------------------
 
 
+def wall_time(day, at, zone) -> datetime:
+    """``day`` at ``at`` in ``zone``, in UTC. A time the clocks skip (spring forward) is an
+    error; a time that happens twice (fall back) is the first of the two."""
+    local = datetime.combine(day, at, tzinfo=zone)
+    utc = local.astimezone(UTC)
+    if utc.astimezone(zone).replace(tzinfo=None) != local.replace(tzinfo=None):
+        raise forms.ValidationError(
+            f"{at:%H:%M} doesn't exist on {day.day} {day:%b}: the clocks change then."
+        )
+    return utc
+
+
 class BlockTimeForm(forms.Form):
     """Part of one day, in the organization's time zone."""
 
@@ -280,12 +292,20 @@ class BlockTimeForm(forms.Form):
         super().__init__(*args, prefix="block", **kwargs)
         self.zone = zone
 
+    def clean(self):
+        data = super().clean()
+        if all(data.get(name) for name in ("date", "start", "end")):
+            try:
+                self._period = (
+                    wall_time(data["date"], data["start"], self.zone),
+                    wall_time(data["date"], data["end"], self.zone),
+                )
+            except forms.ValidationError as error:
+                self.add_error(None, error)
+        return data
+
     def period(self):
-        data = self.cleaned_data
-        return (
-            datetime.combine(data["date"], data["start"], tzinfo=self.zone),
-            datetime.combine(data["date"], data["end"], tzinfo=self.zone),
-        )
+        return self._period
 
 
 class TimeOffRequestForm(forms.Form):
@@ -308,6 +328,6 @@ class TimeOffRequestForm(forms.Form):
     def period(self):
         data = self.cleaned_data
         return (
-            datetime.combine(data["first_day"], time.min, tzinfo=self.zone),
-            datetime.combine(data["last_day"] + timedelta(days=1), time.min, tzinfo=self.zone),
+            wall_time(data["first_day"], time.min, self.zone),
+            wall_time(data["last_day"] + timedelta(days=1), time.min, self.zone),
         )

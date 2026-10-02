@@ -32,6 +32,8 @@ Blocks: title, page_title, page_description, page_actions, content.
     </header>
 
     <main id="main" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      {# Platform announcements load on their own, keeping this page's queries unchanged. #}
+      <div hx-get="{% url 'announcements' %}?where=app" hx-trigger="load" hx-swap="outerHTML"></div>
       <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold tracking-tight text-slate-900">{% block page_title %}{% endblock %}</h1>
