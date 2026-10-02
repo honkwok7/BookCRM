@@ -192,7 +192,8 @@ def set_user_active(*, user, active: bool, reason: str, actor) -> None:
     """Deactivate (can't sign in; their data stays) or reactivate an account."""
     if user.pk == actor.pk:
         raise PermissionDenied("You can't change your own account here.")
-    if user.is_platform_user and not actor.is_superuser:
+    # Not is_platform_user: that is False for a deactivated account, which must stay protected.
+    if (user.is_superuser or user.is_platform_staff) and not actor.is_superuser:
         raise PermissionDenied("Only a superuser can change another platform account.")
     reason = reason.strip()
     if not reason:
@@ -265,10 +266,13 @@ def save_flag(*, flag=None, actor, key: str, description: str = "", enabled: boo
 
     flag = flag or FeatureFlag()
     before = None if flag.pk is None else flag.enabled
+    old_key = flag.key
     flag.key, flag.description, flag.enabled = key, description, enabled
     flag.full_clean()
     flag.save()
-    transaction.on_commit(lambda: forget(flag.key))
+    # A renamed flag: the old name must stop answering from the cache at once.
+    keys = {flag.key, old_key} - {""}
+    transaction.on_commit(lambda: [forget(name) for name in keys])
     _audit(
         AuditAction.FEATURE_FLAG_CHANGED,
         actor=actor,

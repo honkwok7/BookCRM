@@ -59,10 +59,15 @@ Support sometimes needs to see exactly what a user sees. From an account's page,
   change request (`impersonation.request`, with method and path); and every audit row the
   person's actions cause records the admin in `AuditLog.impersonator`.
 - **Refused while it runs:** the API, the Django admin, `/saas/`, password reset, switching
-  organization (including `?organization=`). Signing out ends the impersonation and returns to
-  the platform, still signed in as the admin.
-- It ends when the admin ends it, the time is up, the admin loses platform access or the person
-  is deactivated (checked on every request). Sessions are listed on the account's page.
+  organization (including `?organization=` and the organization header), and another
+  business's portal or booking pages (`/portal/` shows only the impersonated business).
+  Signing out (CSRF-checked, like any sign-out) ends the impersonation and returns to the
+  platform, still signed in as the admin.
+- It ends when the admin ends it or the time is up, and is revoked as soon as anything it
+  relies on goes: the admin's platform access, the person's account, their membership of that
+  organization, or the organization itself (suspended or inactive); and if the person becomes
+  a platform account. Checked on every request, so it never falls back to another of the
+  person's organizations. Sessions are listed on the account's page.
 
 This is the only way platform staff reach an organization's customers and appointments.
 

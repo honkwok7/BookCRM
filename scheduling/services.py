@@ -14,7 +14,7 @@ same time cannot both succeed.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -37,12 +37,16 @@ def _lock_staff(staff: StaffProfile) -> StaffProfile:
 
 
 def _check_period(start: datetime, end: datetime, *, now: datetime, longest: timedelta):
+    """Checks in UTC: two datetimes with the same tzinfo compare by wall clock in Python, which
+    is wrong across a clock change. Returns the period in UTC."""
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
     if start >= end:
         raise ValidationError("The end must be after the start.")
     if end <= now:
         raise ValidationError("That time has already passed.")
     if end - start > longest:
         raise ValidationError(f"Choose at most {_describe(longest)}.")
+    return start, end
 
 
 def _describe(span: timedelta) -> str:
@@ -80,7 +84,7 @@ def request_time_off(
     *, staff: StaffProfile, start: datetime, end: datetime, reason: str = "", actor=None
 ) -> TimeOff:
     now = timezone.now()
-    _check_period(start, end, now=now, longest=MAX_REQUEST)
+    start, end = _check_period(start, end, now=now, longest=MAX_REQUEST)
     with transaction.atomic():
         entry = TimeOff.objects.create(
             organization=staff.organization,
@@ -98,7 +102,7 @@ def block_time(
     *, staff: StaffProfile, start: datetime, end: datetime, reason: str = "", actor=None
 ) -> TimeOff:
     now = timezone.now()
-    _check_period(start, end, now=now, longest=MAX_BLOCK)
+    start, end = _check_period(start, end, now=now, longest=MAX_BLOCK)
     with transaction.atomic():
         _lock_staff(staff)
         clashes = appointments_during(staff, start, end).count()
