@@ -12,3 +12,9 @@ htmlcov
 .pytest_cache
 .ruff_cache
 .tailwind
+.env.*
+!.env.example
+!.env.production.example
+.github
+.claude
+node_modules

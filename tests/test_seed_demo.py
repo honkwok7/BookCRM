@@ -70,3 +70,18 @@ class SeedDemoBookingTests(TestCase):
         self.assertFalse(upcoming.filter(location__isnull=True).exists())
         past = Booking.objects.filter(organization=harmony, source=Booking.Source.IMPORT)
         self.assertTrue(past.exists())
+
+    def test_a_chosen_password_replaces_the_published_ones_and_is_not_printed(self):
+        out = StringIO()
+        call_command(
+            "seed_demo", allow_without_debug=True, password="Partner-Demo-2026", stdout=out
+        )
+        users = get_user_model().objects.filter(
+            email__in=["admin@bookcrm.local", "owner@harmony.local", "alex@example.test"]
+        )
+        self.assertEqual(len(users), 3)
+        for user in users:
+            self.assertTrue(user.check_password("Partner-Demo-2026"), user.email)
+            self.assertFalse(user.check_password("Demo12345!"), user.email)
+        self.assertNotIn("Partner-Demo-2026", out.getvalue())
+        self.assertNotIn("Demo12345!", out.getvalue())

@@ -1,5 +1,9 @@
 # Deployment
 
+A ready-made single-server setup (Docker, Caddy with automatic HTTPS, no published
+database or Redis ports) is in `docker-compose.prod.yml`; the step-by-step guide is
+`docs/DEPLOY_HETZNER.md`. This page lists the settings any deployment needs.
+
 ## Required environment variables
 - `DJANGO_SECRET_KEY`
 - `DJANGO_DEBUG=False`
@@ -58,3 +62,8 @@ Set `RUN_MIGRATIONS=1` on exactly one service (the web container in `docker-comp
 - Set `SITE_URL` to the public `https://` address; emailed links are built from it.
 - Set `DJANGO_SECURE_SSL_REDIRECT=True`.
 - Set secure cookie flags and trusted CSRF origins.
+- Once HTTPS works, set `SECURE_HSTS_SECONDS` (start with `3600`, later `31536000`).
+
+## Static files in production
+`collectstatic` skips `static/src/` (the Tailwind input, `core.apps.StaticFilesConfig`).
+WhiteNoise serves the collected files; uploads (`media/`) need the proxy or object storage.
