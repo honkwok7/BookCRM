@@ -131,6 +131,9 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
+!.env.production.example
 .venv
 env/
 venv/
@@ -193,3 +196,6 @@ django-appointment-system/
 *.sqlite3
 # Tailwind standalone CLI (downloaded by `manage.py tailwind`)
 .tailwind/
+
+# Site password for the production stack (deploy/auth/README.md)
+deploy/auth/*.caddy

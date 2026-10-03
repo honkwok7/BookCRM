@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",
+    "core.apps.StaticFilesConfig",  # django.contrib.staticfiles without static/src/
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -263,6 +263,8 @@ if TRUSTED_PROXY_COUNT:
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
+# HTTPS only from now on (browsers remember it). Off by default; turn it on once HTTPS works.
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0)
 # htmx sends the CSRF token from the page (hx-headers), so JavaScript never reads the cookie.
 CSRF_COOKIE_HTTPONLY = True
 

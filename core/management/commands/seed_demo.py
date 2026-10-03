@@ -164,8 +164,14 @@ class Command(BaseCommand):
             help="Seed even though DEBUG is off. Never on a production database: the demo "
             "accounts, including a platform superuser, have published passwords.",
         )
+        parser.add_argument(
+            "--password",
+            help="Give every demo account this password instead of the published ones (for a "
+            "demo others can reach). It applies to accounts this run creates, and isn't printed.",
+        )
 
     def handle(self, *args, **options):
+        self.password = options["password"]
         if not settings.DEBUG and not options["allow_without_debug"]:
             raise CommandError(
                 "seed_demo creates accounts with published passwords (including a platform "
@@ -183,6 +189,7 @@ class Command(BaseCommand):
     # -- building blocks ---------------------------------------------------------------------
 
     def _user(self, email, first_name="", last_name="", password=PASSWORD, **extra):
+        password = self.password or password
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
@@ -450,12 +457,16 @@ class Command(BaseCommand):
 
     def _report(self):
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
-        self.stdout.write(f"  Platform admin: {PLATFORM_ADMIN[0]} / {PLATFORM_ADMIN[1]}")
+        admin_password, password = PLATFORM_ADMIN[1], PASSWORD
+        if self.password:
+            admin_password = password = "(the --password you gave)"
+        self.stdout.write(f"  Platform admin: {PLATFORM_ADMIN[0]} / {admin_password}")
         for spec in ORGANIZATIONS:
-            self.stdout.write(f"  {spec['name']} (/book/{spec['slug']}/), password {PASSWORD}:")
+            self.stdout.write(f"  {spec['name']} (/book/{spec['slug']}/), password {password}:")
             for email, _, _, role, job_title in spec["members"]:
                 self.stdout.write(
                     f"    {role:<13} {email}" + (f"  ({job_title})" if job_title else "")
                 )
-        self.stdout.write(f"  Customer portal (/portal/): {PORTAL_CUSTOMER[0]} / {PASSWORD}")
-        self.stdout.write("  Development-only credentials.")
+        self.stdout.write(f"  Customer portal (/portal/): {PORTAL_CUSTOMER[0]} / {password}")
+        if not self.password:
+            self.stdout.write("  Development-only credentials.")
