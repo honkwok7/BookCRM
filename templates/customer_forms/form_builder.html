@@ -1,0 +1,95 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+One form's builder (customer_forms/web_views.py FormBuilderView). "state" (selectors.FormState)
+holds the draft and the latest published version; the questions shown are the draft's when
+there is one. Moves, removals, publishing and discarding re-render the #builder partial.
+{% endcomment %}
+{% block title %}{{ template.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ template.name }}{% endblock %}
+{% block page_description %}
+<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
+  <span>{{ template.get_kind_display }}</span>
+  {% if not template.is_active %}{% include "components/badge.html" with label="Inactive" %}{% endif %}
+  {% for service in template.services.all %}{% if forloop.first %}<span>Given with:</span>{% endif %}{% include "components/badge.html" with label=service.name level="brand" %}{% endfor %}
+</div>
+{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'app-form-list' %}" class="btn btn-secondary">All forms</a>
+  <a href="{% url 'app-form-settings' template.pk %}" class="btn btn-secondary" hx-get="{% url 'app-form-settings' template.pk %}" hx-target="#modal-body">
+    {% include "components/icon.html" with name="pencil" class="size-4" %}Settings
+  </a>
+{% endblock %}
+{% block content %}
+{% partialdef builder inline %}
+<div id="builder" class="grid max-w-3xl gap-6">
+  {% if section_error %}{% include "components/alert.html" with level="error" message=section_error %}{% endif %}
+  {% if section_message %}{% include "components/alert.html" with level="success" message=section_message %}{% endif %}
+
+  <section class="card" aria-labelledby="version-heading">
+    <div class="card-body flex flex-wrap items-center justify-between gap-4">
+      <div class="min-w-0">
+        <h2 id="version-heading" class="font-semibold">
+          {% if state.has_changes and state.published %}Unpublished changes{% elif state.has_changes %}Draft, not published yet{% elif state.published %}Version {{ state.published.number }} is published{% else %}No questions yet{% endif %}
+        </h2>
+        <p class="text-sm text-slate-600">
+          {% if state.has_changes and state.published %}Customers still get version {{ state.published.number }} until you publish.
+          {% elif state.has_changes %}Customers get the form once it's published.
+          {% elif state.published %}Published {{ state.published.published_at|date:"j M Y, H:i" }}. Edit a question to start version {{ state.published.number|add:1 }}.
+          {% else %}Add the questions customers should answer, then publish.{% endif %}
+        </p>
+      </div>
+      {% if state.has_changes %}
+        <div class="flex flex-wrap gap-2">
+          {% if state.published %}
+            <form method="post" action="{% url 'app-form-discard' template.pk %}" hx-post="{% url 'app-form-discard' template.pk %}" hx-target="#builder" hx-swap="outerHTML" hx-confirm="Discard the unpublished changes and go back to version {{ state.published.number }}?">
+              {% csrf_token %}<button type="submit" class="btn btn-secondary btn-sm">Discard changes</button>
+            </form>
+          {% endif %}
+          <form method="post" action="{% url 'app-form-publish' template.pk %}" hx-post="{% url 'app-form-publish' template.pk %}" hx-target="#builder" hx-swap="outerHTML">
+            {% csrf_token %}<button type="submit" class="btn btn-primary btn-sm">Publish{% if state.published %} version {{ state.draft.number }}{% endif %}</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="questions-heading">
+    <div class="card-header flex flex-wrap items-center justify-between gap-2">
+      <h2 id="questions-heading" class="card-title">Questions{% if questions %} ({{ questions|length }}){% endif %}</h2>
+      <a href="{% url 'app-form-question-new' template.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-form-question-new' template.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="plus" class="size-4" %}Add question</a>
+    </div>
+    {% if template.description %}<p class="border-b border-slate-100 px-4 py-3 text-sm text-slate-700 sm:px-6">{{ template.description|linebreaksbr }}</p>{% endif %}
+    {% if questions %}
+      <ol class="divide-y divide-slate-100">
+        {% for question in questions %}
+          <li class="flex flex-wrap items-start gap-3 px-4 py-3 sm:px-6">
+            <span class="w-6 shrink-0 pt-0.5 text-sm font-semibold text-slate-600 tabular-nums">{{ forloop.counter }}.</span>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium">{{ question.label }}{% if question.required %} <span class="text-sm font-normal text-red-700">(required)</span>{% endif %}</p>
+              <p class="text-sm text-slate-600">{{ question.get_type_display }}{% if question.help_text %} · {{ question.help_text }}{% endif %}</p>
+              {% if question.options %}<ul class="mt-1 flex flex-wrap gap-1">{% for option in question.options %}<li>{% include "components/badge.html" with label=option %}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="flex shrink-0 items-center gap-1">
+              <form method="post" action="{% url 'app-form-question-move' question.pk %}" hx-post="{% url 'app-form-question-move' question.pk %}" hx-target="#builder" hx-swap="outerHTML">
+                {% csrf_token %}<input type="hidden" name="to" value="up">
+                <button type="submit" class="btn btn-ghost btn-sm" {% if forloop.first %}disabled{% endif %}>{% include "components/icon.html" with name="chevron-down" class="size-4 rotate-180" %}<span class="sr-only">Move “{{ question.label }}” up</span></button>
+              </form>
+              <form method="post" action="{% url 'app-form-question-move' question.pk %}" hx-post="{% url 'app-form-question-move' question.pk %}" hx-target="#builder" hx-swap="outerHTML">
+                {% csrf_token %}<input type="hidden" name="to" value="down">
+                <button type="submit" class="btn btn-ghost btn-sm" {% if forloop.last %}disabled{% endif %}>{% include "components/icon.html" with name="chevron-down" class="size-4" %}<span class="sr-only">Move “{{ question.label }}” down</span></button>
+              </form>
+              <a href="{% url 'app-form-question-edit' question.pk %}" class="btn btn-ghost btn-sm" hx-get="{% url 'app-form-question-edit' question.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}<span class="sr-only">Edit “{{ question.label }}”</span></a>
+              <form method="post" action="{% url 'app-form-question-delete' question.pk %}" hx-post="{% url 'app-form-question-delete' question.pk %}" hx-target="#builder" hx-swap="outerHTML" hx-confirm="Remove this question?">
+                {% csrf_token %}<button type="submit" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="trash" class="size-4" %}<span class="sr-only">Remove “{{ question.label }}”</span></button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      {% include "components/empty_state.html" with title="No questions yet" message="Add questions one at a time: short answers, dates, yes or no, choices and a typed signature." icon="pencil" %}
+    {% endif %}
+  </section>
+</div>
+{% endpartialdef %}
+{% endblock %}

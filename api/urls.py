@@ -5,6 +5,7 @@ from api.search import GlobalSearchView
 from bookings.views import BookingViewSet, WaitlistViewSet
 from core.audit_api import AuditLogViewSet
 from crm.views import CustomerNoteViewSet, CustomerViewSet, TagViewSet
+from customer_forms.views import FormQuestionViewSet, FormTemplateViewSet
 from locations.views import LocationClosureViewSet, LocationViewSet
 from scheduling.views import (
     AvailabilityExceptionViewSet,
@@ -38,6 +39,8 @@ router.register("tags", TagViewSet, basename="tag")
 router.register("customer-notes", CustomerNoteViewSet, basename="customer-note")
 router.register("waitlist", WaitlistViewSet, basename="waitlist")
 router.register("audit-logs", AuditLogViewSet, basename="audit-log")
+router.register("forms", FormTemplateViewSet, basename="form")
+router.register("form-questions", FormQuestionViewSet, basename="form-question")
 
 urlpatterns = [
     path("search/", GlobalSearchView.as_view(), name="global-search"),

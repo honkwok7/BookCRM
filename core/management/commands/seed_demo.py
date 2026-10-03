@@ -22,6 +22,8 @@ from bookings.services import create_booking, record_past_booking
 from crm.activity import Kind, booking_metadata, record_activity
 from crm.models import CustomerNote, Tag
 from crm.services import add_customer_tag, create_customer, create_note, create_tag
+from customer_forms.models import FormTemplate
+from customer_forms.services import add_question, create_template, publish
 from locations.models import Location
 from locations.services import create_location, ensure_default_location, set_location_hours
 from organizations.models import Organization, OrganizationMembership, OrganizationRole
@@ -91,6 +93,30 @@ ORGANIZATIONS = [
             ("Samuel Ortiz", "samuel@example.test", "+14165550105"),
             ("Hannah Kim", "hannah@example.test", "+14165550106"),
             ("Leo Martin", "", "+14165550107"),  # phone-only walk-in client
+        ],
+        # M6.1: a published intake form, given with the chiropractic assessment.
+        "forms": [
+            {
+                "name": "New client intake",
+                "kind": "intake",
+                "description": "Please fill this in before your first visit. It takes about "
+                "two minutes.",
+                "services": ["Initial Chiropractic Assessment"],
+                "questions": [
+                    ("Date of birth", "date", True, []),
+                    ("What brings you in today?", "textarea", True, []),
+                    ("Pain level today (0 to 10)", "number", False, []),
+                    (
+                        "Where do you feel discomfort?",
+                        "multi_select",
+                        False,
+                        ["Neck", "Upper back", "Lower back", "Shoulders", "Hips"],
+                    ),
+                    ("Have you seen a chiropractor before?", "yes_no", True, []),
+                    ("Current medications", "textarea", False, []),
+                    ("Signature", "signature_placeholder", True, []),
+                ],
+            }
         ],
         "tags": {
             ("VIP", "#f59e0b"): ["alex@example.test", "grace@example.test"],
@@ -321,6 +347,24 @@ class Command(BaseCommand):
                 if not provider.offerings.filter(service=service).exists():
                     add_offering(staff=provider, service=service)  # at all their locations
                 services.append((service, staff_by_email[provider_email]))
+
+        for form in spec.get("forms", []):
+            if FormTemplate.objects.filter(organization=organization, name=form["name"]).exists():
+                continue
+            template = create_template(
+                organization=organization,
+                name=form["name"],
+                kind=form["kind"],
+                description=form["description"],
+                services=Service.objects.filter(
+                    organization=organization, name__in=form["services"]
+                ),
+            )
+            for label, kind, required, options in form["questions"]:
+                add_question(
+                    template=template, label=label, type=kind, required=required, options=options
+                )
+            publish(template=template)
 
         customers = []
         for name, email, phone in spec["customers"]:

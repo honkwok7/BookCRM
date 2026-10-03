@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "notifications",
     "subscriptions",
     "dashboard",
+    "customer_forms",
     "saas",
     "api",
 ]
