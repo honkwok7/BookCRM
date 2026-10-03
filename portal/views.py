@@ -31,11 +31,13 @@ from bookings.models import Booking
 from bookings.services import cancel_booking, reschedule_booking
 from core.exceptions import ConflictError, DomainError
 from crm.services import update_customer
+from customer_forms.customer_views import fill_page, take_answers
 from portal.forms import CancelForm, ProfileForm
 from portal.policy import change_policy, local_time, localize, zone_for
 from portal.selectors import (
     portal_bookings,
     portal_customer,
+    portal_form_assignments,
     portal_organization,
     portal_organizations,
 )
@@ -87,6 +89,9 @@ class PortalOrganizationMixin(LoginRequiredMixin):
     def bookings(self):
         return portal_bookings(self.request.user, self.organization)
 
+    def forms(self):
+        return portal_form_assignments(self.request.user, self.organization)
+
     def get_booking(self, pk) -> Booking:
         booking = self.bookings().filter(pk=pk).first()
         if booking is None:
@@ -101,6 +106,10 @@ class PortalOrganizationMixin(LoginRequiredMixin):
         ]
         if self.organization.booking_page_enabled:
             tabs.append(("book", "Book", reverse("public-booking", args=[slug])))
+        waiting = self.forms().filter(status="pending").count()
+        if waiting or self.section == "forms" or self.forms().exists():
+            label = f"Forms ({waiting})" if waiting else "Forms"
+            tabs.append(("forms", label, reverse("portal-forms", args=[slug])))
         tabs.append(("profile", "My details", reverse("portal-profile", args=[slug])))
         return [
             {"label": label, "url": url, "active": key == self.section} for key, label, url in tabs
@@ -295,3 +304,42 @@ class PortalProfileView(PortalOrganizationMixin, View):
                 messages.success(request, "Your details are saved.")
                 return redirect("portal-profile", slug=slug)
         return self.page(self.template_name, {"customer": customer, "form": form}, status=422)
+
+
+class PortalFormsView(PortalOrganizationMixin, View):
+    """Forms the business asked for: waiting first, then completed (M6.2)."""
+
+    section = "forms"
+
+    def get(self, request, slug):
+        forms = self.forms()
+        return self.page(
+            "portal/forms.html",
+            {
+                "waiting": list(forms.filter(status="pending").order_by("created_at")),
+                "completed": list(forms.filter(status="completed").order_by("-completed_at")[:20]),
+            },
+        )
+
+
+class PortalFormView(PortalOrganizationMixin, View):
+    """Fill in one form. The customer sees their questions, never the stored answers."""
+
+    section = "forms"
+
+    def get_assignment(self, pk):
+        assignment = self.forms().filter(pk=pk).first()
+        if assignment is None:
+            raise Http404("Form not found")
+        return assignment
+
+    def extra(self):
+        return {"template": "portal/form.html", "tabs": self.tabs()}
+
+    def get(self, request, slug, pk):
+        assignment = self.get_assignment(pk)
+        return fill_page(request, assignment, action=request.path, **self.extra())
+
+    def post(self, request, slug, pk):
+        assignment = self.get_assignment(pk)
+        return take_answers(request, assignment, action=request.path, **self.extra())

@@ -308,6 +308,18 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
         customer=duplicate, status=waiting, service_id__in=target_services
     ).update(status=WaitlistEntry.Status.CLOSED)
     WaitlistEntry.objects.filter(customer=duplicate).update(customer=target)
+    # Forms too (M6.2). One waiting copy per form and customer: the target's stays.
+    from customer_forms.models import FormAssignment
+
+    pending = FormAssignment.Status.PENDING
+    FormAssignment.objects.filter(
+        customer=duplicate,
+        status=pending,
+        template_id__in=FormAssignment.objects.filter(customer=target, status=pending).values(
+            "template_id"
+        ),
+    ).update(status=FormAssignment.Status.CANCELLED, cancelled_at=timezone.now())
+    FormAssignment.objects.filter(customer=duplicate).update(customer=target)
     duplicate.delete()  # before saving target: target may take over the duplicate's email
     target.save()
 
@@ -383,8 +395,17 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     WaitlistEntry.objects.filter(pk__in=entry_ids).update(
         customer_name=ANONYMIZED_NAME, customer_email="", customer_phone=""
     )
+    # Form answers are personal data: deleted. Waiting forms are cancelled (M6.2).
+    from customer_forms.models import FormAssignment, FormSubmission
+
+    FormSubmission.objects.filter(assignment__customer=customer).delete()
+    FormAssignment.objects.filter(customer=customer, status=FormAssignment.Status.PENDING).update(
+        status=FormAssignment.Status.CANCELLED, cancelled_at=timezone.now()
+    )
     NotificationLog.objects.filter(
-        Q(related_booking__in=bookings) | Q(related_waitlist_entry__in=entry_ids)
+        Q(related_booking__in=bookings)
+        | Q(related_waitlist_entry__in=entry_ids)
+        | Q(related_form_assignment__customer=customer)
     ).update(recipient_email="", recipient=None, failure_reason="")
     if own_account:
         # What they did themselves (booked, cancelled, ...) no longer points to their account.

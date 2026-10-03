@@ -1,7 +1,7 @@
 # Forms
 
-Businesses build intake, consent and questionnaire forms for their customers (M6.1). Giving
-them to customers and collecting answers follows in M6.2.
+Businesses build intake, consent and questionnaire forms (M6.1), give them to customers, and
+read the answers (M6.2).
 
 The app is `customer_forms` (not `forms`, so it can't be confused with `django.forms`); the
 pages are under `/app/forms/`.
@@ -72,6 +72,45 @@ All endpoints need `forms.manage` and are scoped to the request's organization.
 - Errors carry a `code`: `name_required`, `duplicate`, `invalid_service`, `invalid_type`,
   `label_required`, `invalid_options`, `too_many`, `no_questions`, `nothing_to_publish`,
   `nothing_to_discard`, `stale` (the question was removed from the draft).
+
+## Giving forms to customers (M6.2)
+
+A `FormAssignment` gives one customer the latest **published** version of an **active** form.
+There is at most one waiting copy of a form per customer (a database constraint).
+
+- **When they book.** Booking a service linked to forms gives them those forms, in the booking
+  transaction (`customer_forms.assignments.assign_for_booking`, called by
+  `bookings.services.create_booking`). An **intake** form is asked for once per customer: not
+  again while one is waiting or after it was completed. **Consent** forms and
+  **questionnaires** are asked for each appointment (not while one is still waiting). A
+  rescheduled appointment asks for nothing new. When the booking sends its confirmation, the
+  customer also gets a "please fill in" email.
+- **By hand.** On the customer's record, Forms tab, "Send a form" (`customers.manage`), with or
+  without the email. A waiting form can be cancelled there; its link then stops working.
+- **Email link.** `/forms/<signed link>/` needs no account. The link is signed with the site's
+  secret and dated (`django.core.signing`), works for `FORM_LINK_DAYS` days (default 30), and
+  only while the form is waiting; nothing secret is stored. An expired link shows "This link has
+  expired" (410); a forged one is a 404; so is one for a suspended business.
+- **Portal.** Signed-in customers see a "Forms" tab at each business (with the number to do)
+  and fill them in there. It lists only forms given to *their* customer records at that
+  business.
+
+### Answers
+
+- Validated against the version's questions (required, option lists, numbers, dates), stored as
+  `FormSubmission` (time, account if signed in, IP address) and one `FormAnswer` per question
+  (`value` JSON: text, decimal as text, ISO date, true/false, a choice or a list of choices).
+- A form is completed once; a second submission is refused (409 `not_waiting`).
+- Completing adds a "Form completed" entry to the customer's timeline. Neither the timeline nor
+  the audit log (`form.assigned`, `form.assignment_cancelled`, `form.completed`) ever holds
+  the answers: only the form id and version.
+- **Who reads them.** The Forms tab on the customer record lists their forms. The answers page
+  needs `customers.view` (owners, managers, receptionists); a provider sees that a form
+  exists, not what was answered.
+- **Privacy.** Anonymizing (or deleting) a customer deletes their answers and cancels their
+  waiting forms. Merging two records moves the duplicate's forms; where both waited for the
+  same form, the duplicate's copy is cancelled.
+- A form customers were given can't be deleted (409 `in_use`): make it inactive instead.
 
 ## Demo data
 

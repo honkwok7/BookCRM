@@ -1,0 +1,34 @@
+{% comment %}
+The customer's form (customer_forms/answers.py AnswerForm), for the emailed link and the portal.
+"assignment", "form", "action", "done". Shows a thank-you or "no longer open" instead of the
+questions once the form isn't waiting any more.
+{% endcomment %}
+{% if done %}
+  <div class="card card-body grid gap-2">
+    {% include "components/alert.html" with level="success" title="Thank you" message="Your answers were sent to "|add:assignment.organization.name|add:"." %}
+  </div>
+{% elif assignment.status != "pending" %}
+  <div class="card card-body">
+    {% if assignment.status == "completed" %}
+      {% include "components/alert.html" with level="info" title="Already filled in" message="This form was already completed. Thank you." %}
+    {% else %}
+      {% include "components/alert.html" with level="info" title="No longer needed" message="This form is no longer open. If you think that's a mistake, please contact the business." %}
+    {% endif %}
+  </div>
+{% else %}
+  <form method="post" action="{{ action }}" class="card" novalidate>
+    {% csrf_token %}
+    <div class="card-header block">
+      <h2 class="card-title">{{ assignment.template.name }}</h2>
+      {% if assignment.template.description %}<p class="mt-1 text-sm text-slate-700">{{ assignment.template.description|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="card-body grid gap-6">
+      {% include "components/form_errors.html" with form=form %}
+      {% for question, field in form.rows %}
+        {% include "components/field.html" with field=field %}
+      {% endfor %}
+      <p class="text-sm text-slate-600">Only {{ assignment.organization.name }} sees your answers.</p>
+      <div><button type="submit" class="btn btn-primary">Send my answers</button></div>
+    </div>
+  </form>
+{% endif %}

@@ -1,0 +1,8 @@
+{% extends "layouts/public.html" %}
+{% comment %}An emailed form link past its validity (customer_forms/links.py).{% endcomment %}
+{% block title %}Link expired{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  {% include "components/alert.html" with level="warning" title="This link has expired" message="Please ask the business to send you the form again, or sign in to your portal to find it there." %}
+</div>
+{% endblock %}

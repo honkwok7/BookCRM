@@ -113,3 +113,81 @@ class FormQuestion(BaseUUIDModel):
 
     def __str__(self) -> str:
         return self.label
+
+
+class FormAssignment(BaseUUIDModel):
+    """A published form version given to one customer (M6.2): when they book a linked service,
+    or by hand from their CRM record. Completed once, through the portal or an emailed link."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class Source(models.TextChoices):
+        BOOKING = "booking", "Booking"
+        MANUAL = "manual", "Sent by the team"
+
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="+"
+    )
+    template = models.ForeignKey(FormTemplate, on_delete=models.PROTECT, related_name="assignments")
+    # The exact questions asked. Protected: a form customers were given can't be deleted.
+    version = models.ForeignKey(FormVersion, on_delete=models.PROTECT, related_name="assignments")
+    customer = models.ForeignKey(
+        "bookings.Customer", on_delete=models.CASCADE, related_name="form_assignments"
+    )
+    booking = models.ForeignKey(
+        "bookings.Booking",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="form_assignments",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    source = models.CharField(max_length=20, choices=Source.choices)
+    assigned_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["organization", "customer", "status"])]
+        constraints = [
+            # One waiting copy of a form per customer.
+            models.UniqueConstraint(
+                fields=["template", "customer"],
+                condition=Q(status="pending"),
+                name="form_assignment_one_pending",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.template} for {self.customer_id}"
+
+
+class FormSubmission(BaseUUIDModel):
+    assignment = models.OneToOneField(
+        FormAssignment, on_delete=models.CASCADE, related_name="submission"
+    )
+    submitted_at = models.DateTimeField()
+    # Who sent it: their account in the portal; empty through an emailed link.
+    submitted_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+
+class FormAnswer(BaseUUIDModel):
+    submission = models.ForeignKey(FormSubmission, on_delete=models.CASCADE, related_name="answers")
+    question = models.ForeignKey(FormQuestion, on_delete=models.CASCADE, related_name="answers")
+    # text/textarea/signature: str · number: str (as typed, decimal) · date: "YYYY-MM-DD"
+    # yes_no: bool · select: str · multi_select: list of str. Null: not answered.
+    value = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["submission", "question"], name="form_answer_once")
+        ]

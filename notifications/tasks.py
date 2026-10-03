@@ -17,6 +17,9 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
         "related_booking__location",
         "related_booking__organization",
         "related_waitlist_entry__customer",
+        "related_form_assignment__customer",
+        "related_form_assignment__template",
+        "related_form_assignment__organization",
     ).get(
         id=notification_log_id,
         organization_id=organization_id,
@@ -31,9 +34,15 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
     if not claimed:
         return
     booking, entry = log.related_booking, log.related_waitlist_entry
-    context = {"booking": booking, "entry": entry}
+    assignment = log.related_form_assignment
+    context = {"booking": booking, "entry": entry, "assignment": assignment}
     if entry is not None and booking is not None:
         context["booking_url"] = f"{settings.SITE_URL}/book/{booking.organization.slug}/"
+    if assignment is not None:
+        from customer_forms.links import link_for
+
+        context["form_url"] = link_for(assignment)
+        context["link_days"] = settings.FORM_LINK_DAYS
     try:
         text_body = render_to_string(f"emails/{template_base}.txt", context)
         html_body = render_to_string(f"emails/{template_base}.html", context)
@@ -56,6 +65,8 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
     # customer whose cancellation freed the time.
     if entry is not None:
         customer = entry.customer
+    elif assignment is not None:
+        customer = assignment.customer
     else:
         customer = booking.customer if booking else None
     record_activity(
@@ -66,5 +77,6 @@ def send_templated_email(self, *, notification_log_id, organization_id, subject,
             "notification_type": log.notification_type,
             # Not the freed booking's reference: it's another customer's appointment.
             "reference": booking.reference if booking and entry is None else "",
+            **({"form": str(assignment.template_id)} if assignment is not None else {}),
         },
     )

@@ -223,6 +223,8 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@schedula.local"
 # Base URL for links in emails. Never derived from the request's Host header, which a client
 # controls (password-reset poisoning).
 SITE_URL = env("SITE_URL", default="http://localhost:8000").rstrip("/")
+# How long an emailed "fill in this form" link works (customer_forms/links.py).
+FORM_LINK_DAYS = env.int("FORM_LINK_DAYS", default=30)
 
 APP_BASE_URL = env("APP_BASE_URL", default="http://localhost:8000")
 

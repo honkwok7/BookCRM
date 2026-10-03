@@ -1,0 +1,25 @@
+{% extends "layouts/app.html" %}
+{% comment %}One customer's answers to a form, read-only (customer_forms/customer_views.py AnswersView).{% endcomment %}
+{% block title %}{{ assignment.template.name }} · {{ customer.display_name }}{% endblock %}
+{% block page_title %}{{ assignment.template.name }}{% endblock %}
+{% block page_description %}
+<p class="mt-1 text-sm text-slate-600">{{ customer.display_name }} · version {{ assignment.version.number }} · {% if assignment.status == "completed" %}completed {{ assignment.completed_at|date:"j M Y, H:i" }}{% elif assignment.status == "pending" %}waiting since {{ assignment.created_at|date:"j M Y" }}{% else %}cancelled{% endif %}</p>
+{% endblock %}
+{% block page_actions %}<a href="{% url 'crm-customer-tab' customer.pk 'forms' %}" class="btn btn-secondary">All their forms</a>{% endblock %}
+{% block content %}
+<section class="card max-w-3xl" aria-labelledby="answers-heading">
+  <div class="card-header"><h2 id="answers-heading" class="card-title">{% if assignment.status == "completed" %}Answers{% else %}Questions{% endif %}</h2></div>
+  {% if assignment.status == "completed" and not has_submission %}
+    <p class="card-body text-sm text-slate-600">The answers were deleted when the customer was anonymized.</p>
+  {% else %}
+    <dl class="divide-y divide-slate-100">
+      {% for row in rows %}
+        <div class="grid gap-1 px-4 py-3 *:min-w-0 sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-slate-700">{{ row.question.label }}</dt>
+          <dd class="text-sm sm:col-span-2">{% if row.answer %}{{ row.answer|linebreaksbr }}{% elif assignment.status == "completed" %}<span class="text-slate-600">No answer</span>{% else %}<span class="text-slate-600">Not answered yet</span>{% endif %}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  {% endif %}
+</section>
+{% endblock %}

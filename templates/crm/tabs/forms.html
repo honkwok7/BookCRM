@@ -1,0 +1,33 @@
+{% comment %}A customer's forms (crm/web_views.py context_forms, M6.2). Answers need customers.view.{% endcomment %}
+<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+  <p class="text-sm text-slate-600">Forms they were given, when they booked a linked service or by hand.</p>
+  {% if can_send_forms %}<a href="{% url 'crm-customer-form-send' customer.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'crm-customer-form-send' customer.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="plus" class="size-4" %}Send a form</a>{% endif %}
+</div>
+<div class="card">
+  {% if assignments %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <caption class="sr-only">Forms</caption>
+        <thead><tr><th scope="col">Form</th><th scope="col">Given</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+          {% for assignment in assignments %}
+            <tr>
+              <td class="font-medium">{% if can_read_answers %}<a href="{% url 'crm-customer-form' customer.pk assignment.pk %}">{{ assignment.template.name }}</a>{% else %}{{ assignment.template.name }}{% endif %}<span class="block text-xs font-normal text-slate-600">Version {{ assignment.version.number }}</span></td>
+              <td class="whitespace-nowrap text-slate-700">{{ assignment.created_at|date:"j M Y" }}<span class="block text-xs text-slate-600">{% if assignment.booking %}With {{ assignment.booking.reference }}{% else %}{{ assignment.get_source_display }}{% endif %}</span></td>
+              <td>{% if assignment.status == "completed" %}{% include "components/badge.html" with label="Completed" level="success" %}<span class="block text-xs text-slate-600">{{ assignment.completed_at|date:"j M Y" }}</span>{% elif assignment.status == "pending" %}{% include "components/badge.html" with label="Waiting" level="warning" %}{% else %}{% include "components/badge.html" with label="Cancelled" %}{% endif %}</td>
+              <td class="text-right">
+                {% if can_send_forms and assignment.status == "pending" %}
+                  <form method="post" action="{% url 'crm-customer-form-cancel' customer.pk assignment.pk %}" hx-post="{% url 'crm-customer-form-cancel' customer.pk assignment.pk %}" hx-confirm="Cancel “{{ assignment.template.name }}” for this customer? Their link stops working.">
+                    {% csrf_token %}<button type="submit" class="btn btn-ghost btn-sm">Cancel<span class="sr-only"> {{ assignment.template.name }}</span></button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No forms yet" message="Forms linked to a service are given when they book it." icon="pencil" %}
+  {% endif %}
+</div>

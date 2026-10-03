@@ -60,3 +60,17 @@ def portal_customer(user, organization) -> Customer | None:
         customers.filter(user=user).order_by("-created_at").first()
         or customers.order_by("-created_at").first()
     )
+
+
+def portal_form_assignments(user, organization):
+    """Forms given to the customer here (M6.2), through any of their customer records."""
+    from customer_forms.models import FormAssignment
+
+    customers = (
+        Customer.objects.filter(organization=organization)
+        .filter(_customer_filter(user))
+        .exclude(status=Customer.Status.ANONYMIZED)
+    )
+    return FormAssignment.objects.filter(
+        organization=organization, customer__in=customers
+    ).select_related("template", "version", "organization", "booking")

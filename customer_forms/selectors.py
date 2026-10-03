@@ -63,3 +63,28 @@ def form_state(template: FormTemplate) -> FormState:
     draft = next((v for v in versions if v.published_at is None), None)
     published = next((v for v in versions if v.published_at is not None), None)
     return FormState(template=template, published=published, draft=draft)
+
+
+def customer_assignments(customer) -> QuerySet:
+    """A customer's forms, newest first, with what the CRM tab shows."""
+    from customer_forms.models import FormAssignment
+
+    return (
+        FormAssignment.objects.filter(customer=customer)
+        .select_related("template", "version", "booking", "assigned_by", "submission")
+        .order_by("-created_at")
+    )
+
+
+def answer_rows(assignment) -> list[dict]:
+    """The questions asked, in order, with the customer's answers as text."""
+    from customer_forms.answers import display_value
+
+    submission = getattr(assignment, "submission", None)
+    answers = {}
+    if submission is not None:
+        answers = {answer.question_id: answer.value for answer in submission.answers.all()}
+    return [
+        {"question": question, "answer": display_value(question, answers.get(question.pk))}
+        for question in assignment.version.questions.order_by("position")
+    ]

@@ -380,6 +380,10 @@ def create_booking(
             subject=booking,
             metadata=booking_metadata(booking),
         )
+    # Forms linked to the service (M6.2), emailed with the confirmation when it is sent.
+    from customer_forms.assignments import assign_for_booking
+
+    assign_for_booking(booking, actor=actor, notify=notify)
     if notify:
         queue_booking_notification(
             booking=booking,

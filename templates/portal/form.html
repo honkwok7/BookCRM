@@ -1,0 +1,11 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Fill in one form in the portal (portal/views.py PortalFormView).{% endcomment %}
+{% block title %}{{ assignment.template.name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<div class="grid max-w-2xl gap-4">
+  <p class="text-sm"><a href="{% url 'portal-forms' organization.slug %}">All forms</a></p>
+  {% include "customer_forms/_answer_form.html" %}
+</div>
+{% endblock %}

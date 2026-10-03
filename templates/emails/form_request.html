@@ -1,0 +1,4 @@
+<p>{{ assignment.organization.name }} asks you to fill in a form: <strong>{{ assignment.template.name }}</strong>.</p>
+{% if assignment.template.description %}<p>{{ assignment.template.description|linebreaksbr }}</p>{% endif %}
+<p><a href="{{ form_url }}">Fill in the form</a></p>
+<p>The link works for {{ link_days }} days. If you have an account, you'll also find the form in your portal.</p>

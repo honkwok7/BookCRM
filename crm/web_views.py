@@ -65,8 +65,7 @@ from crm.services import (
 from organizations.permissions import Capability
 from staff.selectors import is_provider_here
 
-# Profile tabs, in order: (slug, label). Forms and transactions are placeholders until their
-# milestones (M6 forms, payments later).
+# Profile tabs, in order: (slug, label). Transactions is a placeholder until payments.
 TABS = (
     ("overview", "Overview"),
     ("appointments", "Appointments"),
@@ -338,8 +337,18 @@ class CustomerDetailView(CustomerPageMixin, TemplateView):
         page = Paginator(entries, 50).get_page(self.request.GET.get("page"))
         return {"page_obj": page, "entries": describe_activity(page, customer)}
 
+    def context_forms(self, customer):
+        from customer_forms.selectors import customer_assignments
 
-TAB_TEMPLATES = {"overview", "appointments", "notes", "activity", "communications"}
+        return {
+            "assignments": customer_assignments(customer),
+            "can_read_answers": self.tenant.has(Capability.CUSTOMERS_VIEW),
+            "can_send_forms": can_manage_customers(self.tenant)
+            and customer.status != Customer.Status.ANONYMIZED,
+        }
+
+
+TAB_TEMPLATES = {"overview", "appointments", "notes", "activity", "communications", "forms"}
 
 
 def customer_tab_url(customer, tab: str) -> str:
@@ -356,6 +365,14 @@ def describe_activity(entries, customer) -> list[dict]:
         field.name: str(field.verbose_name).capitalize() for field in Customer._meta.fields
     }
     note_types = dict(CustomerNote.NoteType.choices)
+    from customer_forms.models import FormTemplate
+
+    form_names = {
+        str(pk): name
+        for pk, name in FormTemplate.objects.filter(organization=customer.organization).values_list(
+            "pk", "name"
+        )
+    }
     kind = CustomerActivity.Kind
     rows = []
     for entry in entries:
@@ -375,6 +392,8 @@ def describe_activity(entries, customer) -> list[dict]:
         elif entry.kind == kind.CUSTOMER_MERGED:
             moved = data.get("appointments_moved", 0)
             detail = f"{moved} appointment{'s' if moved != 1 else ''} moved"
+        elif data.get("form"):  # a completed form, or the email asking for it
+            detail = form_names.get(data["form"], "a deleted form")
         elif data.get("reference"):
             detail = data["reference"]
         rows.append(
