@@ -1,0 +1,38 @@
+{% extends "layouts/app.html" %}
+{% comment %}New form, or a form's settings (customer_forms/web_views.py). "template" is the form being edited.{% endcomment %}
+{% block title %}{% if template %}{{ template.name }} settings{% else %}New form{% endif %} · {{ organization.name }}{% endblock %}
+{% block page_title %}{% if template %}{{ template.name }} settings{% else %}New form{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-2xl">
+{% partialdef form inline %}
+<div class="grid gap-6">
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="closest div" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{% if template %}Form settings{% else %}New form{% endif %}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <div class="grid gap-4 *:min-w-0 sm:grid-cols-2">
+    {% include "components/field.html" with field=form.name %}
+    {% include "components/field.html" with field=form.kind %}
+  </div>
+  {% include "components/field.html" with field=form.description %}
+  {% if form.services.field.queryset.exists %}{% include "components/field.html" with field=form.services %}{% endif %}
+  {% if form.is_active %}{% include "components/field.html" with field=form.is_active %}{% endif %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% if template %}{% url 'app-form-builder' template.pk %}{% else %}{% url 'app-form-list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{% if template %}Save changes{% else %}Create form{% endif %}</button>
+  </div>
+</form>
+{% if template %}
+  <form method="post" action="{% url 'app-form-delete' template.pk %}" hx-post="{% url 'app-form-delete' template.pk %}" hx-confirm="Delete the form {{ template.name }} and all its versions?" class="border-t border-slate-200 pt-4">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger btn-sm">{% include "components/icon.html" with name="trash" class="size-4" %}Delete form</button>
+  </form>
+{% endif %}
+</div>
+{% endpartialdef %}
+</div>
+{% endblock %}

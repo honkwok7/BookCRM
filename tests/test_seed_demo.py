@@ -85,3 +85,16 @@ class SeedDemoBookingTests(TestCase):
             self.assertFalse(user.check_password("Demo12345!"), user.email)
         self.assertNotIn("Partner-Demo-2026", out.getvalue())
         self.assertNotIn("Demo12345!", out.getvalue())
+
+    def test_the_demo_has_a_published_intake_form(self):
+        from customer_forms.models import FormTemplate
+
+        for _ in range(2):  # idempotent
+            call_command("seed_demo", allow_without_debug=True, stdout=StringIO())
+        form = FormTemplate.objects.get(name="New client intake")
+        version = form.versions.get()
+        self.assertFalse(version.is_draft)
+        self.assertEqual(version.questions.count(), 7)
+        self.assertEqual(
+            list(form.services.values_list("name", flat=True)), ["Initial Chiropractic Assessment"]
+        )

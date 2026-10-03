@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 from api.urls import router
 from bookings.models import Customer
 from core.audit import snapshot
+from customer_forms.services import add_question, create_template
 from organizations.models import OrganizationRole
 from services.models import Service
 from tests import factories as f
@@ -54,6 +55,12 @@ B_OBJECT_FACTORIES = {
     "customer-note": lambda org, mark: f.CustomerNoteFactory(organization=org, content=mark),
     "waitlist": lambda org, mark: f.WaitlistEntryFactory(organization=org, customer_name=mark),
     "audit-log": lambda org, mark: f.AuditLogFactory(organization=org, metadata={"note": mark}),
+    "form": lambda org, mark: create_template(organization=org, name=f"{mark} intake"),
+    "form-question": lambda org, mark: add_question(
+        template=create_template(organization=org, name=f"{mark} consent"),
+        label=mark,
+        type="text",
+    ),
 }
 
 

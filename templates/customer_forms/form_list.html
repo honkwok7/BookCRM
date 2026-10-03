@@ -1,0 +1,39 @@
+{% extends "layouts/app.html" %}
+{% comment %}Forms list (customer_forms/web_views.py FormListView).{% endcomment %}
+{% block title %}Forms · {{ organization.name }}{% endblock %}
+{% block page_title %}Forms{% endblock %}
+{% block page_description %}<p class="mt-1 text-sm text-slate-600">Intake, consent and questionnaire forms your customers fill in.</p>{% endblock %}
+{% block page_actions %}
+  <a href="{% url 'app-form-new' %}" class="btn btn-primary" hx-get="{% url 'app-form-new' %}" hx-target="#modal-body">
+    {% include "components/icon.html" with name="plus" class="size-4" %}New form
+  </a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  {% if forms %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <caption class="sr-only">Forms</caption>
+        <thead><tr><th scope="col">Form</th><th scope="col">Kind</th><th scope="col">Version</th><th scope="col">Given with</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          {% for form in forms %}
+            <tr>
+              <td class="font-medium"><a href="{% url 'app-form-builder' form.pk %}">{{ form.name }}</a></td>
+              <td class="text-slate-700">{{ form.get_kind_display }}</td>
+              <td class="whitespace-nowrap text-slate-700">
+                {% if form.published_number %}Version {{ form.published_number }}{% else %}Not published{% endif %}
+                {% if form.published_number and form.draft_count %}<span class="block text-xs text-slate-600">Draft in progress</span>{% endif %}
+              </td>
+              <td class="text-slate-700">{% for service in form.services.all %}<span class="block">{{ service.name }}</span>{% empty %}<span class="text-slate-600">No service</span>{% endfor %}</td>
+              <td>{% if not form.is_active %}{% include "components/badge.html" with label="Inactive" %}{% elif form.published_number %}{% include "components/badge.html" with label="Published" level="success" %}{% else %}{% include "components/badge.html" with label="Draft" level="warning" %}{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% url 'app-form-new' as new_url %}
+    {% include "components/empty_state.html" with title="No forms yet" message="Build an intake or consent form, then link it to the services that need it." icon="pencil" action_url=new_url action_label="Create a form" %}
+  {% endif %}
+</div>
+{% endblock %}

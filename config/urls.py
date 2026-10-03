@@ -20,6 +20,7 @@ urlpatterns = [
     path("", include("locations.web_urls")),
     path("", include("staff.web_urls")),
     path("", include("services.web_urls")),
+    path("", include("customer_forms.web_urls")),
     path("", include("portal.urls")),
     path("", include("saas.urls")),
     path("admin/", admin.site.urls),

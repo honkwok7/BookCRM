@@ -1634,6 +1634,15 @@ All SaaS operations are possible without using `/admin/`.
 
 ### M6.1: Form templates and builder
 
+> **Status: done (2026-10-03, branch `m6.1-form-builder`).** See [FORMS.md](FORMS.md).
+> - The app is `customer_forms` (not `forms`: avoids confusion with `django.forms`).
+> - Versions as planned, made explicit: `FormVersion` (number, `published_at`); the builder edits
+>   the one draft, publishing freezes it, editing a published form copies it into a new draft.
+>   Questions keep a `key` across versions. `signature_placeholder` is a typed name for now.
+> - The service link is `FormTemplate.services`; assigning on booking is M6.2.
+> - API: `/api/v1/forms/` (+ `publish/`, `discard-draft/`) and `/api/v1/form-questions/`
+>   (+ `move/`). `seed_demo` adds a published intake form to Harmony.
+
 #### Objective
 Generic intake, consent and questionnaire forms.
 
