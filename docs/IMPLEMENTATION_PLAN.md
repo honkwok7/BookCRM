@@ -1679,6 +1679,16 @@ An owner builds a 10-question intake form.
 
 ### M6.2: Assignments, submissions, portal completion
 
+> **Status: done (2026-10-03, branch `m6.2-form-completion`).** See [FORMS.md](FORMS.md).
+> - `FormAssignment` (+ `source`, `assigned_by`, `cancelled_at`; one waiting copy per form and
+>   customer), `FormSubmission`, `FormAnswer`. No `due`/`token` columns: emailed links are
+>   signed and dated (`customer_forms/links.py`, `FORM_LINK_DAYS`), so nothing secret is stored.
+> - Booking a linked service assigns (intake once per customer; consent and questionnaires
+>   per appointment), emailed with the confirmation. Manual "Send a form" in the CRM.
+> - Portal "Forms" tab, `/forms/<link>/` for guests, CRM Forms tab and answers page
+>   (`customers.view`). Anonymizing deletes answers; merging moves forms.
+> - No assignment API yet (the plan named none); it belongs with M10.1's API consolidation.
+
 #### Objective
 Customers complete their assigned forms.
 

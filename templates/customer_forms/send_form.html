@@ -1,0 +1,30 @@
+{% extends "layouts/app.html" %}
+{% comment %}Give a customer a form (customer_forms/customer_views.py SendFormView).{% endcomment %}
+{% block title %}Send a form · {{ customer.display_name }}{% endblock %}
+{% block page_title %}Send a form to {{ customer.display_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Send a form</h2>{% endif %}
+  {% csrf_token %}
+  {% if form.template.field.queryset.exists %}
+    {% include "components/form_errors.html" with form=form %}
+    {% include "components/field.html" with field=form.template %}
+    {% include "components/field.html" with field=form.notify %}
+    <p class="text-sm text-slate-600">They can also fill it in from their portal if they have an account.</p>
+  {% else %}
+    <p class="text-sm text-slate-700">There are no published, active forms yet. Build one under Forms first.</p>
+  {% endif %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'crm-customer-tab' customer.pk 'forms' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    {% if form.template.field.queryset.exists %}<button type="submit" class="btn btn-primary">Send</button>{% endif %}
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

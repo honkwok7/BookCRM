@@ -26,4 +26,6 @@ urlpatterns = [
         name="portal-reschedule",
     ),
     path("portal/<slug:slug>/profile/", views.PortalProfileView.as_view(), name="portal-profile"),
+    path("portal/<slug:slug>/forms/", views.PortalFormsView.as_view(), name="portal-forms"),
+    path("portal/<slug:slug>/forms/<uuid:pk>/", views.PortalFormView.as_view(), name="portal-form"),
 ]

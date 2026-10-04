@@ -1,0 +1,43 @@
+{% extends "layouts/portal.html" %}
+{% comment %}Forms the business asked for (portal/views.py PortalFormsView).{% endcomment %}
+{% block title %}Forms · {{ organization.name }}{% endblock %}
+{% block page_title %}{{ organization.name }}{% endblock %}
+{% block content %}
+{% include "portal/_nav.html" %}
+<div class="grid gap-6">
+  <section class="card" aria-labelledby="waiting-heading">
+    <div class="card-header">
+      <h2 id="waiting-heading" class="card-title">To fill in</h2>
+      <p class="mt-1 text-sm text-slate-600">{{ organization.name }} asks you to fill these in, ideally before your appointment.</p>
+    </div>
+    {% if waiting %}
+      <ul class="divide-y divide-slate-100">
+        {% for assignment in waiting %}
+          <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <div class="min-w-0">
+              <p class="font-medium">{{ assignment.template.name }}</p>
+              <p class="text-sm text-slate-600">{{ assignment.template.get_kind_display }}{% if assignment.booking %} · for {{ assignment.booking.reference }}{% endif %}</p>
+            </div>
+            <a href="{% url 'portal-form' organization.slug assignment.pk %}" class="btn btn-primary btn-sm">Fill in</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="card-body text-sm text-slate-600">Nothing to fill in right now.</p>
+    {% endif %}
+  </section>
+  {% if completed %}
+    <section class="card" aria-labelledby="completed-heading">
+      <div class="card-header"><h2 id="completed-heading" class="card-title">Completed</h2></div>
+      <ul class="divide-y divide-slate-100">
+        {% for assignment in completed %}
+          <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm sm:px-6">
+            <span class="font-medium">{{ assignment.template.name }}</span>
+            <span class="text-slate-600">Sent {{ assignment.completed_at|date:"j M Y" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

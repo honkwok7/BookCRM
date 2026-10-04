@@ -1,0 +1,7 @@
+{{ assignment.organization.name }} asks you to fill in a form: {{ assignment.template.name }}.
+{% if assignment.template.description %}
+{{ assignment.template.description }}
+{% endif %}
+Fill it in here: {{ form_url }}
+
+The link works for {{ link_days }} days. If you have an account, you'll also find the form in your portal.

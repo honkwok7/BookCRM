@@ -1,6 +1,6 @@
 from django.urls import path
 
-from customer_forms import web_views
+from customer_forms import customer_views, web_views
 
 urlpatterns = [
     path("app/forms/", web_views.FormListView.as_view(), name="app-form-list"),
@@ -37,5 +37,22 @@ urlpatterns = [
         "app/forms/questions/<uuid:pk>/move/",
         web_views.QuestionMoveView.as_view(),
         name="app-form-question-move",
+    ),
+    # M6.2: customers fill in forms; the CRM sends them and reads the answers.
+    path("forms/<str:token>/", customer_views.LinkFillView.as_view(), name="form-fill"),
+    path(
+        "app/customers/<uuid:pk>/forms/send/",
+        customer_views.SendFormView.as_view(),
+        name="crm-customer-form-send",
+    ),
+    path(
+        "app/customers/<uuid:pk>/forms/<uuid:assignment_pk>/",
+        customer_views.AnswersView.as_view(),
+        name="crm-customer-form",
+    ),
+    path(
+        "app/customers/<uuid:pk>/forms/<uuid:assignment_pk>/cancel/",
+        customer_views.CancelAssignmentView.as_view(),
+        name="crm-customer-form-cancel",
     ),
 ]

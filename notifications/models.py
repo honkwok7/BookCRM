@@ -44,6 +44,14 @@ class NotificationLog(BaseUUIDModel):
         on_delete=models.SET_NULL,
         related_name="notification_logs",
     )
+    # Set for a form request: the email carries a link to fill in this form (M6.2).
+    related_form_assignment = models.ForeignKey(
+        "customer_forms.FormAssignment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notification_logs",
+    )
     sent_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.TextField(blank=True)
     retry_count = models.PositiveIntegerField(default=0)

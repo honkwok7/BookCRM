@@ -75,3 +75,27 @@ def queue_waitlist_notification(*, entry, booking):
         )
     )
     return log
+
+
+def queue_form_notification(*, assignment):
+    """Email the customer a link to fill in ``assignment``'s form (after commit)."""
+    customer = assignment.customer
+    log = NotificationLog.objects.create(
+        organization=assignment.organization,
+        recipient=customer.user,
+        recipient_email=customer.email,
+        notification_type="form_request",
+        related_booking=assignment.booking,
+        related_form_assignment=assignment,
+        status=NotificationLog.Status.PENDING,
+    )
+    transaction.on_commit(
+        partial(
+            _dispatch_email,
+            notification_log_id=str(log.id),
+            organization_id=str(assignment.organization_id),
+            subject=f"Please fill in: {assignment.template.name}",
+            template_base="form_request",
+        )
+    )
+    return log
