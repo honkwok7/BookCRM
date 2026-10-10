@@ -43,6 +43,8 @@
 | Customer portal | `/portal/`, `/portal/book/`, `/portal/appointments/…`, `/portal/forms/…`, `/portal/profile/` | authenticated customer (per-org Customer link) |
 | Public booking | `/book/<org-slug>/` (HTMX wizard), `/book/<org-slug>/confirmation/<public_uuid>/` | public, throttled |
 | API | `/api/v1/…` (all resources); `/api/schema/`, `/api/docs/`, `/api/redoc/`; legacy `/api/*` aliases deprecated in M10.1 | JWT / session / API key |
+| Calendar feeds | `/calendar/feed/<token>.ics` (M7.5) | secret token |
+| Integrations | `/app/settings/calendar-sync/`, OAuth callbacks and provider webhooks (Phase 12) | membership; signed `state` / verified webhook |
 | Ops | `/health/`, `/ready/`, `/admin/` (technical only) | – |
 
 ## Draft permission matrix (implemented as capabilities in M1.2)
@@ -80,6 +82,8 @@
 | R7 | Scope is very large | Stalls | Small milestones, each shippable and tested |
 | R8 | Timezone bugs (org vs location vs UTC) | Wrong slots | Location timezone becomes the source of truth; property-based tests around DST |
 | R9 | Front-end build adds tooling | Dev friction | Standalone Tailwind binary in Docker; committed built CSS for non-Docker devs |
+| R10 | Google and Microsoft OAuth app verification for calendar sync (Phase 12) takes weeks and needs a privacy policy | Phase 12 can't launch publicly | Apply early; ship M7.4 and M7.5 (no OAuth) first; test with allow-listed accounts meanwhile |
+| R11 | Calendar feed links (M7.5) are bearer secrets that people may share | Appointment details leak | Hashed tokens, rotation, revocation when the membership ends, minimal personal data in the feed |
 
 ---
 
@@ -1841,6 +1845,109 @@ New table plus backfill.
 #### Acceptance Criteria
 A 24-hour reminder is sent exactly once for each booking.
 
+### M7.4: "Add to calendar" for customers
+
+> Added 2026-10-10 at the product owner's request (calendar sync, level 1 of 3).
+
+#### Objective
+Customers can put their appointment in Google, Outlook or Apple Calendar from the confirmation
+email or the portal, and the entry follows moves and cancellations.
+
+#### Existing Components Reused
+- The M7.1 pipeline and the confirmation, reschedule and cancellation emails.
+- `Booking.public_uuid` as the stable event identifier.
+- The portal appointment page (M5.4).
+
+#### Models
+None. The event `UID` is derived from `Booking.public_uuid`. `SEQUENCE` is derived from the
+status-history count, so every change outranks the last.
+
+#### Backend
+- `bookings/ical.py`: build an RFC 5545 `VEVENT` with a hand-written serializer, no new
+  dependency. It includes the service, the provider's display name, the location address, and
+  the start and end in UTC with the location timezone noted.
+- Attach `appointment.ics` (`METHOD:REQUEST`) to the confirmation and reschedule emails, and
+  `METHOD:CANCEL` to the cancellation email.
+- "Add to Google" and "Add to Outlook" template links in the emails and on the portal page.
+- `/portal/appointments/<id>/calendar.ics` for signed-in customers.
+
+#### UI
+"Add to calendar" buttons in the emails and on the portal appointment page.
+
+#### Security
+- The file holds only what the customer already sees. Internal notes and other customers never
+  appear in it.
+- The portal download checks ownership, like the rest of the portal.
+- Text fields are escaped and folded per RFC 5545, so a service name can't inject properties.
+
+#### Tests
+- The `.ics` output parses, with a stable `UID` and an increasing `SEQUENCE`.
+- Correct UTC times across a DST change.
+- The cancellation email carries `METHOD:CANCEL`.
+- Escaping of commas, semicolons and newlines.
+- One customer can't download another customer's file.
+
+#### Migration Impact
+None.
+
+#### Acceptance Criteria
+- Importing the confirmation attachment into Google Calendar and Outlook creates the event.
+- A reschedule moves it, and a cancellation removes it.
+
+### M7.5: Staff calendar feed (one-way subscription)
+
+> Added 2026-10-10 at the product owner's request (calendar sync, level 2 of 3).
+
+#### Objective
+Each staff member subscribes once from Google, Outlook or Apple Calendar to a private feed of
+their BookCRM appointments and approved time off.
+
+#### Existing Components Reused
+- `bookings.selectors` (provider scoping from M5.3).
+- `scheduling.TimeOff`.
+- The M7.4 `VEVENT` builder.
+
+#### Models
+`staff.CalendarFeed`: membership (one-to-one), `token_hash` (SHA-256; the raw token is shown
+only once), `created_at`, `last_accessed_at`, `revoked_at`.
+
+#### Backend
+- `GET /calendar/feed/<token>.ics` (no session) returns the appointments from 30 days back to
+  180 days ahead, plus approved time off.
+- An HTTP `ETag` and a short cache, because Google refreshes subscriptions only every few hours.
+- Optional organization feeds for owners and managers (all staff, or one location), gated by
+  `appointments.view_all`.
+- Services: `create_feed`, `rotate_feed` and `revoke_feed`, all audited.
+
+#### UI
+- "Calendar feed" on the provider area and on the staff profile: copy the link, step-by-step
+  instructions for Google, Outlook and Apple, and "Reset link".
+- A note that subscribed calendars can lag by several hours.
+
+#### Security
+- The token is the only credential, so it is stored hashed, rotatable, and revoked when the
+  membership ends or the organization is suspended.
+- Feeds hold minimal personal data: the customer's first name and the service by default,
+  with a per-organization "show full names" setting.
+- No internal notes or form answers.
+- The token is redacted from request logs and the audit trail.
+- Throttled per token.
+
+#### Tests
+- Isolation: a feed shows only its own staff member's events in its own organization.
+- A revoked or rotated token returns 404.
+- Leaving the organization or a suspension kills the feed.
+- Cancelled bookings drop out.
+- The `ETag` returns 304 when nothing changed.
+- The token never appears in the audit log.
+
+#### Migration Impact
+One new table. Additive.
+
+#### Acceptance Criteria
+Maya subscribes in Google Calendar and sees her week. A new booking appears after the next
+Google refresh.
+
 ---
 
 ## Phase 8: Subscriptions and billing
@@ -2177,6 +2284,156 @@ Approved by the product owner.
 
 ---
 
+## Phase 12: Two-way calendar sync (Google and Microsoft)
+
+> Added 2026-10-10 at the product owner's request (calendar sync, level 3 of 3). It follows
+> Phase 11, because it needs the hardened API, background jobs and observability. Google and
+> Microsoft app verification takes weeks, so start it before M12.1 is finished.
+
+### M12.1: Calendar connections and pushing appointments to Google
+
+#### Objective
+A staff member connects their Google Calendar once. Their BookCRM appointments are then
+created, moved and removed there within a minute.
+
+#### Existing Components Reused
+- Celery with retries and the `on_commit` dispatch from M7.1.
+- The `BookingService` events.
+- The M7.4 event content.
+
+#### Models
+- `integrations.CalendarConnection`: membership, provider (`google`/`microsoft`), account
+  email, encrypted access and refresh tokens, scopes, target calendar id, status
+  (`active`/`needs_reauth`/`revoked`), `last_synced_at`, `last_error`.
+- `integrations.CalendarEventLink`: booking, connection, external event id, etag. Unique per
+  booking and connection.
+
+#### Backend
+- A new `integrations` app with a `CalendarProvider` protocol (`create_event`,
+  `update_event`, `delete_event`, `list_busy`) and a `GoogleCalendarProvider`
+  (Calendar API v3, OAuth 2.0 with PKCE, the narrowest scopes that work).
+- Tokens are encrypted at rest with a key from the environment (`CALENDAR_TOKEN_KEY`). A new
+  dependency, `cryptography`, needs approval.
+- Booking create, reschedule, cancel and staff-change events queue an idempotent sync task.
+- A nightly reconcile repairs drift.
+- A revoked grant marks the connection `needs_reauth` and notifies the staff member.
+
+#### UI
+- Settings → Calendar sync: "Connect Google Calendar", pick the target calendar, show the
+  status and last sync, and "Disconnect".
+- Owners see each staff member's connection status, but never their tokens.
+
+#### Security
+- OAuth `state` is bound to the session and membership.
+- Tokens are encrypted, never logged and never returned by the API.
+- Disconnecting revokes the grant at Google and deletes the tokens.
+- A connection belongs to one membership in one organization.
+- Pushed events hold minimal customer data, as in M7.5.
+- Google's OAuth app verification is required before public launch, with a privacy policy
+  that covers calendar data.
+
+#### Tests
+- The provider is mocked. A create → reschedule → cancel sequence produces exactly one remote
+  event, updated and then deleted.
+- Retries don't duplicate events.
+- An expired refresh token leads to `needs_reauth`.
+- Isolation: a connection never syncs another organization's bookings.
+- No tokens appear in logs or the audit trail.
+
+#### Migration Impact
+Two new tables. Additive.
+
+#### Acceptance Criteria
+A booking made on the public page appears in the provider's Google Calendar within a minute,
+and moves or disappears when it's rescheduled or cancelled.
+
+### M12.2: Microsoft Outlook / Microsoft 365
+
+#### Objective
+The same as M12.1, for Outlook.com and Microsoft 365 calendars.
+
+#### Existing Components Reused
+The M12.1 connection model, sync tasks, UI and tests.
+
+#### Models
+None. `provider = microsoft`.
+
+#### Backend
+- A `MicrosoftCalendarProvider` using the Microsoft Graph calendar API with OAuth 2.0
+  (a multi-tenant Entra ID app with delegated `Calendars.ReadWrite` and `offline_access`).
+- Handles Graph throttling (`Retry-After`) and recurring-series quirks.
+
+#### UI
+"Connect Outlook" next to "Connect Google Calendar".
+
+#### Security
+As in M12.1. Some Microsoft 365 organizations need their admin to approve the app; the UI
+explains this.
+
+#### Tests
+- The M12.1 suite, parameterised by provider.
+- Throttling and `Retry-After` handling.
+
+#### Migration Impact
+None.
+
+#### Acceptance Criteria
+The same as M12.1, in Outlook.
+
+### M12.3: Busy times from Google and Outlook block booking
+
+#### Objective
+Events a staff member creates in their own Google or Outlook calendar (a dentist visit, say)
+block those times in BookCRM, so nobody can book them.
+
+#### Existing Components Reused
+- `AvailabilityService` (M3.4), which already subtracts time off and existing bookings.
+- The `BookingService` re-check under lock (M4.1 and M4.2).
+
+#### Models
+`integrations.ExternalBusyBlock`: connection, start, end, external event id, `fetched_at`.
+Only the times are kept, never event titles or attendees.
+
+#### Backend
+- Change notifications (Google push channels, Microsoft Graph subscriptions), plus polling
+  every 10 minutes as a fallback, refresh the busy blocks for the next 180 days.
+- Channels and subscriptions are renewed before they expire.
+- `AvailabilityService` subtracts the busy blocks, and `BookingService` re-checks them under
+  the staff lock.
+- Events that BookCRM pushed itself (M12.1 and M12.2) are ignored, so a booking never blocks
+  its own slot.
+- The organization chooses what happens when the external calendar can't be reached: hide
+  the slots, or allow booking and flag it.
+
+#### UI
+- Busy blocks show greyed out as "Busy (Google)" or "Busy (Outlook)" on the staff and
+  reception calendars, without the event title.
+- The connection status shows the last refresh time.
+
+#### Security
+- Webhook endpoints verify the channel token or `clientState`, and map to exactly one
+  connection.
+- Event titles, descriptions and attendees are never stored.
+- Busy blocks are deleted when the connection is disconnected.
+
+#### Tests
+- A slot overlapping a busy block isn't offered, and a booking for it is refused even when
+  the request races the webhook.
+- Self-created events don't block.
+- An expired subscription is renewed.
+- A forged webhook is rejected.
+- Isolation across organizations.
+- Busy blocks spanning a DST change.
+
+#### Migration Impact
+One new table. Additive.
+
+#### Acceptance Criteria
+A staff member adds a 2 pm event in Google Calendar. Within a few minutes the 2 pm slot
+disappears from the public booking page.
+
+---
+
 ## Cross-cutting: seed data, docs and dev environment
 
 These are delivered incrementally, and each milestone updates them:
@@ -2232,11 +2489,12 @@ Create and update as the features land:
 | 15 | M5.1–M5.4 |
 | 16 | M5.5 |
 | 17 | M6 |
-| 18 | M7 |
+| 18 | M7.1–M7.3, then M7.4 + M7.5 |
 | 19 | M8 |
 | 20 | M9 |
 | 21 | M10 |
 | 22 | M11 |
+| 23 | M12.1, M12.2, M12.3 |
 
 **Reordered 2026-09-29:** the public booking wizard (M4.6) moves ahead of M4.3–M4.5, straight
 after the availability engine and booking service (M3.4, M4.1, M4.2), because the old public
