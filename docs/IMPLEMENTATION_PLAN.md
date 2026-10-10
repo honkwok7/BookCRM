@@ -43,6 +43,7 @@
 | Customer portal | `/portal/`, `/portal/book/`, `/portal/appointments/…`, `/portal/forms/…`, `/portal/profile/` | authenticated customer (per-org Customer link) |
 | Public booking | `/book/<org-slug>/` (HTMX wizard), `/book/<org-slug>/confirmation/<public_uuid>/` | public, throttled |
 | API | `/api/v1/…` (all resources); `/api/schema/`, `/api/docs/`, `/api/redoc/`; legacy `/api/*` aliases deprecated in M10.1 | JWT / session / API key |
+| Rooms and resources | `/app/locations/<id>/resources/…`, `/app/calendar/?view=rooms`, `/app/sessions/<id>/` (Phase 7A) | membership + capability |
 | Calendar feeds | `/calendar/feed/<token>.ics` (M7.5) | secret token |
 | Integrations | `/app/settings/calendar-sync/`, OAuth callbacks and provider webhooks (Phase 12) | membership; signed `state` / verified webhook |
 | Ops | `/health/`, `/ready/`, `/admin/` (technical only) | – |
@@ -84,6 +85,7 @@
 | R9 | Front-end build adds tooling | Dev friction | Standalone Tailwind binary in Docker; committed built CSS for non-Docker devs |
 | R10 | Google and Microsoft OAuth app verification for calendar sync (Phase 12) takes weeks and needs a privacy policy | Phase 12 can't launch publicly | Apply early; ship M7.4 and M7.5 (no OAuth) first; test with allow-listed accounts meanwhile |
 | R11 | Calendar feed links (M7.5) are bearer secrets that people may share | Appointment details leak | Hashed tokens, rotation, revocation when the membership ends, minimal personal data in the feed |
+| R12 | Rooms, concurrent and group booking (Phase 7A) change the booking engine and replace the M4.2 constraint | Double booking returns if done wrong | Additive models; services with no rooms behave exactly as before; the constraint is extended, not removed; PostgreSQL race tests for every new rule |
 
 ---
 
@@ -1950,6 +1952,162 @@ Google refresh.
 
 ---
 
+## Phase 7A: Rooms and resources
+
+> Added 2026-10-10 at the product owner's request, to match clinic tools such as Jane App.
+> It is numbered 7A so the later phases (and the code and docs that cite them) keep their
+> numbers. It runs straight after Phase 7, while the booking engine (M3.4, M4.1, M4.2) is still
+> fresh. Every change goes through `AvailabilityService` and `BookingService`. Neither milestone
+> weakens the database-level double-booking guarantee from M4.2; each extends it.
+
+### M7A.1: Rooms and equipment
+
+#### Objective
+Two staff members can't be booked into the same room, or onto the same piece of equipment, at
+the same time. The booking page only offers times when the staff member **and** the room or
+equipment are free.
+
+#### Existing Components Reused
+- `locations.Location` and its hours and closures.
+- `AvailabilityService` (M3.4) and `BookingService` with the staff-row lock (M4.1).
+- The M4.2 exclusion-constraint pattern (`btree_gist`, conditional PostgreSQL DDL) and its
+  race tests.
+- The calendar's per-provider "resource" view (M4.4).
+
+#### Models
+- `resources.Resource`: organization, location, name, kind (`room`/`equipment`), quantity
+  (for example 2 massage tables), is_active, and an optional colour. Names are unique per
+  location, ignoring case.
+- `resources.ServiceResourceRequirement`: service, resource, quantity needed (default 1), and
+  an optional "any of these rooms" group, so a massage can use Room 1 **or** Room 2.
+- `resources.ResourceAllocation`: booking, resource, unit number (1..quantity), and a copy of
+  the booking's blocked start and end. An `EXCLUDE USING gist (resource WITH =, unit WITH =,
+  tstzrange(start, end) WITH &&)` constraint applies to active bookings.
+- Optional `resources.ResourceClosure` for maintenance (room being painted, machine serviced).
+
+#### Backend
+- `AvailabilityService` intersects the staff member's free time with the free units of every
+  required resource, using one bulk query per location and day with no N+1 queries.
+- `BookingService.create` and `reschedule`:
+  - lock the staff row, then the required resource rows, always in id order so concurrent
+    requests can't deadlock;
+  - pick free units, preferring the room the customer had last time;
+  - write the allocations in the same transaction.
+- Cancel, no-show and reject release the allocations: the rows stay for history, but the
+  constraint covers active bookings only.
+- A constraint violation maps to HTTP 409, as in M4.2.
+- Reception can move a booking to another room without changing its time.
+- Services with no requirements behave exactly as they do today, so nothing changes until a
+  business sets up rooms.
+- Removing a resource that future bookings still use is refused (`in_use`).
+
+#### UI
+- Location → Rooms and equipment: list, add, edit, deactivate and closures.
+- Service form: a "Needs" section to pick rooms and equipment and how many.
+- Calendar: a "By room" view with one column per room, next to the existing per-provider view.
+- The appointment page shows the room, with "Change room".
+- The public booking page shows only times that are fully available. It doesn't name rooms
+  unless the business turns that on.
+
+#### Security
+- Resources are tenant-scoped and added to the isolation suite.
+- Managing them needs `locations.manage`. Changing a booking's room needs
+  `appointments.manage`.
+- Allocation and room changes are audited.
+
+#### Tests
+- PostgreSQL race test: two simultaneous bookings for the last free room both pass the
+  availability check, and exactly one succeeds.
+- Quantity 2: the third overlapping booking is refused.
+- "Any of these rooms" picks a free one.
+- A reschedule frees the old room and takes a new one atomically.
+- Closures and inactive resources remove slots.
+- Services with no requirements are unchanged (the existing availability suite still passes).
+- Query budget for availability with resources.
+- Isolation for the new models.
+
+#### Migration Impact
+Four new tables and a PostgreSQL exclusion constraint. Additive: existing bookings have no
+allocations and stay valid.
+
+#### Acceptance Criteria
+With one treatment room, booking Maya into it at 2 pm removes 2 pm for every other service that
+needs that room, on every booking screen, even under concurrent requests.
+
+### M7A.2: Concurrent and group booking
+
+#### Objective
+- A practitioner can run several appointments at once (a chiropractor working two rooms), up
+  to a limit the business sets.
+- A service's capacity becomes real, so a class or group session takes up to N people in one
+  slot.
+
+#### Existing Components Reused
+- M7A.1 rooms, allocations and the locking order.
+- `Service.capacity`, which exists today but isn't used by the engine.
+- The M4.2 staff exclusion constraint, which this milestone extends.
+
+#### Models
+- `StaffProfile.max_concurrent` (default 1) and `Service.allows_overlap` (default false).
+  Overlap happens only when both allow it.
+- `Booking.staff_slot` (1..max_concurrent). The M4.2 constraint becomes `EXCLUDE (staff WITH
+  =, staff_slot WITH =, tstzrange WITH &&)`. Existing rows get slot 1, so today's one-at-a-time
+  rule is exactly preserved.
+- Group services (`capacity > 1`): `bookings.GroupSession` (organization, service, staff,
+  location, start, end, capacity snapshot, status). A group booking joins a session instead of
+  holding its own staff slot, and seats are counted under the session row lock.
+
+#### Backend
+- `AvailabilityService`:
+  - for overlap-capable staff and services, offers a time while a staff slot is free;
+  - for group services, offers a session's time until its seats are full and shows the seats
+    left.
+- `BookingService`:
+  - assigns the lowest free staff slot under the staff lock;
+  - for groups, locks the session, checks the seats and creates the session on the first
+    booking;
+  - when a whole session is cancelled, cancels its bookings and tells the attendees through
+    M7.1.
+- When a seat frees up, the waitlist (M4.7) offers it.
+- Each attendee's intake form (M6.2) works per booking, as it does today.
+
+#### UI
+- Staff profile: "Can see up to N clients at once".
+- Service form: "Allow overlapping appointments" and "Group session, up to N people".
+- Calendar: overlapping appointments side by side within the provider's column; a group
+  session shows as one block with "6 of 8".
+- Session page: attendee list, check-in for each person, and cancel session.
+- Public booking page: "3 places left".
+
+#### Security
+- The capacity and overlap settings need `services.manage` and `staff.manage`.
+- Seat counts are enforced under a lock and a constraint, never only in the UI.
+- Attendees can't see each other's names or details.
+
+#### Tests
+- With max_concurrent 2, the third overlapping booking is refused, including under
+  PostgreSQL races.
+- A service that doesn't allow overlap still blocks.
+- Group: the ninth booking for 8 seats is refused under races. A cancellation reopens a seat
+  and triggers the waitlist.
+- Cancelling a session cancels every booking and notifies once each.
+- Existing bookings keep slot 1, and the M4.2 race tests still pass.
+- Rooms combined with groups: a class fills one room, not one room per attendee.
+
+#### Migration Impact
+- New columns with safe defaults, then a backfill to `staff_slot = 1`.
+- The M4.2 constraint is replaced in a separate migration, after a pre-check reports zero
+  violations. The steps follow the additive → backfill → constrain strategy.
+- One new table (`GroupSession`).
+
+#### Acceptance Criteria
+- Daniel (chiropractor) is set to 2 at once: two clients can book him at 10 am, and a third
+  can't.
+- A "Yoga for back pain" class with 8 places fills, shows "Full", and reopens a place when
+  someone cancels.
+
+---
+
 ## Phase 8: Subscriptions and billing
 
 ### M8.1: Entitlements and limits
@@ -2490,6 +2648,7 @@ Create and update as the features land:
 | 16 | M5.5 |
 | 17 | M6 |
 | 18 | M7.1–M7.3, then M7.4 + M7.5 |
+| 18A | M7A.1, then M7A.2 |
 | 19 | M8 |
 | 20 | M9 |
 | 21 | M10 |
