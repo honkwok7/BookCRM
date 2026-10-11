@@ -44,6 +44,7 @@
 | Public booking | `/book/<org-slug>/` (HTMX wizard), `/book/<org-slug>/confirmation/<public_uuid>/` | public, throttled |
 | API | `/api/v1/…` (all resources); `/api/schema/`, `/api/docs/`, `/api/redoc/`; legacy `/api/*` aliases deprecated in M10.1 | JWT / session / API key |
 | Rooms and resources | `/app/locations/<id>/resources/…`, `/app/calendar/?view=rooms`, `/app/sessions/<id>/` (Phase 7A) | membership + capability |
+| Payments | `/app/invoices/…`, `/app/payments/cash-up/`, `/app/settings/invoices/`, `/app/settings/online-payments/`, `/portal/invoices/…`, Stripe webhooks (Phase 8A) | membership + capability; verified webhook |
 | Calendar feeds | `/calendar/feed/<token>.ics` (M7.5) | secret token |
 | Integrations | `/app/settings/calendar-sync/`, OAuth callbacks and provider webhooks (Phase 12) | membership; signed `state` / verified webhook |
 | Ops | `/health/`, `/ready/`, `/admin/` (technical only) | – |
@@ -86,6 +87,7 @@
 | R10 | Google and Microsoft OAuth app verification for calendar sync (Phase 12) takes weeks and needs a privacy policy | Phase 12 can't launch publicly | Apply early; ship M7.4 and M7.5 (no OAuth) first; test with allow-listed accounts meanwhile |
 | R11 | Calendar feed links (M7.5) are bearer secrets that people may share | Appointment details leak | Hashed tokens, rotation, revocation when the membership ends, minimal personal data in the feed |
 | R12 | Rooms, concurrent and group booking (Phase 7A) change the booking engine and replace the M4.2 constraint | Double booking returns if done wrong | Additive models; services with no rooms behave exactly as before; the constraint is extended, not removed; PostgreSQL race tests for every new rule |
+| R13 | Money handling (Phase 8A): rounding, tax, gapless numbering and saved cards | Wrong totals, tax problems, card data exposure | Decimal arithmetic and tested rounding rules; immutable invoices with credit notes; numbering under a row lock; card data only at Stripe (SAQ A); fees charged by staff with idempotency keys |
 
 ---
 
@@ -2213,6 +2215,309 @@ Switching the provider needs configuration only. `.env.example` documents the St
 
 ---
 
+## Phase 8A: Payments and invoicing (patients paying the clinic)
+
+> Added 2026-10-10 at the product owner's request. The options, reasons and suggestions are
+> written up in the "BookCRM Payments and Invoicing" proposal. Phase 8 covers clinics paying
+> BookCRM; this phase covers patients paying the clinic. It reuses the Phase 8 webhook log
+> and provider pattern (M8.3), so it follows Phase 8. Most clinic patients pay cash or card at
+> the desk, so **M8A.1 is the core** and M8A.2–M8A.4 are optional per clinic.
+>
+> **Open decisions** (the defaults below are the suggestions; confirm before M8A.1 starts):
+> 1. Which card terminals the target clinics use (decides whether a connected terminal is
+>    ever built; default: not planned, record card payments manually).
+> 2. Payment company for online payments (default: Stripe only, Connect **Standard** accounts).
+> 3. Platform fee on online payments (default: none, subscriptions only).
+> 4. First release scope (default: M8A.1, then M8A.2).
+
+### M8A.1: Payments, invoices and receipts
+
+#### Objective
+Reception records what patients pay at the desk (cash, card or debit on the clinic's existing
+terminal, e-transfer), including partial payments. BookCRM issues numbered invoices and
+receipts with the right tax, keeps each patient's balance, and reports real money instead of
+estimates.
+
+#### Existing Components Reused
+- `Booking.price_snapshot` and `Booking.payment_status` (kept and derived from payments).
+- `Service.tax_rate` (the placeholder becomes a link to the organization's tax rates).
+- The CRM Transactions tab placeholder (M2.6) and the `payment_recorded` activity kind
+  (M2.3).
+- The M7.1 email pipeline, the audit log (M1.4) and the reporting service (M5.1, Phase 9).
+
+#### Models
+A new `payments` app (separate from the Phase 8 `billing` app, which is about subscriptions):
+- `TaxRate`: organization, name ("HST"), rate %, is_active. `ServiceTax`: which rates apply to
+  a service; none means exempt.
+- `InvoiceSettings` on the organization: legal name, address, tax registration number,
+  number prefix ("HWC"), footer text.
+- `StaffProfile.registration_number` and `registration_body` (shown on insurance receipts).
+- `InvoiceSequence`: organization, year, next number. It is locked with `select_for_update`,
+  so numbers have no gaps and no duplicates.
+- `Invoice`: organization, number (unique per organization), customer, booking (nullable),
+  location, status (`draft`/`issued`/`partially_paid`/`paid`/`void`), issued_at, currency,
+  subtotal, tax total, total, amount paid, balance, plus a snapshot of the business and
+  provider details at issue time.
+- `InvoiceLine`: description, quantity, unit price, discount, tax rate snapshot, staff.
+- `Payment`: invoice, method (`cash`/`credit_card`/`debit`/`etransfer`/`gift_card`/
+  `stripe`/`other`), amount, tip, cash tendered, change given, rounding adjustment,
+  reference, taken_by, taken_at, voided_at, void_reason.
+- `CreditNote`: its own number from the same sequence, the original invoice, lines and reason.
+- `CashUp`: organization, location, business date, expected cash, counted cash, card and
+  debit totals by method, difference, closed_by, notes.
+
+#### Backend
+- `payments/services.py`: `issue_invoice` (created automatically when a booking is completed,
+  or by hand), `add_line`, `take_payment`, `void_payment`, `void_invoice` (refused once paid;
+  use a credit note), `issue_credit_note`, `close_cash_up`.
+- Money is `Decimal`. Tax is rounded per line, half-up to the cent.
+- **Cash rounding** to 5¢ applies to cash payments only (Canadian rule), recorded as a
+  rounding adjustment, so the invoice total stays exact.
+- Issued invoices are immutable. Corrections go through credit notes. Nothing is ever deleted.
+- PDF receipts and invoices via a server-side renderer. The library is a decision for this
+  milestone: WeasyPrint (needs system libraries in the Docker image) or ReportLab.
+- The receipt is emailed when it's paid (M7.1) and downloadable from the portal and the CRM.
+- `Booking.payment_status` is derived from the invoice (unpaid, partially paid, paid,
+  refunded).
+- The dashboard and reports switch from estimated to collected revenue, by day, method and
+  staff member, plus outstanding balances.
+- API endpoints for invoices, payments and the cash-up, read-mostly for AI agents (M10).
+
+#### UI
+- "Take payment" on the appointment page and the reception screen: the amount is pre-filled,
+  the method is chosen, and partial amounts are allowed. For cash, enter the amount handed
+  over and see the change due.
+- An invoice page with lines, payments, balance, PDF, email, void and credit note.
+- Customer → Transactions tab: invoices, payments, balance or credit.
+- Reception → End of day: expected versus counted cash, card totals by method to compare with
+  the terminal's report, and differences flagged.
+- Settings → Invoices and tax: tax rates, which services are taxable, legal details and the
+  number prefix.
+- Staff profile: the registration number.
+
+#### Security
+- New capabilities:
+  - `payments.take` for owner, manager and receptionist;
+  - `payments.manage` (void, credit notes, refunds) for owner and manager;
+  - `payments.reports` for owner and manager;
+  - `payments.settings` for the owner only.
+- Tenant-scoped and added to the isolation suite.
+- Every payment, void, credit note and cash-up is audited, with the amount and the actor.
+- PDFs are generated per request with an ownership check, and never served from a public
+  media URL.
+- Patients see only their own invoices in the portal.
+
+#### Tests
+- Gapless numbering under concurrent issuing (PostgreSQL).
+- Tax: HST 13% per line, exempt services, mixed lines, and rounding edge cases.
+- Cash rounding: 124.32 → 124.30 and 124.33 → 124.35. Card payments are never rounded.
+- Partial payments update the balance and the booking's payment status.
+- An issued invoice can't be edited. Voiding a paid invoice is refused; a credit note works.
+- Cash-up totals match the payments for that day and location.
+- Permissions and isolation for every new endpoint and page.
+- The PDF contains the tax number, the provider registration number and the totals.
+
+#### Migration Impact
+New tables, plus `StaffProfile` columns. `Service.tax_rate` values are backfilled into
+`TaxRate` and `ServiceTax` rows. The old column is kept until M11.3.
+
+#### Acceptance Criteria
+Reception takes $124.30 in cash for a 60-minute massage (with $130 handed over, change
+$5.70). The patient receives receipt `HWC-2026-0001` showing 13% HST and Maya's registration
+number. The end-of-day cash-up balances, and the dashboard shows collected revenue.
+
+### M8A.2: Card to hold the booking (no-show and late-cancellation fees)
+
+#### Objective
+Patients leave a card when booking online. It is charged only if they don't show up or cancel
+late. A returning patient enters the card once per clinic, and later bookings need only the
+policy tick box.
+
+#### Existing Components Reused
+- The M8.3 provider pattern and webhook log (`BillingEvent`, idempotent by event id).
+- The booking wizard (M4.6), the portal (M5.4) and the status workflow (M4.3: `no_show`, and
+  cancellation deadlines).
+- The M8A.1 invoices and payments, since a fee becomes an invoice and a `stripe` payment.
+
+#### Models
+- `PaymentAccount`: organization, provider (`stripe`), the connected account id (Stripe
+  Connect **Standard**, so the money goes to the clinic and BookCRM holds no funds), status,
+  capabilities.
+- `SavedCard`: customer, the provider customer id, the payment method id, brand, last 4,
+  expiry month and year, created_at, removed_at. Only the token and display details are kept,
+  never the card number.
+- `CardPolicy` per service: `none` or `card_required`, the fee rule (fixed amount, or a % of
+  the price) for no-shows and for late cancellations, and the late window in hours.
+- `PolicyConsent`: booking, the exact policy text snapshot and its hash, accepted_at, IP
+  address and user agent. This is the evidence if a charge is disputed.
+
+#### Backend
+- **Connect onboarding:** the owner connects or creates the clinic's Stripe account through
+  an OAuth/onboarding link, and the status is synced by webhooks.
+- **Saving a card:** a Stripe SetupIntent in the wizard, with Stripe Elements on the page.
+  Card numbers go from the browser to Stripe and never reach BookCRM (PCI SAQ A).
+- **Returning patients:**
+  - Signed in to the portal: the saved card is pre-selected.
+  - Guest: the saved card is shown only after the patient signs in or enters a one-time code
+    sent to the email or phone on file. It is **never** shown just because an email address
+    was typed.
+  - Phone booking: reception sees "Card on file" or sends an "Add your card" link. Staff never
+    enter card numbers.
+  - Every booking records a new `PolicyConsent`.
+  - Stripe **Link** can be offered as an optional one-tap autofill.
+- **Charging a fee:** staff click "Charge no-show fee" or "Charge late-cancellation fee"
+  (never automatic by default). An off-session PaymentIntent is created with an idempotency
+  key per booking and fee type, then an invoice and payment from M8A.1, a receipt by email,
+  and an audit row.
+- **Failures:** a failed charge marks the invoice unpaid and emails a payment link
+  (Stripe-hosted). Cards expiring before an upcoming booking trigger a reminder to update.
+- **Refunds:** full or partial, from the invoice, through Stripe. Processing fees aren't
+  returned, and the UI says so.
+- Webhooks (`setup_intent.*`, `payment_intent.*`, `charge.refunded`,
+  `charge.dispute.*`, `account.updated`) are signature-verified and idempotent.
+- Disputes are logged against the invoice, with the consent evidence ready to download.
+
+#### UI
+- Settings → Online payments: connect Stripe, status, and default fee rules.
+- Service form: "Require a card to hold the booking", with the fee rule.
+- Wizard: the card step with the policy text and tick box, or "Use Visa ending 4242".
+- Portal: saved card per clinic, with replace and remove.
+- Appointment page: "Card on file", "Charge no-show fee" and "Send add-card link".
+- Invoice page: refund, and dispute status.
+
+#### Security
+- No card data is stored, logged or sent through BookCRM. Only Stripe tokens.
+- Saved cards are scoped to one organization and one customer, and are never shared across
+  clinics.
+- Guest card reuse requires sign-in or a one-time code, rate-limited and expiring.
+- Charging and refunding need `payments.manage`, or `payments.take` for fees if the owner
+  allows it.
+- The Stripe secret key and webhook secret come from the environment.
+- Fee charges and refunds are audited. The consent snapshot can't be changed.
+- Anonymizing a customer detaches their saved cards at Stripe and deletes the local rows.
+
+#### Tests
+- With a mocked Stripe client:
+  - a SetupIntent saves a card;
+  - a returning signed-in patient reuses it;
+  - a guest without a code can't see it, while one with a valid code can;
+  - a no-show fee charges exactly once, even when the button is clicked twice or the webhook
+    is repeated;
+  - a failed charge sends a payment link;
+  - a partial refund works.
+- Webhook signature rejection and idempotency.
+- A card from one clinic is never offered at another.
+- Consent is stored per booking with the exact text shown.
+- Anonymizing removes saved cards.
+- Isolation and permissions.
+
+#### Migration Impact
+New tables. Additive.
+
+#### Acceptance Criteria
+Alex books a massage online and saves a Visa card. Their next booking needs only the tick box.
+After a no-show, reception charges the 50% fee with one click, and Alex gets a receipt.
+The clinic sees the payment in Stripe and in BookCRM. Nobody can see the full card number.
+
+### M8A.3: Online deposits and prepayment (optional)
+
+#### Objective
+A clinic can require a deposit (a fixed amount or a %) or full payment when booking online,
+per service.
+
+#### Existing Components Reused
+M8A.2 (connected account, Stripe Elements, webhooks) and M8A.1 (invoices and payments).
+
+#### Models
+`CardPolicy` gains `deposit_fixed`, `deposit_percent` and `prepay_full`. `Payment.method` uses
+`stripe` with the PaymentIntent id.
+
+#### Backend
+- A PaymentIntent in the wizard. The booking is confirmed only after the payment succeeds,
+  and a pending booking that isn't paid within 15 minutes is released.
+- A deposit becomes a partial payment on the invoice, and the rest is paid at the desk.
+- Cancellations within the rules are refunded automatically, or kept as credit (the clinic
+  chooses). Late cancellations keep the deposit.
+- Apple Pay and Google Pay through Stripe's payment request button.
+
+#### UI
+- Service form: deposit settings.
+- Wizard: the payment step with the amount due now and the amount due at the visit.
+- Portal: payment history.
+
+#### Security
+- The same as M8A.2.
+- The amount is always computed on the server, never taken from the browser.
+
+#### Tests
+- No booking without a successful payment.
+- Abandoned payments release the slot.
+- Refund-or-credit rules at the deadline boundary.
+- Wallet payments are recorded the same way.
+
+#### Migration Impact
+New columns. Additive.
+
+#### Acceptance Criteria
+A first visit requiring a $30 deposit can't be booked without paying it. The deposit shows
+on the invoice, and the patient pays the balance at the desk.
+
+### M8A.4: Packages and gift cards (optional)
+
+#### Objective
+Clinics sell session packages and gift cards, and BookCRM tracks what's used and what's
+still owed.
+
+#### Existing Components Reused
+M8A.1 (invoices, payments and tax), M8A.3 (online purchase) and `BookingService` (redemption
+when a booking is completed).
+
+#### Models
+- `PackageType`: organization, name, eligible services, sessions, price, valid days, is_active.
+- `CustomerPackage`: customer, type, sessions left, expires_at, the purchase invoice.
+- `PackageRedemption`: package, booking, redeemed_at, reversed_at.
+- `GiftCard`: organization, code (random, stored as a hash plus the last 4), initial value,
+  balance, purchaser, recipient, expires_at.
+- `GiftCardTransaction`.
+
+#### Backend
+- Completing an eligible booking uses one package session. Cancelling reverses it.
+- Gift cards are a payment method on any invoice (M8A.1), with partial use.
+- Tax: packages are taxed at sale. Gift cards are usually taxed when used, not when bought.
+  Both are configurable, with an accountant's confirmation recommended.
+- A liability report shows unused gift card balances and unredeemed package sessions.
+
+#### UI
+- Settings → Packages and gift cards.
+- Selling them at the desk and online.
+- Portal: "3 of 5 left" and gift card balance.
+- Appointment: "Use package session".
+
+#### Security
+- Gift card codes are random, stored hashed, and rate-limited on lookup.
+- Balances change only through the service, and are audited.
+
+#### Tests
+- Redemption and reversal.
+- Expiry.
+- Concurrent redemption of the last session.
+- Gift card partial use and brute-force throttling.
+- Tax at sale versus at use.
+- Liability totals.
+
+#### Migration Impact
+New tables. Additive.
+
+#### Acceptance Criteria
+A patient buys "5 × 60-min massage". Each completed massage counts down, and the liability
+report shows what remains.
+
+> **Later, only if clinics ask:** a card terminal connected to BookCRM (Stripe Terminal), so
+> desk card payments are recorded automatically. Insurance direct billing and surcharging
+> are out of scope.
+
+---
+
 ## Phase 9: Reporting
 
 ### M9.1: ReportingService and reports UI
@@ -2650,6 +2955,7 @@ Create and update as the features land:
 | 18 | M7.1–M7.3, then M7.4 + M7.5 |
 | 18A | M7A.1, then M7A.2 |
 | 19 | M8 |
+| 19A | M8A.1, then M8A.2 (M8A.3 and M8A.4 when wanted) |
 | 20 | M9 |
 | 21 | M10 |
 | 22 | M11 |
