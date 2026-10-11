@@ -2,8 +2,9 @@
 {% load tz %}
 {% comment %}
 Confirm a drag-and-drop move (bookings/calendar_views.py MoveView). The "confirm" partial is
-what the calendar loads into the page dialog after a drop; "done" replaces it once the move
-is saved, just before the dialog closes.
+what the calendar loads into the page dialog after a drop: the new day, a choice of the
+provider's free times that day (the dropped time when it's free), Move, and Cancel
+appointment. "done" replaces it once the move is saved, just before the dialog closes.
 {% endcomment %}
 {% block title %}Move {{ booking.reference }} · {{ organization.name }}{% endblock %}
 {% block page_title %}Move {{ booking.customer_name }}{% endblock %}
@@ -11,31 +12,57 @@ is saved, just before the dialog closes.
 <div class="card card-body max-w-xl">
 {% partialdef confirm inline %}
 {% timezone zone %}
-<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-4" novalidate>
+<div id="move-dialog" class="grid gap-4">
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="#move-dialog" hx-swap="outerHTML" class="grid gap-4" novalidate>
   {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Move appointment?</h2>{% endif %}
   {% csrf_token %}
   <input type="hidden" name="start" value="{{ raw_start }}">
   <input type="hidden" name="tz" value="{{ raw_tz }}">
   <p class="text-sm text-slate-700">{{ booking.customer_name }} · {{ booking.service.name }} with {{ booking.staff.public_name }}</p>
   {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
-  <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+  <dl class="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 text-sm">
     <dt class="font-medium text-slate-600">From</dt>
     <dd class="text-slate-700 line-through">{{ start|date:"D, M j" }}, {{ start|time:"g:i A" }} – {{ end|time:"g:i A" }}</dd>
-    {% if new_start %}
-      <dt class="font-medium text-slate-600">To</dt>
-      <dd class="font-semibold text-slate-900">{{ new_start|date:"D, M j" }}, {{ new_start|time:"g:i A" }} – {{ new_end|time:"g:i A" }}</dd>
+    {% if day %}
+      <dt class="font-medium text-slate-600"><label for="move-slot">To</label></dt>
+      <dd class="flex flex-wrap items-center gap-2 text-slate-900">
+        <span class="font-semibold">{{ day|date:"D, M j" }}</span>
+        {% if times %}
+          <span class="w-36"><select id="move-slot" name="slot" class="input py-1">
+            {% if not chosen %}<option value="">Choose a time</option>{% endif %}
+            {% for value, label in times %}<option value="{{ value }}"{% if value == chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select></span>
+          <span class="text-slate-600">{{ minutes }} min</span>
+        {% endif %}
+      </dd>
     {% endif %}
   </dl>
-  {% if new_start %}<p class="text-xs text-slate-600">The new time is checked against the provider's hours and other appointments when you confirm. Times in {{ zone }}.</p>{% endif %}
+  {% if day %}
+    {% if not times %}
+      <p class="text-sm text-slate-700">{{ booking.staff.public_name }} has no free times on this day. Drop the appointment on another day.</p>
+    {% elif not dropped_free %}
+      <p class="text-sm text-slate-700">{{ new_start|time:"g:i A" }} isn't free for {{ booking.staff.public_name }}. Choose one of their free times.</p>
+    {% else %}
+      <p class="text-xs text-slate-600">You can change the time: the list shows {{ booking.staff.public_name }}'s free times that day. Times in {{ zone }}.</p>
+    {% endif %}
+  {% endif %}
   <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
     {% if in_modal %}
       <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Keep the current time</button>
     {% else %}
       <a href="{% url 'app-appointment' booking.pk %}" class="btn btn-secondary">Keep the current time</a>
     {% endif %}
-    {% if new_start %}<button type="submit" class="btn btn-primary">Move</button>{% endif %}
+    {% if times %}<button type="submit" class="btn btn-primary">Move</button>{% endif %}
   </div>
 </form>
+{% if can_cancel %}
+<form method="post" action="{% url 'app-appointment-action' booking.pk %}"{% if in_modal %} hx-post="{% url 'app-appointment-action' booking.pk %}" hx-target="#modal-body" hx-swap="innerHTML"{% endif %} hx-confirm="Cancel {{ booking.customer_name }}'s appointment on {{ start|date:'D, M j' }} at {{ start|time:'g:i A' }}?" class="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-4">
+  {% csrf_token %}<input type="hidden" name="action" value="cancel">
+  <div class="form-field min-w-40 flex-1"><label class="form-label" for="move-cancel-reason">Or cancel the appointment <span class="font-normal text-slate-600">(reason optional)</span></label><input id="move-cancel-reason" name="reason" maxlength="255"></div>
+  <button type="submit" class="btn btn-danger">Cancel appointment</button>
+</form>
+{% endif %}
+</div>
 {% endtimezone %}
 {% endpartialdef %}
 </div>

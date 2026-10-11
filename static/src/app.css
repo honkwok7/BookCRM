@@ -212,6 +212,7 @@
   .cal-dragging { @apply pointer-events-none z-30 opacity-90 shadow-lg ring-2 ring-brand-600; }
   .cal-pending { @apply z-30 animate-pulse ring-2 ring-brand-600; }
   .cal-drag-active { @apply cursor-grabbing select-none; }
+  .cal-drop-target { @apply bg-brand-50 ring-2 ring-brand-600 ring-inset; }
   .cal-status-pending { @apply border-dashed; }
   .cal-status-checked_in,
   .cal-status-in_progress { @apply ring-2 ring-green-600 ring-inset; }

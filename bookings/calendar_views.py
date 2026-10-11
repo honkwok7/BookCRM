@@ -28,6 +28,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
+from bookings.app_forms import RescheduleForm
 from bookings.calendar import (
     MAX_RANGE_DAYS,
     calendar_bookings,
@@ -321,9 +322,12 @@ class MoveView(AppointmentMixin, View):
     """Drag and drop on the calendar: ``start`` (the dropped wall time, ``YYYY-MM-DDTHH:MM``)
     in ``tz`` (the zone the calendar was drawn in).
 
-    GET asks for confirmation in the page dialog; POST reschedules through the booking service,
-    which applies every check a new booking gets (working hours, conflicts). The provider stays
-    the same. Without JavaScript the confirmation is a page of its own.
+    GET asks for confirmation in the page dialog, with the provider's free times that day
+    (``slot``) so the time can be adjusted; the dropped time is chosen when it's free. POST
+    reschedules to ``slot`` (or the dropped time) through the booking service, which applies
+    every check a new booking gets (working hours, conflicts). The provider stays the same. The
+    dialog also offers to cancel the appointment instead. Without JavaScript the confirmation is
+    a page of its own.
     """
 
     required_capabilities = (Capability.APPOINTMENTS_MANAGE,)
@@ -349,6 +353,20 @@ class MoveView(AppointmentMixin, View):
             )
         return start
 
+    def chosen_start(self, data):
+        """The time picked in the dialog (an ISO datetime from the free times), else the
+        dropped one."""
+        slot = data.get("slot") or ""
+        if not slot:
+            return self.new_start(data)
+        try:
+            start = parse_datetime(slot)
+        except ValueError:
+            start = None
+        if start is None or start.tzinfo is None:
+            raise DomainError("Choose a new time.", code="invalid_start")
+        return start
+
     def render_confirm(self, booking, data, *, error="", status=200):
         zone = self.zone_for(booking.location)
         context = {
@@ -362,6 +380,7 @@ class MoveView(AppointmentMixin, View):
             "action": self.request.path,
             "in_modal": is_htmx(self.request),
             "error": error,
+            "can_cancel": Booking.Status.CANCELLED in ALLOWED_TRANSITIONS[booking.status],
         }
         try:
             if booking.status not in RESCHEDULABLE_STATUSES:
@@ -371,6 +390,22 @@ class MoveView(AppointmentMixin, View):
             new_start = self.new_start(data).astimezone(zone)
             context["new_start"] = new_start
             context["new_end"] = new_start + (booking.end_datetime - booking.start_datetime)
+            day = new_start.date()
+            form = RescheduleForm(initial={"date": day}, booking=booking)
+            if form.day != day:
+                raise DomainError(
+                    "That day has passed. Drop the appointment on today or a later day.",
+                    code="past_day",
+                )
+            dropped = next((key for key, slot in form.slots.items() if slot.start == new_start), "")
+            chosen = data.get("slot") or ""
+            context.update(
+                day=day,
+                times=form.fields["start"].choices,
+                dropped_free=bool(dropped),
+                chosen=chosen if chosen in form.slots else dropped,
+                minutes=booking.duration_snapshot_minutes,
+            )
         except DomainError as problem:
             context["error"] = error or problem.message
             status = 422
@@ -389,7 +424,7 @@ class MoveView(AppointmentMixin, View):
                 )
             moved = reschedule_booking(
                 booking=booking,
-                new_start=self.new_start(request.POST),
+                new_start=self.chosen_start(request.POST),
                 actor=request.user,
                 source=change_source(self.tenant),
             )

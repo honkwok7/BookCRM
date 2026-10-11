@@ -28,11 +28,15 @@ calendar refreshes itself.
 
 ## Drag and drop
 
-In the day and week views, members with `appointments.manage` can drag a pending or confirmed
-appointment to a new time. The card snaps to 15-minute rows and shows the time it would move
+Members with `appointments.manage` can drag a pending or confirmed appointment to a new time
+in the day and week views, or to another day in the month view, where it keeps its time. The card snaps to 15-minute rows and shows the time it would move
 to. In the week view it can go to another day; in the day view it stays in its provider's
 column, because moving keeps the same provider. Dropping it opens a dialog that shows the old
-and new times. **Move** reschedules it through `reschedule_booking`, which applies every
+time and the new day, with a list of the provider's free times that day. The dropped time is
+chosen when it's free; otherwise the dialog says so and asks for another. The list lets you
+fine-tune the time, which matters most in the month view, where a drop keeps the old time.
+The dialog can also cancel the appointment instead (with an optional reason). **Move**
+reschedules it through `reschedule_booking`, which applies every
 check a new booking gets (working hours, closures, conflicts). A refusal is explained in the
 dialog. **Keep the current time**, Escape or closing the dialog puts the card back.
 Escape during a drag cancels it.
@@ -41,7 +45,7 @@ The browser sends the dropped wall time and the zone the calendar was drawn in
 (`/app/appointments/<id>/move/?start=YYYY-MM-DDTHH:MM&tz=…`). The server checks the zone, and
 refuses a time that a daylight-saving change skips. Drag and drop is mouse and pen only: on a
 touch screen dragging scrolls the calendar, and the dialog's **Reschedule** button moves an
-appointment instead. The month view has no drag and drop. Without JavaScript the move
+appointment instead. Without JavaScript the move
 confirmation is an ordinary page.
 
 ## Access

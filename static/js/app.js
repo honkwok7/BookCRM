@@ -125,7 +125,8 @@
   });
 
   // Calendar (templates/calendar/): double-click an appointment to open it in the page dialog,
-  // and drag a movable one (day and week views) to a new time. A drop asks the server to
+  // and drag a movable one to a new time (day and week views) or another day at the same time
+  // (month view). A drop asks the server to
   // confirm (MoveView); closing the dialog without moving redraws the calendar, which puts the
   // appointment back. Handlers are delegated from the document because htmx replaces
   // #calendar on every navigation. Without JavaScript the links open the appointment page.
@@ -175,6 +176,8 @@
     }
 
     function restore(state) {
+      if (state.chip) state.chip.className = state.chipClass;
+      if (state.cell) state.cell.classList.remove("cal-drop-target");
       state.el.className = state.className;
       if (state.timeEl) state.timeEl.textContent = state.timeText;
       if (state.el.parentNode !== state.parent) state.parent.insertBefore(state.el, state.next);
@@ -197,6 +200,26 @@
       var el = event.target.closest && event.target.closest(".cal-movable[data-move-url]");
       // Touch scrolls the calendar instead; touch users move appointments with Reschedule.
       if (!el || event.button !== 0 || event.pointerType === "touch") return;
+      var month = el.closest("[data-cal-month]");
+      if (month) {
+        // Month view: the chip's list item moves between day cells; the time stays the same.
+        var item = el.closest("li");
+        drag = {
+          el: item,
+          chip: el,
+          chipClass: el.className,
+          month: month,
+          startX: event.clientX,
+          startY: event.clientY,
+          started: false,
+          className: item.className,
+          parent: item.parentNode,
+          next: item.nextSibling,
+          startCell: el.closest("[data-cal-day]"),
+          cell: null,
+        };
+        return;
+      }
       var grid = el.closest("[data-cal-grid]");
       if (!grid) return;
       var rowPx = remPx();
@@ -226,11 +249,25 @@
         var dy = event.clientY - drag.startY;
         if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
         drag.started = true;
-        drag.el.classList.add("cal-dragging", "col-span-full");
-        setClassNumber(drag.el, "col-start-", 1);
         document.body.classList.add("cal-drag-active");
+        if (drag.month) {
+          drag.chip.classList.add("cal-dragging");
+        } else {
+          drag.el.classList.add("cal-dragging", "col-span-full");
+          setClassNumber(drag.el, "col-start-", 1);
+        }
       }
       event.preventDefault();
+      if (drag.month) {
+        var hit = document.elementFromPoint(event.clientX, event.clientY);
+        var cell = hit ? hit.closest("[data-cal-day]") : null;
+        if (!cell || !drag.month.contains(cell) || cell === drag.cell) return;
+        if (drag.cell) drag.cell.classList.remove("cal-drop-target");
+        drag.cell = cell;
+        cell.classList.add("cal-drop-target");
+        cell.querySelector("ul").appendChild(drag.el);
+        return;
+      }
       var column =
         drag.grid.dataset.sameColumn !== undefined
           ? drag.parent
@@ -252,6 +289,25 @@
       window.setTimeout(function () {
         suppressClick = false;
       }, 0);
+      if (state.month) {
+        var day = state.cell || state.startCell;
+        if (cancelled || day === state.startCell) {
+          restore(state);
+          return;
+        }
+        day.classList.remove("cal-drop-target");
+        state.chip.classList.remove("cal-dragging");
+        state.chip.classList.add("cal-pending");
+        pendingMove = true;
+        openInDialog(
+          state.chip.dataset.moveUrl +
+            "?start=" +
+            encodeURIComponent(day.dataset.date + "T" + state.chip.dataset.time) +
+            "&tz=" +
+            encodeURIComponent(state.month.dataset.zone),
+        );
+        return;
+      }
       var column = state.el.parentNode;
       var row = classNumber(state.el, "row-start-");
       if (cancelled || (column === state.parent && row === state.startRow)) {
