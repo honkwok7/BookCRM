@@ -167,10 +167,13 @@ class CalendarMarkupTests(Fixtures, TestCase):
         change_booking_status(booking=self.booking, new_status=Status.NO_SHOW)
         self.assertNotContains(self.calendar(self.receptionist), "data-move-url")
 
-    def test_month_view_opens_appointments_in_the_dialog(self):
+    def test_month_view_opens_and_moves_appointments(self):
         response = self.calendar(self.receptionist, view="month")
         self.assertContains(response, f'data-open-url="/app/appointments/{self.booking.pk}/"')
-        self.assertNotContains(response, "data-move-url")
+        self.assertContains(response, f'data-move-url="/app/appointments/{self.booking.pk}/move/"')
+        self.assertContains(response, 'data-time="09:00"')  # the day changes, the time stays
+        self.assertContains(response, f'data-date="{self.day.isoformat()}"')
+        self.assertContains(response, "or drag it to a new day")
 
     def test_details_load_into_the_dialog(self):
         self.client.force_login(self.receptionist)
