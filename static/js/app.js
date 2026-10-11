@@ -59,9 +59,11 @@
           this.open = true;
         },
         close: function () {
+          if (!this.open) return;
           this.open = false;
           var body = document.getElementById("modal-body");
           if (body) body.innerHTML = "";
+          document.body.dispatchEvent(new CustomEvent("modal:closed", { bubbles: true }));
         },
       };
     });
@@ -121,6 +123,198 @@
       };
     });
   });
+
+  // Calendar (templates/calendar/): double-click an appointment to open it in the page dialog,
+  // and drag a movable one (day and week views) to a new time. A drop asks the server to
+  // confirm (MoveView); closing the dialog without moving redraws the calendar, which puts the
+  // appointment back. Handlers are delegated from the document because htmx replaces
+  // #calendar on every navigation. Without JavaScript the links open the appointment page.
+  (function () {
+    var DRAG_THRESHOLD_PX = 6;
+    var drag = null;
+    var pendingMove = false;
+    var suppressClick = false;
+    var lastPointerType = "mouse";
+
+    function openInDialog(url) {
+      if (window.htmx) window.htmx.ajax("GET", url, { target: "#modal-body", swap: "innerHTML" });
+    }
+
+    function remPx() {
+      return parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    }
+
+    function classNumber(el, prefix) {
+      var match = el.className.match(new RegExp("(?:^|\\s)" + prefix + "(\\d+)(?:\\s|$)"));
+      return match ? parseInt(match[1], 10) : 1;
+    }
+
+    function setClassNumber(el, prefix, value) {
+      el.className = el.className.replace(new RegExp("(^|\\s)" + prefix + "\\d+(?=\\s|$)"), "");
+      el.classList.add(prefix + value);
+    }
+
+    function pad(n) {
+      return (n < 10 ? "0" : "") + n;
+    }
+
+    // Minutes after midnight for a grid row, and that time as the card shows it ("2:15").
+    function rowMinutes(grid, row) {
+      return (
+        parseInt(grid.dataset.firstHour, 10) * 60 +
+        (row - 1) * parseInt(grid.dataset.slotMinutes, 10)
+      );
+    }
+
+    function clockLabel(minutes) {
+      return (Math.floor(minutes / 60) % 12 || 12) + ":" + pad(minutes % 60);
+    }
+
+    function showTime(state, row) {
+      if (state.timeEl) state.timeEl.textContent = clockLabel(rowMinutes(state.grid, row));
+    }
+
+    function restore(state) {
+      state.el.className = state.className;
+      if (state.timeEl) state.timeEl.textContent = state.timeText;
+      if (state.el.parentNode !== state.parent) state.parent.insertBefore(state.el, state.next);
+    }
+
+    function columnAt(x, y) {
+      var hit = document.elementFromPoint(x, y);
+      return hit ? hit.closest("[data-cal-column]") : null;
+    }
+
+    function rowAt(column, y, state) {
+      var top = column.getBoundingClientRect().top;
+      top += parseFloat(window.getComputedStyle(column).paddingTop) || 0;
+      var row = Math.floor((y - top) / state.rowPx) + 1 - state.grabRow;
+      return Math.max(1, Math.min(row, state.rows - state.span + 1));
+    }
+
+    document.addEventListener("pointerdown", function (event) {
+      lastPointerType = event.pointerType || "mouse";
+      var el = event.target.closest && event.target.closest(".cal-movable[data-move-url]");
+      // Touch scrolls the calendar instead; touch users move appointments with Reschedule.
+      if (!el || event.button !== 0 || event.pointerType === "touch") return;
+      var grid = el.closest("[data-cal-grid]");
+      if (!grid) return;
+      var rowPx = remPx();
+      drag = {
+        el: el,
+        grid: grid,
+        startX: event.clientX,
+        startY: event.clientY,
+        started: false,
+        className: el.className,
+        parent: el.parentNode,
+        next: el.nextSibling,
+        rowPx: rowPx,
+        rows: parseInt(grid.dataset.rows, 10),
+        span: classNumber(el, "row-span-"),
+        startRow: classNumber(el, "row-start-"),
+        grabRow: Math.floor((event.clientY - el.getBoundingClientRect().top) / rowPx),
+        timeEl: el.querySelector(".font-semibold"),
+      };
+      drag.timeText = drag.timeEl ? drag.timeEl.textContent : "";
+    });
+
+    document.addEventListener("pointermove", function (event) {
+      if (!drag) return;
+      if (!drag.started) {
+        var dx = event.clientX - drag.startX;
+        var dy = event.clientY - drag.startY;
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
+        drag.started = true;
+        drag.el.classList.add("cal-dragging", "col-span-full");
+        setClassNumber(drag.el, "col-start-", 1);
+        document.body.classList.add("cal-drag-active");
+      }
+      event.preventDefault();
+      var column =
+        drag.grid.dataset.sameColumn !== undefined
+          ? drag.parent
+          : columnAt(event.clientX, event.clientY) || drag.el.parentNode;
+      if (!column || !drag.grid.contains(column)) return;
+      if (drag.el.parentNode !== column) column.appendChild(drag.el);
+      var row = rowAt(column, event.clientY, drag);
+      setClassNumber(drag.el, "row-start-", row);
+      showTime(drag, row);
+    });
+
+    function endDrag(cancelled) {
+      var state = drag;
+      drag = null;
+      if (!state || !state.started) return;
+      document.body.classList.remove("cal-drag-active");
+      // Swallow the click that ends the drag (it may land on another element, so don't wait).
+      suppressClick = true;
+      window.setTimeout(function () {
+        suppressClick = false;
+      }, 0);
+      var column = state.el.parentNode;
+      var row = classNumber(state.el, "row-start-");
+      if (cancelled || (column === state.parent && row === state.startRow)) {
+        restore(state);
+        return;
+      }
+      state.el.classList.remove("cal-dragging");
+      state.el.classList.add("cal-pending");
+      var minutes = rowMinutes(state.grid, row);
+      var start = column.dataset.date + "T" + pad(Math.floor(minutes / 60)) + ":" + pad(minutes % 60);
+      pendingMove = true;
+      openInDialog(
+        state.el.dataset.moveUrl +
+          "?start=" +
+          encodeURIComponent(start) +
+          "&tz=" +
+          encodeURIComponent(state.grid.dataset.zone),
+      );
+    }
+
+    document.addEventListener("pointerup", function () {
+      endDrag(false);
+    });
+    document.addEventListener("pointercancel", function () {
+      endDrag(true);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && drag) endDrag(true);
+    });
+
+    // A single click (mouse) does nothing, so a double-click can open the dialog without the
+    // link navigating. Keyboard activation (Enter) and a tap on a touch screen open it at once.
+    // Ctrl/Cmd/Shift-click still opens the appointment page in a new tab or window.
+    document.addEventListener("click", function (event) {
+      var link = event.target.closest && event.target.closest("#calendar [data-open-url]");
+      if (!link) return;
+      if (suppressClick) {
+        event.preventDefault();
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (event.detail === 0 || lastPointerType === "touch") openInDialog(link.dataset.openUrl);
+    });
+
+    document.addEventListener("dblclick", function (event) {
+      var link = event.target.closest && event.target.closest("#calendar [data-open-url]");
+      if (!link) return;
+      event.preventDefault();
+      openInDialog(link.dataset.openUrl);
+    });
+
+    // The server redraws the calendar after a move (calendar-refresh). If the dialog closes
+    // without one, redraw anyway so a dropped appointment goes back to its real time.
+    document.addEventListener("calendar-refresh", function () {
+      pendingMove = false;
+    });
+    document.addEventListener("modal:closed", function () {
+      if (!pendingMove) return;
+      pendingMove = false;
+      document.body.dispatchEvent(new CustomEvent("calendar-refresh"));
+    });
+  })();
 
   // htmx does not swap error responses; tell the user something went wrong instead of
   // failing silently.

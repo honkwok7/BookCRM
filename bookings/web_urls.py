@@ -49,6 +49,11 @@ urlpatterns = [
         name="app-appointment",
     ),
     path(
+        "app/appointments/<uuid:pk>/move/",
+        calendar_views.MoveView.as_view(),
+        name="app-appointment-move",
+    ),
+    path(
         "app/appointments/<uuid:pk>/action/",
         calendar_views.AppointmentActionView.as_view(),
         name="app-appointment-action",

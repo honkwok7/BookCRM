@@ -207,6 +207,11 @@
   .cal-color-5 { @apply border-teal-500 bg-teal-50 text-teal-900 hover:bg-teal-100; }
   .cal-color-6 { @apply border-indigo-500 bg-indigo-50 text-indigo-900 hover:bg-indigo-100; }
   .cal-color-7 { @apply border-orange-500 bg-orange-50 text-orange-900 hover:bg-orange-100; }
+  /* Drag and drop (static/js/app.js "calendar") */
+  .cal-movable { @apply cursor-grab select-none; }
+  .cal-dragging { @apply pointer-events-none z-30 opacity-90 shadow-lg ring-2 ring-brand-600; }
+  .cal-pending { @apply z-30 animate-pulse ring-2 ring-brand-600; }
+  .cal-drag-active { @apply cursor-grabbing select-none; }
   .cal-status-pending { @apply border-dashed; }
   .cal-status-checked_in,
   .cal-status-in_progress { @apply ring-2 ring-green-600 ring-inset; }

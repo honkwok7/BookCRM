@@ -15,13 +15,34 @@ appointments are hidden, and choosing a status shows only that status. Times are
 chosen location's time zone, or the organization's. The grid shows 8:00 to 20:00 and widens
 to include any appointment outside those hours.
 
-Clicking an appointment opens its panel: time, provider, location, the customer (linked to
-their CRM record when you can browse customers), price, source, notes and history. It also
-offers the actions its status allows: confirm, check in, start, check out, no-show, reject,
+Double-clicking an appointment opens its details in a dialog: time, provider, location, the
+customer (linked to their CRM record when you can browse customers), price, source, notes and
+history. A single mouse click does nothing, so the double-click doesn't also navigate. Enter
+on a focused appointment and a tap on a touch screen open the dialog at once, and
+Ctrl/Cmd-click opens the appointment's own page in a new tab. The dialog also offers the
+actions its status allows: confirm, check in, start, check out, no-show, reject,
 and cancel with a reason. The actions go through the booking service, so the lifecycle and
 timing rules apply ([BOOKING_ENGINE.md](BOOKING_ENGINE.md#lifecycle)). The history records the
 source as `reception` for receptionists and `staff` for everyone else. After an action the
 calendar refreshes itself.
+
+## Drag and drop
+
+In the day and week views, members with `appointments.manage` can drag a pending or confirmed
+appointment to a new time. The card snaps to 15-minute rows and shows the time it would move
+to. In the week view it can go to another day; in the day view it stays in its provider's
+column, because moving keeps the same provider. Dropping it opens a dialog that shows the old
+and new times. **Move** reschedules it through `reschedule_booking`, which applies every
+check a new booking gets (working hours, closures, conflicts). A refusal is explained in the
+dialog. **Keep the current time**, Escape or closing the dialog puts the card back.
+Escape during a drag cancels it.
+
+The browser sends the dropped wall time and the zone the calendar was drawn in
+(`/app/appointments/<id>/move/?start=YYYY-MM-DDTHH:MM&tz=…`). The server checks the zone, and
+refuses a time that a daylight-saving change skips. Drag and drop is mouse and pen only: on a
+touch screen dragging scrolls the calendar, and the dialog's **Reschedule** button moves an
+appointment instead. The month view has no drag and drop. Without JavaScript the move
+confirmation is an ordinary page.
 
 ## Access
 
@@ -29,9 +50,9 @@ calendar refreshes itself.
   `appointments.manage`.
 - With `appointments.view_all`, a member sees the whole organization. Without it (providers),
   they see only appointments assigned to them, and the provider filter lists only themselves.
-  An appointment outside that scope is a 404 in the panel too.
-- Actions need `appointments.manage`.
-- Internal notes appear in the panel only with `customers.notes.private`. The feed never
+  An appointment outside that scope is a 404 in the dialog too, and can't be moved.
+- Actions and drag and drop need `appointments.manage`.
+- Internal notes appear in the dialog only with `customers.notes.private`. The feed never
   includes them.
 
 ## Events feed
@@ -45,7 +66,8 @@ days) accepts the page's filters and uses the same scoping. It returns `timezone
 
 The layout is computed in `bookings/calendar.py` and rendered as plain HTML with CSS grid, so
 it works without JavaScript. htmx swaps the calendar on navigation and filter changes and
-loads the panel. There's no inline style (the Content Security Policy forbids it), and no
+loads appointments into the page dialog. Double-click and drag and drop live in
+`static/js/app.js` (delegated from the document, because htmx replaces the calendar). There's no inline style (the Content Security Policy forbids it), and no
 calendar library (FullCalendar's resource views need a commercial licence and it injects
 styles). Each row is 15 minutes. An event's row, span and lane become Tailwind grid classes,
 listed with `@source inline(...)` in `static/src/app.css`. At most `MAX_LANES` (24)
@@ -54,8 +76,6 @@ daylight-saving day an appointment's row follows the wall clock (the hour labels
 length is its real duration, so one in the repeated hour still shows and one across the
 missing hour isn't doubled. The page uses a fixed number of queries however many appointments
 it shows, and a test checks this.
-
-Drag-and-drop rescheduling isn't built. It would call `reschedule_booking`.
 
 ## Appointment screens (M4.5)
 
