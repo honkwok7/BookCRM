@@ -36,8 +36,11 @@ class MoveTests(Fixtures, TestCase):
         response = self.client.get(self.url, self.at(13, 15), **HTMX)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="modal-title"')
-        self.assertContains(response, "1:15 PM – 2:15 PM")
         self.assertContains(response, ">Move</button>")
+        # The dropped time is chosen in the list of the provider's free times that day.
+        chosen = f"{self.day.isoformat()}T13:15:00+00:00"
+        self.assertContains(response, f'<option value="{chosen}" selected>1:15 PM</option>')
+        self.assertContains(response, ">Cancel appointment</button>")
         self.assertNotContains(response, "<html")
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.status, Status.CONFIRMED)  # nothing changes on GET
@@ -55,6 +58,38 @@ class MoveTests(Fixtures, TestCase):
         self.assertIn("calendar-refresh", triggers)
         self.assertEqual(triggers["toast"]["message"], "Appointment moved.")
         self.assertIn("modal:close", json.loads(response["HX-Trigger-After-Swap"]))
+
+    def test_the_time_can_be_adjusted_in_the_dialog(self):
+        params = {**self.at(13, 15), "slot": f"{self.day.isoformat()}T15:30:00+00:00"}
+        response = self.client.post(self.url, params, **HTMX)
+        self.assertEqual(response.status_code, 200, response.content)
+        moved = Booking.objects.get(rescheduled_from=self.booking)
+        self.assertEqual(moved.start_datetime, datetime.combine(self.day, time(15, 30), tzinfo=UTC))
+
+    def test_a_dropped_time_that_is_not_free_asks_for_another(self):
+        response = self.client.get(self.url, self.at(6), **HTMX)
+        self.assertContains(response, "6:00 AM isn't free for Maya")
+        self.assertContains(response, '<option value="">Choose a time</option>')
+        self.assertNotContains(response, " selected>")
+
+    def test_a_past_day_is_refused(self):
+        params = {"start": "2020-01-07T10:00", "tz": "UTC"}
+        response = self.client.get(self.url, params, **HTMX)
+        self.assertContains(response, "That day has passed", status_code=422)
+        self.assertNotContains(response, ">Move</button>", status_code=422)
+
+    def test_the_dialog_can_cancel_the_appointment_instead(self):
+        response = self.client.post(
+            f"/app/appointments/{self.booking.pk}/action/",
+            {"action": "cancel", "reason": "Can't make it"},
+            **HTMX,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.booking.refresh_from_db()
+        self.assertEqual(
+            (self.booking.status, self.booking.cancellation_reason),
+            (Status.CANCELLED, "Can't make it"),
+        )
 
     def test_a_time_outside_the_providers_hours_is_refused(self):
         response = self.client.post(self.url, self.at(6), **HTMX)
