@@ -1,19 +1,22 @@
 """Calendar screens (M4.4): /app/calendar/ (day, week, month), the appointment panel and its
-status actions, and a JSON feed of events.
+status actions, moving an appointment by drag and drop, and a JSON feed of events.
 
 Who sees what is ``bookings.calendar.calendar_bookings``: the whole organization with
 ``appointments.view_all``, otherwise (providers) only their own appointments. The page, the
 panel and the feed all use it, so an appointment that isn't on your calendar is a 404 in the
 panel too. Status changes go through the booking service and need ``appointments.manage``.
 
-htmx: filters and navigation swap ``#calendar``; clicking an appointment loads its panel into
-``#calendar-panel``; an action re-renders the panel and asks the calendar to refresh
-(``HX-Trigger: calendar-refresh``). Without JavaScript every link and form is an ordinary page.
+htmx: filters and navigation swap ``#calendar``; double-clicking an appointment loads its
+panel into the page dialog (``#modal-body``, see static/js/app.js "calendar"); an action
+re-renders the panel there and asks the calendar to refresh (``HX-Trigger: calendar-refresh``).
+Dropping an appointment on another time asks ``MoveView`` to confirm, then reschedules it.
+Without JavaScript every link and form is an ordinary page.
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -21,7 +24,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.dateparse import parse_date
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
@@ -41,9 +44,10 @@ from bookings.services import (
     RESCHEDULABLE_STATUSES,
     cancel_booking,
     change_booking_status,
+    reschedule_booking,
 )
 from core.exceptions import DomainError
-from core.web import TenantPageMixin, is_htmx, organization_zone
+from core.web import TenantPageMixin, htmx_trigger, is_htmx, organization_zone, toast
 from crm.permissions import can_browse_customers
 from locations.selectors import locations_for
 from organizations.models import OrganizationRole
@@ -154,6 +158,12 @@ class CalendarView(CalendarAccessMixin, View):
             "calendar_url": reverse(self.url_name),
             "page_heading": "My calendar" if self.own_only else "Calendar",
             "weekday_names": WEEKDAY_NAMES,
+            # Drag and drop (time grids only): appointments in these statuses can be moved.
+            "movable_statuses": (
+                [str(status) for status in RESCHEDULABLE_STATUSES]
+                if self.tenant.has(Capability.APPOINTMENTS_MANAGE)
+                else []
+            ),
         }
         filters = dict(location=location, staff=staff, service=service, statuses=statuses)
 
@@ -243,7 +253,7 @@ class AppointmentMixin(CalendarAccessMixin):
             "history": booking.status_history.select_related("changed_by").order_by("created_at"),
             "status_level": STATUS_LEVEL.get(booking.status, "neutral"),
             "error": error,
-            "in_panel": is_htmx(self.request),
+            "in_modal": is_htmx(self.request),
         }
         template = "calendar/appointment.html"
         if is_htmx(self.request):
@@ -305,6 +315,95 @@ class AppointmentActionView(AppointmentMixin, View):
         response = self.render_panel(booking)
         response["HX-Trigger"] = "calendar-refresh"
         return response
+
+
+class MoveView(AppointmentMixin, View):
+    """Drag and drop on the calendar: ``start`` (the dropped wall time, ``YYYY-MM-DDTHH:MM``)
+    in ``tz`` (the zone the calendar was drawn in).
+
+    GET asks for confirmation in the page dialog; POST reschedules through the booking service,
+    which applies every check a new booking gets (working hours, conflicts). The provider stays
+    the same. Without JavaScript the confirmation is a page of its own.
+    """
+
+    required_capabilities = (Capability.APPOINTMENTS_MANAGE,)
+    template_name = "calendar/move.html"
+
+    @staticmethod
+    def new_start(data):
+        try:
+            zone = ZoneInfo(data.get("tz") or "")
+        except ZoneInfoNotFoundError, ValueError:
+            raise DomainError("Unknown time zone.", code="invalid_timezone") from None
+        try:
+            wall = parse_datetime(data.get("start") or "")
+        except ValueError:
+            wall = None
+        if wall is None or wall.tzinfo is not None:
+            raise DomainError("Choose a new time.", code="invalid_start")
+        start = wall.replace(tzinfo=zone)
+        # A wall time skipped by a daylight-saving change doesn't survive the round trip.
+        if start.astimezone(UTC).astimezone(zone).replace(tzinfo=None) != wall:
+            raise DomainError(
+                "That time doesn't exist on this day (the clocks change).", code="invalid_start"
+            )
+        return start
+
+    def render_confirm(self, booking, data, *, error="", status=200):
+        zone = self.zone_for(booking.location)
+        context = {
+            "organization": self.tenant.organization,
+            "booking": booking,
+            "zone": str(zone),
+            "start": booking.start_datetime.astimezone(zone),
+            "end": booking.end_datetime.astimezone(zone),
+            "raw_start": data.get("start", ""),
+            "raw_tz": data.get("tz", ""),
+            "action": self.request.path,
+            "in_modal": is_htmx(self.request),
+            "error": error,
+        }
+        try:
+            if booking.status not in RESCHEDULABLE_STATUSES:
+                raise DomainError(
+                    "This appointment can't be moved any more.", code="invalid_transition"
+                )
+            new_start = self.new_start(data).astimezone(zone)
+            context["new_start"] = new_start
+            context["new_end"] = new_start + (booking.end_datetime - booking.start_datetime)
+        except DomainError as problem:
+            context["error"] = error or problem.message
+            status = 422
+        template = f"{self.template_name}#confirm" if is_htmx(self.request) else self.template_name
+        return render(self.request, template, context, status=status)
+
+    def get(self, request, pk):
+        return self.render_confirm(self.get_booking(pk), request.GET)
+
+    def post(self, request, pk):
+        booking = self.get_booking(pk)
+        try:
+            if booking.status not in RESCHEDULABLE_STATUSES:
+                raise DomainError(
+                    "This appointment can't be moved any more.", code="invalid_transition"
+                )
+            moved = reschedule_booking(
+                booking=booking,
+                new_start=self.new_start(request.POST),
+                actor=request.user,
+                source=change_source(self.tenant),
+            )
+        except DomainError as error:
+            return self.render_confirm(
+                self.get_booking(pk), request.POST, error=error.message, status=422
+            )
+        if not is_htmx(request):
+            messages.success(request, "Appointment moved.")
+            return redirect(reverse("app-appointment", args=[moved.pk]))
+        response = render(request, "calendar/move.html#done", {"booking": moved})
+        htmx_trigger(response, "calendar-refresh")
+        htmx_trigger(response, "modal:close", after_swap=True)
+        return toast(response, "Appointment moved.")
 
 
 class StaffCalendarView(CalendarView):

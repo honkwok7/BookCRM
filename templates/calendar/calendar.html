@@ -2,14 +2,15 @@
 {% load tz %}
 {% comment %}
 The calendar (bookings/calendar_views.py). #calendar swaps on filter changes and navigation
-(htmx) and refreshes itself after a status change (the calendar-refresh event). Appointments
-open in #calendar-panel. Without JavaScript every link is a page and the filters have a button.
+(htmx) and refreshes itself after a change (the calendar-refresh event). Double-clicking an
+appointment opens it in the page dialog; in the day and week views appointments that can be
+moved are dragged to a new time (static/js/app.js "calendar"). Without JavaScript every link
+is a page and the filters have a button.
 {% endcomment %}
 {% block title %}{{ page_heading }} · {{ organization.name }}{% endblock %}
 {% block page_title %}{{ page_heading }}{% endblock %}
 {% block content %}
 {% timezone zone %}
-<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 <div id="calendar" class="min-w-0" hx-disinherit="*" hx-get="{{ request.get_full_path }}" hx-trigger="calendar-refresh from:body" hx-select="#calendar" hx-swap="outerHTML">
   <form method="get" action="{{ calendar_url }}" class="mb-3 flex flex-wrap items-end gap-3" hx-get="{{ calendar_url }}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
     <input type="hidden" name="view" value="{{ view }}">
@@ -60,12 +61,7 @@ open in #calendar-panel. Without JavaScript every link is a page and the filters
   {% else %}
     {% include "calendar/_time_grid.html" %}
   {% endif %}
-  <p class="mt-2 text-xs text-slate-600">Times in {{ zone }}.</p>
-</div>
-
-<aside id="calendar-panel" aria-label="Appointment" class="min-w-0">
-  <div class="card card-body text-sm text-slate-600">Select an appointment to see its details.</div>
-</aside>
+  <p class="mt-2 text-xs text-slate-600">Times in {{ zone }}. Double-click an appointment to see its details{% if movable_statuses and view != "month" %}, or drag it to a new time{% endif %}.</p>
 </div>
 {% endtimezone %}
 {% endblock %}

@@ -13,7 +13,7 @@
               <a href="{{ day_url }}&amp;date={{ day.date|date:'Y-m-d' }}" class="mb-1 inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold no-underline {% if day.is_today %}bg-brand-600 text-white{% elif day.in_month %}text-slate-800{% else %}text-slate-500{% endif %}"{% if day.is_today %} aria-current="date"{% endif %} aria-label="{{ day.date|date:'l, F j' }}: {{ day.events|length }} appointment{{ day.events|length|pluralize }}">{{ day.date.day }}</a>
               <ul class="grid min-w-0 grid-cols-1 gap-0.5">
                 {% for event in day.shown %}
-                  <li class="min-w-0"><a href="{% url 'app-appointment' event.booking.pk %}" hx-get="{% url 'app-appointment' event.booking.pk %}" hx-target="#calendar-panel" hx-swap="innerHTML" class="cal-chip cal-color-{{ event.color }} cal-status-{{ event.booking.status }}">{{ event.start|time:"g:i" }} {{ event.booking.customer_name }}</a></li>
+                  <li class="min-w-0"><a href="{% url 'app-appointment' event.booking.pk %}" data-open-url="{% url 'app-appointment' event.booking.pk %}" class="cal-chip cal-color-{{ event.color }} cal-status-{{ event.booking.status }}">{{ event.start|time:"g:i" }} {{ event.booking.customer_name }}</a></li>
                 {% endfor %}
                 {% if day.more %}<li><a href="{{ day_url }}&amp;date={{ day.date|date:'Y-m-d' }}" class="text-xs">+{{ day.more }} more</a></li>{% endif %}
               </ul>
