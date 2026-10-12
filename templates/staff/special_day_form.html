@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+Add a special day for a provider (staff/web_views.py StaffSpecialDayView): one date off, or
+working only certain hours, without changing the weekly hours.
+{% endcomment %}
+{% block title %}Special day · {{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Special day: {{ staff.public_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-5" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Special day: {{ staff.public_name }}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="-mt-2 text-sm text-slate-600">For one date only. The weekly hours stay as they are. A special day on a date that already has one replaces it.</p>
+  {% include "components/field.html" with field=form.day %}
+  {% include "components/field.html" with field=form.kind %}
+  <div class="grid grid-cols-2 gap-3">
+    {% include "components/field.html" with field=form.start %}
+    {% include "components/field.html" with field=form.end %}
+  </div>
+  {% include "components/field.html" with field=form.reason %}
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+    {% else %}
+      <a href="{% url 'app-staff-tab' staff.pk 'availability' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save special day</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

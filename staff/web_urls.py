@@ -42,6 +42,21 @@ urlpatterns = [
         web_views.StaffTimeOffDecideView.as_view(),
         name="app-staff-time-off-decide",
     ),
+    path(
+        "app/staff/<uuid:pk>/availability/edit/",
+        web_views.StaffHoursView.as_view(),
+        name="app-staff-hours",
+    ),
+    path(
+        "app/staff/<uuid:pk>/availability/days/new/",
+        web_views.StaffSpecialDayView.as_view(),
+        name="app-staff-special-day",
+    ),
+    path(
+        "app/staff/<uuid:pk>/availability/days/<uuid:day_pk>/delete/",
+        web_views.StaffSpecialDayDeleteView.as_view(),
+        name="app-staff-special-day-delete",
+    ),
     # Last: the tab slug would otherwise swallow "edit".
     path(
         "app/staff/<uuid:pk>/<slug:tab>/",

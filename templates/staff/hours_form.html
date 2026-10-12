@@ -1,0 +1,80 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+A provider's weekly hours editor (staff/web_views.py StaffHoursView): per weekday a "working"
+box, where, the hours and an optional second period. "Copy Monday to Tue–Fri" re-renders the
+form without saving. When new hours would leave upcoming appointments outside working time,
+the form comes back with a warning and "Save anyway". Opened in the page dialog or as a page.
+{% endcomment %}
+{% block title %}Weekly hours · {{ staff.public_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Weekly hours: {{ staff.public_name }}{% endblock %}
+{% block content %}
+<div class="card card-body max-w-3xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-6" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Weekly hours: {{ staff.public_name }}</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="-mt-2 text-sm text-slate-600">Tick the days {{ staff.public_name }} works. Times are in the location's time zone. The second period is optional, for example after a lunch break. For a single date, add a special day instead.</p>
+  {% if reshaped %}
+    <div class="alert alert-warning" role="alert"><p>Some days have more periods or places than this form shows ({{ reshaped|join:", " }}). Saving replaces them with what you see here.</p></div>
+  {% endif %}
+  {% if conflict_count %}
+    <div class="alert alert-warning grid gap-2" role="alert">
+      <p class="font-medium">{{ conflict_count }} upcoming appointment{{ conflict_count|pluralize }} would fall outside these hours. Saving doesn't move or cancel {{ conflict_count|pluralize:"it,them" }}.</p>
+      <ul class="list-disc pl-5 text-sm">
+        {% for booking in conflicts %}<li>{{ booking.start_datetime|date:"D j M, g:i A" }}: {{ booking.customer_name }} · {{ booking.service.name }}</li>{% endfor %}
+        {% if conflicts_more %}<li>and {{ conflicts_more }} more</li>{% endif %}
+      </ul>
+    </div>
+  {% endif %}
+  <div class="grid gap-4">
+    {% for day in form.days %}
+      <fieldset class="grid gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+        <legend class="sr-only">{{ day.label }}</legend>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            {{ day.on }}
+            <label for="{{ day.on.id_for_label }}" class="text-sm font-semibold text-slate-900">{{ day.label }}</label>
+          </div>
+          {% if form.locations|length > 1 or day.where.value %}
+            <div class="flex items-center gap-2 text-sm">
+              <label for="{{ day.where.id_for_label }}" class="text-slate-600">At</label>
+              <select name="{{ day.where.html_name }}" id="{{ day.where.id_for_label }}" class="input w-auto py-1">
+                {% for value, label in day.where.field.choices %}<option value="{{ value }}"{% if value == day.where.value|default_if_none:"" %} selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+          {% else %}
+            <input type="hidden" name="{{ day.where.html_name }}" value="">
+          {% endif %}
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {% for field in day.times %}
+            <div class="form-field">
+              <label for="{{ field.id_for_label }}" class="form-label text-xs">{% cycle "Starts" "Ends" "Starts again (optional)" "Ends again" %}<span class="sr-only"> on {{ day.label }}</span></label>
+              {{ field }}
+              {% if field.errors %}<div id="{{ field.auto_id }}_error">{% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </fieldset>
+    {% endfor %}
+  </div>
+  <div class="flex flex-wrap justify-between gap-2 border-t border-slate-200 pt-4">
+    <button type="submit" name="copy_monday" value="1" class="btn btn-ghost">Copy Monday to Tue–Fri</button>
+    <div class="flex flex-wrap gap-2">
+      {% if in_modal %}
+        <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Cancel</button>
+      {% else %}
+        <a href="{% url 'app-staff-tab' staff.pk 'availability' %}" class="btn btn-secondary">Cancel</a>
+      {% endif %}
+      {% if conflict_count %}
+        <button type="submit" name="confirm" value="1" class="btn btn-primary">Save anyway</button>
+      {% else %}
+        <button type="submit" class="btn btn-primary">Save hours</button>
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

@@ -853,6 +853,9 @@ Every org has at least one location.
 ### M3.2: Staff and service assignments
 
 > **Status: done (2026-09-29, branch `m3.2-staff-assignments`).** See [STAFF.md](STAFF.md).
+> - **Added 2026-10-11 (gap fix, branch `staff-hours-editor`):** the Availability tab's editor
+>   for weekly hours and special days, which no milestone had picked up (until then weekly hours
+>   could only be set through the API).
 > - **Models:** `StaffProfile` gained `display_name`, `provider_type`,
 >   `online_booking_visible`, `max_daily_appointments` and `locations`;
 >   `StaffServiceOffering` (location empty = all their locations; custom duration and price).

@@ -67,8 +67,16 @@ removed in M11.3.
 - `/app/staff/<id>/<tab>/`: tabs Profile, Services, Locations, Availability and Time off; each
   is its own URL and htmx swaps only the tab. Managers edit the profile, locations and services
   in dialogs. The services editor has a box per service and location (ticking every location
-  stores "all their locations") and optional duration and price. Availability and time off
-  are read-only here until the availability rewrite (M3.4).
+  stores "all their locations") and optional duration and price.
+- **Availability tab:** the weekly hours and upcoming special days. Managers edit the weekly
+  hours in a dialog: per weekday "working", where (one of their locations or any), the hours
+  and an optional second period (e.g. after a lunch break), with "Copy Monday to Tue–Fri".
+  Saving replaces the whole week (`scheduling.hours.set_weekly_hours`, under the staff lock,
+  audited as `availability.updated` with before and after). If the new hours would leave
+  appointments in the next 90 days outside working time, the dialog lists them and asks to
+  "Save anyway"; nothing is moved or cancelled. **Special days** (`set_special_day`) are one
+  date off, or working only certain hours, without changing the weekly pattern; one per date,
+  past dates are refused, and they can be removed. Time off is approved on the Time off tab.
 
 Viewing needs `staff.view` (every team role); changes need `staff.manage` (owners and
 managers).
