@@ -11,7 +11,7 @@ booking service checks everything again when booking.
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django import forms
 from django.utils import timezone
@@ -72,6 +72,11 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         label="Notes",
         widget=forms.Textarea(attrs={"rows": 2}),
     )
+    # Opened from an empty calendar slot: the clicked time ("HH:MM") and the column's provider,
+    # kept while the service is chosen. They preselect a time and provider once offered.
+    at = forms.CharField(required=False, max_length=5, widget=forms.HiddenInput)
+    for_staff = forms.CharField(required=False, max_length=36, widget=forms.HiddenInput)
+    from_calendar = forms.BooleanField(required=False, widget=forms.HiddenInput)
 
     def __init__(self, *args, tenant, customers, own_staff=None, walk_in=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -129,7 +134,11 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         self.fields["staff"].choices = choices
         chosen_staff = str(data.get("staff") or "")
         if chosen_staff not in dict(choices):
-            chosen_staff = choices[0][0] if choices else ""
+            preferred = str(data.get("for_staff") or "")
+            chosen_staff = preferred if preferred in dict(choices) else ""
+            chosen_staff = chosen_staff or (choices[0][0] if choices else "")
+            if not data.get("staff"):  # a posted provider that isn't offered stays an error
+                self._prefill("staff", chosen_staff)
         self.staff_choice = chosen_staff
         self.fields["staff"].initial = chosen_staff
 
@@ -151,6 +160,28 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
             engine = AvailabilityService(organization, self.service, location=location)
             staff = None if chosen_staff == ANYONE else self.providers.get(chosen_staff)
             self.fields["start"].choices = self.slot_choices(engine, self.day, staff)
+            if str(data.get("start") or "") not in self.slots:
+                self._prefill("start", self.time_at(data.get("at")))
+
+    def _prefill(self, name, value):
+        """Choose ``value`` for a field the member hasn't set (yet)."""
+        if not value:
+            return
+        if self.is_bound:
+            self.data = self.data.copy()
+            self.data[name] = value
+        self.fields[name].initial = value
+
+    def time_at(self, wanted) -> str:
+        """The free time at the clicked "HH:MM", else the first one after it."""
+        try:
+            wanted = datetime.strptime(str(wanted or ""), "%H:%M").time()
+        except ValueError:
+            return ""
+        for key, slot in self.slots.items():
+            if slot.start.astimezone(self.zone).time() >= wanted:
+                return key
+        return ""
 
     @staticmethod
     def _pick(queryset, value):

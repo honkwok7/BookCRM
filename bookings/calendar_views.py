@@ -166,6 +166,12 @@ class CalendarView(CalendarAccessMixin, View):
                 if self.tenant.has(Capability.APPOINTMENTS_MANAGE)
                 else []
             ),
+            # A click on an empty spot opens a new appointment there.
+            "new_url": (
+                reverse("app-appointment-new")
+                if self.tenant.has(Capability.APPOINTMENTS_MANAGE)
+                else ""
+            ),
         }
         filters = dict(location=location, staff=staff, service=service, statuses=statuses)
 

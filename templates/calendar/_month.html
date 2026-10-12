@@ -1,10 +1,11 @@
 {% comment %}
 Month: up to three appointments per day, then "+N more" (the day view). A movable chip can be
 dragged to another day and keeps its time (static/js/app.js "calendar"): data-time is its
-start in the calendar's zone, data-date the day a cell stands for.
+start in the calendar's zone, data-date the day a cell stands for. With appointments.manage,
+a click on a cell's empty space from today on opens a new appointment that day (data-new-url).
 {% endcomment %}
 <div class="card overflow-x-auto">
-  <table class="w-full min-w-[42rem] table-fixed border-collapse text-sm" data-cal-month data-zone="{{ zone }}">
+  <table class="w-full min-w-[42rem] table-fixed border-collapse text-sm" data-cal-month data-zone="{{ zone }}"{% if new_url %} data-new-url="{{ new_url }}" data-location="{{ location.pk|default:'' }}" data-staff="{{ staff.pk|default:'' }}"{% endif %}>
     <caption class="sr-only">{{ title }}</caption>
     <thead>
       <tr>{% for name in weekday_names %}<th scope="col" class="border-b border-slate-200 py-2 text-xs font-semibold text-slate-600">{{ name }}</th>{% endfor %}</tr>
@@ -13,7 +14,7 @@ start in the calendar's zone, data-date the day a cell stands for.
       {% for week in weeks %}
         <tr>
           {% for day in week %}
-            <td class="h-28 border border-slate-100 p-1 align-top {% if not day.in_month %}bg-slate-50{% endif %}" data-cal-day data-date="{{ day.date|date:'Y-m-d' }}">
+            <td class="h-28 border border-slate-100 p-1 align-top {% if not day.in_month %}bg-slate-50{% endif %}" data-cal-day data-date="{{ day.date|date:'Y-m-d' }}"{% if day.date < today %} data-past{% endif %}>
               <a href="{{ day_url }}&amp;date={{ day.date|date:'Y-m-d' }}" class="mb-1 inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold no-underline {% if day.is_today %}bg-brand-600 text-white{% elif day.in_month %}text-slate-800{% else %}text-slate-500{% endif %}"{% if day.is_today %} aria-current="date"{% endif %} aria-label="{{ day.date|date:'l, F j' }}: {{ day.events|length }} appointment{{ day.events|length|pluralize }}">{{ day.date.day }}</a>
               <ul class="grid min-w-0 grid-cols-1 gap-0.5">
                 {% for event in day.shown %}

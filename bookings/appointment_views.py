@@ -42,7 +42,7 @@ from bookings.services import (
     reschedule_booking,
 )
 from core.exceptions import ConflictError, DomainError
-from core.web import HtmxPartialMixin, is_htmx
+from core.web import HtmxPartialMixin, htmx_trigger, is_htmx, toast
 from crm.selectors import customers_visible_to
 from organizations.permissions import Capability
 from staff.models import StaffProfile
@@ -164,9 +164,10 @@ class BookingFormMixin(CalendarAccessMixin):
         # Nobody to book for: the form offers no providers.
         return profile or StaffProfile(pk=None)
 
-    def make_form(self, data=None):
+    def make_form(self, data=None, initial=None):
         return AppointmentForm(
             data,
+            initial=initial,
             tenant=self.tenant,
             customers=customers_visible_to(self.request),
             own_staff=self.own_staff(),
@@ -186,8 +187,18 @@ class BookingFormMixin(CalendarAccessMixin):
         name = f"{self.template_name}#form" if is_htmx(self.request) else self.template_name
         return render(self.request, name, context, status=status)
 
+    # From an empty calendar slot: ?date=YYYY-MM-DD&at=HH:MM&staff=<pk>&location=<pk>.
+    prefill_params = {"date": "date", "at": "at", "staff": "for_staff", "location": "location"}
+
     def get(self, request):
-        return self.render_form(self.make_form())
+        initial = {
+            field: request.GET[param]
+            for param, field in self.prefill_params.items()
+            if request.GET.get(param)
+        }
+        if initial:
+            initial["from_calendar"] = True
+        return self.render_form(self.make_form(initial=initial))
 
     def post(self, request):
         form = self.make_form(request.POST)
@@ -204,6 +215,12 @@ class BookingFormMixin(CalendarAccessMixin):
             return self.render_form(
                 form, status=422, error="That time was just taken. Choose another time."
             )
+        if form.cleaned_data.get("from_calendar") and is_htmx(request):
+            # Stay on the calendar: close the dialog and redraw it with the new appointment.
+            response = HttpResponse()
+            htmx_trigger(response, "calendar-refresh")
+            htmx_trigger(response, "modal:close", after_swap=True)
+            return toast(response, self.success_message)
         return done(request, booking, self.success_message)
 
 

@@ -13,6 +13,7 @@ does the same without JavaScript.
 <form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-5" novalidate>
   {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">{{ title }}</h2>{% endif %}
   {% csrf_token %}
+  {% if form.at %}{{ form.at }}{{ form.for_staff }}{{ form.from_calendar }}{% endif %}
   {% if error %}{% include "components/alert.html" with level="error" message=error %}{% endif %}
   {% include "components/form_errors.html" with form=form %}
 

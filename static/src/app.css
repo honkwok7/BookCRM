@@ -215,6 +215,11 @@
   .cal-pending { @apply z-30 animate-pulse ring-2 ring-brand-600; }
   .cal-drag-active { @apply cursor-grabbing select-none; }
   .cal-drop-target { @apply bg-brand-50 ring-2 ring-brand-600 ring-inset; }
+  /* A click on an empty spot books there; the ghost shows the time under the mouse */
+  [data-new-url] [data-cal-column]:not([data-past]),
+  [data-new-url] [data-cal-day]:not([data-past]) { @apply cursor-pointer; }
+  [data-new-url] [data-cal-day]:not([data-past]):hover { @apply bg-brand-50; }
+  .cal-ghost { @apply pointer-events-none z-10 truncate rounded border border-dashed border-brand-600 bg-brand-50 px-1 text-xs leading-4 text-brand-800; }
   .cal-status-pending { @apply border-dashed; }
   .cal-status-checked_in,
   .cal-status-in_progress { @apply ring-2 ring-green-600 ring-inset; }
