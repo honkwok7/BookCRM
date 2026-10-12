@@ -128,7 +128,8 @@
   // and drag a movable one to a new time (day and week views) or another day at the same time
   // (month view). A drop asks the server to
   // confirm (MoveView); closing the dialog without moving redraws the calendar, which puts the
-  // appointment back. Handlers are delegated from the document because htmx replaces
+  // appointment back. A click on an empty spot (from today on, with data-new-url) opens a
+  // new appointment there. Handlers are delegated from the document because htmx replaces
   // #calendar on every navigation. Without JavaScript the links open the appointment page.
   (function () {
     var DRAG_THRESHOLD_PX = 6;
@@ -194,6 +195,70 @@
       var row = Math.floor((y - top) / state.rowPx) + 1 - state.grabRow;
       return Math.max(1, Math.min(row, state.rows - state.span + 1));
     }
+
+    // -- New appointment from an empty spot --------------------------------------------------
+
+    var ghost = null;
+
+    // The bookable column under the pointer (not an appointment, not a past day), or null.
+    function emptyColumn(target) {
+      if (!target.closest || target.closest("[data-open-url], a, button")) return null;
+      var column = target.closest("#calendar [data-cal-column]");
+      if (!column || column.dataset.past !== undefined) return null;
+      return column.closest("[data-cal-grid][data-new-url]") ? column : null;
+    }
+
+    function clickedRow(column, y) {
+      var grid = column.closest("[data-cal-grid]");
+      var rows = parseInt(grid.dataset.rows, 10);
+      return rowAt(column, y, { rowPx: remPx(), grabRow: 0, rows: rows, span: 1 });
+    }
+
+    function newAppointment(host, date, minutes, staff) {
+      var url = host.dataset.newUrl + "?date=" + encodeURIComponent(date);
+      if (minutes !== null) url += "&at=" + pad(Math.floor(minutes / 60)) + ":" + pad(minutes % 60);
+      if (staff) url += "&staff=" + encodeURIComponent(staff);
+      if (host.dataset.location) url += "&location=" + encodeURIComponent(host.dataset.location);
+      openInDialog(url);
+    }
+
+    function hideGhost() {
+      if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    }
+
+    document.addEventListener("pointermove", function (event) {
+      if (drag || event.pointerType === "touch") return hideGhost();
+      var column = emptyColumn(event.target);
+      if (!column) return hideGhost();
+      var grid = column.closest("[data-cal-grid]");
+      var row = Math.min(clickedRow(column, event.clientY), parseInt(grid.dataset.rows, 10) - 1);
+      if (!ghost) {
+        ghost = document.createElement("div");
+        ghost.setAttribute("aria-hidden", "true");
+      }
+      ghost.className = "cal-ghost col-span-full row-span-2 row-start-" + row;
+      ghost.textContent = "+ " + clockLabel(rowMinutes(grid, row));
+      if (ghost.parentNode !== column) column.appendChild(ghost);
+    });
+
+    document.addEventListener("click", function (event) {
+      if (suppressClick || event.defaultPrevented || event.button !== 0) return;
+      var column = emptyColumn(event.target);
+      if (column) {
+        var grid = column.closest("[data-cal-grid]");
+        var minutes = rowMinutes(grid, clickedRow(column, event.clientY));
+        hideGhost();
+        newAppointment(grid, column.dataset.date, minutes, column.dataset.staff || grid.dataset.staff);
+        return;
+      }
+      if (!event.target.closest || event.target.closest("a, button")) return;
+      var cell = event.target.closest("#calendar [data-cal-day]");
+      var month = cell && cell.closest("[data-cal-month][data-new-url]");
+      if (!month || cell.dataset.past !== undefined) return;
+      newAppointment(month, cell.dataset.date, null, month.dataset.staff);
+    });
+
+    // -- Drag and drop -----------------------------------------------------------------------
 
     document.addEventListener("pointerdown", function (event) {
       lastPointerType = event.pointerType || "mouse";

@@ -56,6 +56,18 @@ touch screen dragging scrolls the calendar, and the dialog's **Reschedule** butt
 appointment instead. Without JavaScript the move
 confirmation is an ordinary page.
 
+## Booking from an empty spot
+
+With `appointments.manage`, clicking an empty spot in the day or week view opens **New
+appointment** in the dialog. A dashed "+ 2:00" marker follows the mouse and shows the time.
+The form starts on that date and remembers the clicked time and provider: in the day view the
+provider is the column's person, and in the week view the calendar's Provider filter. Once a
+service is chosen, it selects that provider if they offer the service. It then selects the free
+time at the clicked time, or the next free time after it. In the month view, clicking a day's
+empty space opens the form on that date. Past days can't be clicked. After booking, the dialog
+closes and the calendar redraws. Booked from anywhere else, the form still opens the new
+appointment's page (`/app/appointments/new/?date=&at=&staff=&location=`).
+
 ## Access
 
 - The page and the sidebar link are for members with `appointments.view_all` or
