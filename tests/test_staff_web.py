@@ -47,7 +47,7 @@ class StaffPagesTests(StaffWebTestCase):
             ("profile", "Name shown to customers"),
             ("services", "Massage"),
             ("locations", "Downtown"),
-            ("availability", "No availability set"),
+            ("availability", "No working hours set"),
             ("time-off", "No upcoming time off"),
         ):
             with self.subTest(tab=tab):
