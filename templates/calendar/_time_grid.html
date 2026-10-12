@@ -25,6 +25,7 @@ provider, so it moves only within its own column.
           {% endif %}
         </div>
         <div class="grid auto-rows-[1rem] grid-cols-{{ column.lanes }} gap-x-0.5 px-0.5 pt-2" data-cal-column data-date="{% if view == 'week' %}{{ column.key|date:'Y-m-d' }}{% else %}{{ anchor|date:'Y-m-d' }}{% endif %}">
+          {% for spot in column.open %}<div class="cal-open col-span-full row-start-{{ spot.0 }} row-span-{{ spot.1 }}" aria-hidden="true"></div>{% endfor %}
           {% for hour in grid.hours %}<div class="col-span-full row-start-{{ hour.row }} row-span-4 border-t border-slate-100" aria-hidden="true"></div>{% endfor %}
           <div class="row-start-{{ grid.rows }}" aria-hidden="true"></div>
           {% for event in column.events %}

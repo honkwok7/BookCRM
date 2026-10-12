@@ -15,6 +15,14 @@ appointments are hidden, and choosing a status shows only that status. Times are
 chosen location's time zone, or the organization's. The grid shows 8:00 to 20:00 and widens
 to include any appointment outside those hours.
 
+**Working hours** are shaded light green behind the appointments in the day and week views,
+so free time in working hours stands out. The day view shades each provider's column with
+their own hours. The week view shades the chosen provider's hours, or, with "Everyone", the
+hours when anyone shown is working. The hours are the weekly hours (for the chosen location,
+or every location), limited by day exceptions and the location's opening hours, minus
+closures, holidays and approved time off (`scheduling/working_hours.py`, a fixed number of
+queries). The grid widens to show hours outside 8:00–20:00. The month view isn't shaded.
+
 Double-clicking an appointment opens its details in a dialog: time, provider, location, the
 customer (linked to their CRM record when you can browse customers), price, source, notes and
 history. A single mouse click does nothing, so the double-click doesn't also navigate. Enter
