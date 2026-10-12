@@ -53,7 +53,8 @@ from crm.permissions import can_browse_customers
 from locations.selectors import locations_for
 from organizations.models import OrganizationRole
 from organizations.permissions import Capability
-from scheduling.availability import zone_of
+from scheduling.availability import merge, zone_of
+from scheduling.working_hours import working_hours
 from services.selectors import services_for
 from staff.selectors import is_provider_here, own_profile, staff_for
 
@@ -176,7 +177,12 @@ class CalendarView(CalendarAccessMixin, View):
             if staff is not None:
                 providers = providers.filter(pk=staff.pk)
             bookings = calendar_bookings(self.tenant, start, end, **filters)
-            context["grid"] = day_grid(bookings, zone, anchor, list(providers))
+            providers = list(providers)
+            hours = working_hours(
+                self.tenant.organization, providers, anchor, anchor, location=location
+            )
+            open_hours = {staff_id: windows for (staff_id, _), windows in hours.items()}
+            context["grid"] = day_grid(bookings, zone, anchor, providers, open_hours)
             step = timedelta(days=1)
             context["title"] = f"{anchor:%A, %B} {anchor.day}, {anchor.year}"
             previous, following = anchor - step, anchor + step
@@ -184,8 +190,19 @@ class CalendarView(CalendarAccessMixin, View):
             first_day = anchor - timedelta(days=anchor.weekday())
             start, end = local_bounds(zone, first_day, 7)
             bookings = calendar_bookings(self.tenant, start, end, **filters)
-            context["grid"] = week_grid(bookings, zone, first_day, today)
             last_day = first_day + timedelta(days=6)
+            # One provider's hours, or (everyone) the hours when anyone shown is working.
+            providers = [staff] if staff is not None else self.visible_staff()
+            if staff is None and location is not None:
+                providers = providers.filter(locations=location)
+            hours = working_hours(
+                self.tenant.organization, list(providers), first_day, last_day, location=location
+            )
+            by_day = {}
+            for (_, day), windows in hours.items():
+                by_day.setdefault(day, []).extend(windows)
+            open_hours = {day: merge(windows) for day, windows in by_day.items()}
+            context["grid"] = week_grid(bookings, zone, first_day, today, open_hours)
             context["title"] = (
                 f"{first_day:%b} {first_day.day} – {last_day:%b} {last_day.day}, {last_day.year}"
             )

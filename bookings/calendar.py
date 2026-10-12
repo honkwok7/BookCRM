@@ -3,7 +3,9 @@ lay them out on a day (staff columns), week (day columns) or month grid.
 
 Layout is computed here, not in the browser: the grid is plain HTML and CSS (Tailwind grid
 utilities, no inline styles because of the Content Security Policy), so it works without
-JavaScript. A row is ``SLOT_MINUTES`` long; events snap outwards to whole rows.
+JavaScript. A row is ``SLOT_MINUTES`` long; events snap outwards to whole rows. Providers'
+working hours (scheduling/working_hours.py) are laid out the same way and shaded behind the
+appointments.
 """
 
 from __future__ import annotations
@@ -91,6 +93,7 @@ class Column:
     events: list[PlacedEvent] = field(default_factory=list)
     lanes: int = 1
     is_today: bool = False
+    open: list[tuple[int, int]] = field(default_factory=list)  # working hours: (row, span)
 
 
 @dataclass
@@ -132,20 +135,21 @@ def hour_bounds(events: list[tuple[datetime, datetime]]) -> tuple[int, int]:
     return first, last
 
 
-def place(booking, zone, day: date, first_hour: int, last_hour: int) -> PlacedEvent | None:
-    """Position ``booking`` on ``day``'s column (clipped to the day and the visible hours).
+def grid_span(
+    start: datetime, end: datetime, zone, day: date, first_hour: int, last_hour: int
+) -> tuple[int, int] | None:
+    """The (row, span) of ``[start, end)`` on ``day``'s column, clipped to the day and the
+    visible hours, or None when none of it is visible.
 
     Clipping and the length use real (UTC) time; the row comes from the wall clock, which is
     what the hour labels show. So on a daylight-saving day an appointment keeps its real
     length: one in the repeated hour still shows, one across the missing hour isn't doubled.
     """
-    start = booking.start_datetime.astimezone(zone)
-    end = booking.end_datetime.astimezone(zone)
     wall_day_start = datetime.combine(day, time(first_hour))
     day_start = wall_day_start.replace(tzinfo=zone).astimezone(UTC)
     day_end = (datetime.combine(day, time.min) + timedelta(hours=last_hour)).replace(tzinfo=zone)
-    visible_start = max(booking.start_datetime.astimezone(UTC), day_start)
-    visible_end = min(booking.end_datetime.astimezone(UTC), day_end.astimezone(UTC))
+    visible_start = max(start.astimezone(UTC), day_start)
+    visible_end = min(end.astimezone(UTC), day_end.astimezone(UTC))
     if visible_start >= visible_end:
         return None
     wall_start = visible_start.astimezone(zone).replace(tzinfo=None)
@@ -154,7 +158,27 @@ def place(booking, zone, day: date, first_hour: int, last_hour: int) -> PlacedEv
     rows = (last_hour - first_hour) * 60 // SLOT_MINUTES
     row = min(int(offset // SLOT_MINUTES) + 1, rows)
     last_row = min(int(-(-(offset + length) // SLOT_MINUTES)), rows)  # ceiling
-    return PlacedEvent(booking, start, end, row, max(1, last_row - row + 1))
+    return row, max(1, last_row - row + 1)
+
+
+def place(booking, zone, day: date, first_hour: int, last_hour: int) -> PlacedEvent | None:
+    """Position ``booking`` on ``day``'s column (see ``grid_span``)."""
+    spot = grid_span(booking.start_datetime, booking.end_datetime, zone, day, first_hour, last_hour)
+    if spot is None:
+        return None
+    start = booking.start_datetime.astimezone(zone)
+    end = booking.end_datetime.astimezone(zone)
+    return PlacedEvent(booking, start, end, *spot)
+
+
+def open_spans(intervals, zone, day: date, first_hour: int, last_hour: int) -> list:
+    """Working-hour intervals (UTC) as (row, span) blocks on ``day``'s column."""
+    spans = (grid_span(start, end, zone, day, first_hour, last_hour) for start, end in intervals)
+    return [spot for spot in spans if spot is not None]
+
+
+def local_pairs(intervals, zone) -> list[tuple[datetime, datetime]]:
+    return [(start.astimezone(zone), end.astimezone(zone)) for start, end in intervals]
 
 
 def assign_lanes(events: list[PlacedEvent]) -> int:
@@ -187,17 +211,21 @@ def local_bounds(zone: ZoneInfo, first_day: date, days: int) -> tuple[datetime, 
     return start, end
 
 
-def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date) -> TimeGrid:
+def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date, open_hours=None) -> TimeGrid:
+    """``open_hours``: ``{day: [(start, end), ...]}`` (UTC) to shade as working hours."""
+    open_hours = open_hours or {}
     days = [first_day + timedelta(days=offset) for offset in range(7)]
     bookings = list(bookings)
     first, last = hour_bounds(
         [(b.start_datetime.astimezone(zone), b.end_datetime.astimezone(zone)) for b in bookings]
+        + [pair for hours in open_hours.values() for pair in local_pairs(hours, zone)]
     )
     palette: dict = {}
     columns = []
     for day in days:
         column = Column(key=day, label=f"{day:%a}", sublabel=f"{day:%b} {day.day}")
         column.is_today = day == today
+        column.open = open_spans(open_hours.get(day, []), zone, day, first, last)
         for booking in bookings:
             event = place(booking, zone, day, first, last)
             if event is not None:
@@ -208,11 +236,14 @@ def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date) -> TimeGri
     return TimeGrid(columns, first, last)
 
 
-def day_grid(bookings, zone: ZoneInfo, day: date, providers) -> TimeGrid:
-    """One column per provider (the "resource" view)."""
+def day_grid(bookings, zone: ZoneInfo, day: date, providers, open_hours=None) -> TimeGrid:
+    """One column per provider (the "resource" view). ``open_hours``: ``{staff_pk: [(start,
+    end), ...]}`` (UTC) to shade as each provider's working hours."""
+    open_hours = open_hours or {}
     bookings = list(bookings)
     first, last = hour_bounds(
         [(b.start_datetime.astimezone(zone), b.end_datetime.astimezone(zone)) for b in bookings]
+        + [pair for hours in open_hours.values() for pair in local_pairs(hours, zone)]
     )
     palette: dict = {}
     columns = {
@@ -228,8 +259,9 @@ def day_grid(bookings, zone: ZoneInfo, day: date, providers) -> TimeGrid:
         if event is not None:
             event.color = color_for(booking.staff_id, palette)
             column.events.append(event)
-    for column in columns.values():
+    for staff_id, column in columns.items():
         column.lanes = assign_lanes(column.events)
+        column.open = open_spans(open_hours.get(staff_id, []), zone, day, first, last)
     return TimeGrid(list(columns.values()), first, last)
 
 

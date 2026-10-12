@@ -61,7 +61,7 @@ is a page and the filters have a button.
   {% else %}
     {% include "calendar/_time_grid.html" %}
   {% endif %}
-  <p class="mt-2 text-xs text-slate-600">Times in {{ zone }}. Double-click an appointment to see its details{% if movable_statuses %}, or drag it to a new {% if view == "month" %}day{% else %}time{% endif %}{% endif %}.</p>
+  <p class="mt-2 text-xs text-slate-600">{% if view != "month" %}<span class="cal-open mr-1 inline-block size-3 rounded-sm align-[-2px] ring-1 ring-emerald-200" aria-hidden="true"></span>Shaded: {% if view == "day" %}each provider's working hours{% elif staff %}{{ staff.public_name }}'s working hours{% else %}when anyone shown is working (pick a provider to see theirs){% endif %}. {% endif %}Times in {{ zone }}. Double-click an appointment to see its details{% if movable_statuses %}, or drag it to a new {% if view == "month" %}day{% else %}time{% endif %}{% endif %}.</p>
 </div>
 {% endtimezone %}
 {% endblock %}
