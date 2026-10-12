@@ -1,5 +1,5 @@
 """Staff screens: the staff list, a person's page (Profile, Services, Locations, Availability,
-Time off) and the forms that change them.
+Time off) and the forms that change them, including their weekly hours and special days.
 
 Reads go through staff.selectors and writes through staff.services, exactly like the API.
 Viewing needs ``staff.view``; every change needs ``staff.manage``. A staff member of another
@@ -27,10 +27,24 @@ from core.exceptions import DomainError
 from core.web import HtmxPartialMixin, TenantPageMixin, is_htmx
 from locations.models import Location
 from organizations.permissions import Capability
-from scheduling.models import TimeOff
+from scheduling.hours import (
+    check_periods,
+    delete_special_day,
+    hours_conflicts,
+    set_special_day,
+    set_weekly_hours,
+)
+from scheduling.models import AvailabilityException, TimeOff
 from scheduling.selectors import weekly_hours
 from scheduling.services import appointments_during, decide_time_off
-from staff.forms import StaffCreateForm, StaffLocationsForm, StaffProfileForm, StaffServicesForm
+from staff.forms import (
+    SpecialDayForm,
+    StaffCreateForm,
+    StaffLocationsForm,
+    StaffProfileForm,
+    StaffServicesForm,
+    WeeklyHoursForm,
+)
 from staff.models import StaffProfile
 from staff.selectors import offerings_by_service, staff_for
 from staff.services import (
@@ -227,7 +241,13 @@ class StaffDetailView(StaffPageMixin, TemplateView):
         return {"rows": rows, "location_count": location_count}
 
     def context_availability(self, staff):
-        return weekly_hours(staff)
+        special_days = AvailabilityException.objects.filter(
+            staff=staff, date__gte=timezone.localdate()
+        ).order_by("date")
+        return weekly_hours(staff) | {
+            "special_days": special_days,
+            "can_manage": self.can_manage(),
+        }
 
     def context_time_off(self, staff):
         now = timezone.now()
@@ -266,6 +286,83 @@ class StaffTimeOffDecideView(StaffManageMixin, View):
         return self.success(
             staff, "Time off approved." if approve else "Time off rejected.", tab="time-off"
         )
+
+
+# -- Working hours --------------------------------------------------------------------------
+
+
+class StaffHoursView(StaffManageMixin, View):
+    """Edit the weekly hours. New hours that leave upcoming appointments outside working time
+    come back with a warning; "Save anyway" (``confirm``) saves them. Nothing is moved."""
+
+    form_template = "staff/hours_form.html"
+    shown_conflicts = 5
+
+    def get(self, request, pk):
+        staff = self.get_staff(pk)
+        initial, reshaped = WeeklyHoursForm.initial_for(staff)
+        return self.render_form(
+            WeeklyHoursForm(initial=initial, staff=staff), staff=staff, reshaped=reshaped
+        )
+
+    def post(self, request, pk):
+        staff = self.get_staff(pk)
+        form = WeeklyHoursForm(request.POST, staff=staff)
+        if "copy_monday" in request.POST:
+            form = WeeklyHoursForm(form.copied_from_monday(), staff=staff)
+            form.is_valid()
+            form.errors.clear()  # only copied, not saved: no errors yet
+            return self.render_form(form, staff=staff)
+        if form.is_valid():
+            periods = form.periods()
+            try:
+                check_periods(staff, periods)
+                conflicts = hours_conflicts(staff, periods)
+                if conflicts and "confirm" not in request.POST:
+                    shown = conflicts[: self.shown_conflicts]
+                    return self.render_form(
+                        form,
+                        status=422,
+                        staff=staff,
+                        conflicts=shown,
+                        conflict_count=len(conflicts),
+                        conflicts_more=len(conflicts) - len(shown),
+                    )
+                set_weekly_hours(staff=staff, periods=periods, actor=request.user)
+            except DomainError as error:
+                form.add_error(None, error.message)
+            else:
+                return self.success(staff, "Weekly hours saved.", tab="availability")
+        return self.render_form(form, status=422, staff=staff)
+
+
+class StaffSpecialDayView(StaffManageMixin, View):
+    form_template = "staff/special_day_form.html"
+
+    def get(self, request, pk):
+        return self.render_form(SpecialDayForm(), staff=self.get_staff(pk))
+
+    def post(self, request, pk):
+        staff = self.get_staff(pk)
+        form = SpecialDayForm(request.POST)
+        if form.is_valid():
+            try:
+                set_special_day(staff=staff, actor=request.user, **form.service_fields())
+            except DomainError as error:
+                form.add_error(None, error.message)
+            else:
+                return self.success(staff, "Special day saved.", tab="availability")
+        return self.render_form(form, status=422, staff=staff)
+
+
+class StaffSpecialDayDeleteView(StaffManageMixin, View):
+    def post(self, request, pk, day_pk):
+        staff = self.get_staff(pk)
+        entry = AvailabilityException.objects.filter(pk=day_pk, staff=staff).first()
+        if entry is None:
+            raise Http404("Special day not found")
+        delete_special_day(entry=entry, actor=request.user)
+        return self.success(staff, "Special day removed.", tab="availability")
 
 
 # -- Forms ----------------------------------------------------------------------------------

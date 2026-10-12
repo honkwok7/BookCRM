@@ -1,5 +1,10 @@
+{% comment %}A provider's working hours (staff/web_views.py context_availability): the weekly pattern and upcoming special days. Editing needs staff.manage.{% endcomment %}
+<div class="grid gap-6">
 <section class="card" aria-labelledby="availability-heading">
-  <div class="card-header"><h2 id="availability-heading" class="card-title">Weekly availability</h2></div>
+  <div class="card-header flex flex-wrap items-center justify-between gap-2">
+    <h2 id="availability-heading" class="card-title">Weekly hours</h2>
+    {% if can_manage %}<a href="{% url 'app-staff-hours' staff.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-staff-hours' staff.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit weekly hours</a>{% endif %}
+  </div>
   {% if has_availability %}
     <dl class="divide-y divide-slate-100">
       {% for row in week %}
@@ -14,7 +19,35 @@
       {% endfor %}
     </dl>
   {% else %}
-    {% include "components/empty_state.html" with title="No availability set" message="This person has no working hours yet, so no appointment times are offered." icon="clock" %}
+    {% include "components/empty_state.html" with title="No working hours set" message="This person has no working hours yet, so no appointment times are offered." icon="clock" %}
   {% endif %}
-  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in each location's time zone. Weekly hours are edited through the API for now; an editor here comes with the reception screens.</p>
+  <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-6">Times are in each location's time zone. These hours set the times offered for booking and the shading on the calendar.</p>
 </section>
+
+<section class="card" aria-labelledby="special-days-heading">
+  <div class="card-header flex flex-wrap items-center justify-between gap-2">
+    <h2 id="special-days-heading" class="card-title">Special days</h2>
+    {% if can_manage %}<a href="{% url 'app-staff-special-day' staff.pk %}" class="btn btn-secondary btn-sm" hx-get="{% url 'app-staff-special-day' staff.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="plus" class="size-4" %}Add a special day</a>{% endif %}
+  </div>
+  {% if special_days %}
+    <ul class="divide-y divide-slate-100">
+      {% for entry in special_days %}
+        <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm sm:px-6">
+          <span class="min-w-0">
+            <span class="font-medium text-slate-900">{{ entry.date|date:"D j M Y" }}</span>
+            <span class="text-slate-700">· {% if entry.unavailable_all_day %}Not working{% else %}Only {{ entry.start_time|time:"H:i" }}–{{ entry.end_time|time:"H:i" }}{% endif %}</span>
+            {% if entry.reason %}<span class="block text-slate-600">{{ entry.reason }}</span>{% endif %}
+          </span>
+          {% if can_manage %}
+            <form method="post" action="{% url 'app-staff-special-day-delete' staff.pk entry.pk %}" hx-post="{% url 'app-staff-special-day-delete' staff.pk entry.pk %}" hx-confirm="Remove the special day on {{ entry.date|date:'D j M Y' }}? The weekly hours apply again that day.">
+              {% csrf_token %}<button type="submit" class="btn btn-ghost btn-sm">Remove<span class="sr-only"> the special day on {{ entry.date|date:"j M Y" }}</span></button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="card-body text-sm text-slate-600">No special days coming up. Use one for a single date off or different hours, such as a holiday or a short day.</p>
+  {% endif %}
+</section>
+</div>

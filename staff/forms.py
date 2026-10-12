@@ -9,8 +9,9 @@ from datetime import UTC, datetime, time, timedelta
 from django import forms
 from django.contrib.auth import get_user_model
 
-from locations.models import Location
+from locations.models import Location, Weekday
 from organizations.models import OrganizationMembership, OrganizationRole
+from scheduling.models import WeeklyAvailability
 from services.models import Service
 from staff.models import StaffProfile
 from staff.services import OfferingChoice
@@ -331,3 +332,168 @@ class TimeOffRequestForm(forms.Form):
             wall_time(data["first_day"], time.min, self.zone),
             wall_time(data["last_day"] + timedelta(days=1), time.min, self.zone),
         )
+
+
+# -- Working hours ----------------------------------------------------------------------------
+
+ANY_LOCATION = ""
+
+
+class WeeklyHoursForm(forms.Form):
+    """A provider's weekly hours: per weekday a "working" box, where, the hours and an optional
+    second period (e.g. after a lunch break).
+
+    Field names: ``on_<d>``, ``where_<d>``, ``start_<d>``, ``end_<d>``, ``start2_<d>``,
+    ``end2_<d>`` with ``d`` = 0 (Monday) … 6 (Sunday). ``where`` is a location id, or empty for
+    any of their locations.
+    """
+
+    def __init__(self, *args, staff, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.staff = staff
+        self.locations = {str(location.pk): location for location in staff.locations.all()}
+        where_choices = [(ANY_LOCATION, "Any of their locations")] + [
+            (pk, location.name) for pk, location in self.locations.items()
+        ]
+        self.days = []
+        for day, label in Weekday.choices:
+            self.fields[f"on_{day}"] = forms.BooleanField(
+                label=f"Working on {label}", required=False
+            )
+            self.fields[f"where_{day}"] = forms.ChoiceField(
+                label=f"Where on {label}", choices=where_choices, required=False
+            )
+            for prefix, text in (
+                ("start", "Starts"),
+                ("end", "Ends"),
+                ("start2", "Starts again"),
+                ("end2", "Ends again"),
+            ):
+                self.fields[f"{prefix}_{day}"] = forms.TimeField(
+                    label=f"{text} on {label}",
+                    required=False,
+                    widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+                )
+            self.days.append(
+                {
+                    "label": label,
+                    "on": self[f"on_{day}"],
+                    "where": self[f"where_{day}"],
+                    "times": [self[f"{p}_{day}"] for p in ("start", "end", "start2", "end2")],
+                }
+            )
+        # Weekly hours this form can't show exactly (more than two periods on a day, or
+        # different places on one day): saving replaces them, so the page says so.
+        self.reshaped_days = []
+
+    @classmethod
+    def initial_for(cls, staff) -> tuple[dict, list[str]]:
+        initial, reshaped = {}, []
+        rows = WeeklyAvailability.objects.filter(staff=staff, is_active=True).order_by(
+            "day_of_week", "start_time"
+        )
+        by_day: dict[int, list] = {}
+        for row in rows:
+            by_day.setdefault(row.day_of_week, []).append(row)
+        for day, day_rows in by_day.items():
+            initial[f"on_{day}"] = True
+            initial[f"where_{day}"] = str(day_rows[0].location_id or ANY_LOCATION)
+            for index, row in enumerate(day_rows[:2]):
+                suffix = "2" if index else ""
+                initial[f"start{suffix}_{day}"] = row.start_time
+                initial[f"end{suffix}_{day}"] = row.end_time
+            if len(day_rows) > 2 or len({row.location_id for row in day_rows}) > 1:
+                reshaped.append(dict(Weekday.choices)[day])
+        return initial, reshaped
+
+    def copied_from_monday(self) -> dict:
+        """The submitted values with Monday's copied to Tuesday-Friday (not saved)."""
+        data = self.data.copy()
+        for day in range(1, 5):
+            for prefix in ("on", "where", "start", "end", "start2", "end2"):
+                value = self.data.get(f"{prefix}_0")
+                if value is None:
+                    data.pop(f"{prefix}_{day}", None)
+                else:
+                    data[f"{prefix}_{day}"] = value
+        return data
+
+    def clean(self):
+        data = super().clean()
+        for day, label in Weekday.choices:
+            if not data.get(f"on_{day}"):
+                continue
+            start, end = data.get(f"start_{day}"), data.get(f"end_{day}")
+            if start is None or end is None:
+                self.add_error(f"start_{day}", f"Enter the start and end times for {label}.")
+            elif start >= end:
+                self.add_error(f"end_{day}", "The end must be after the start.")
+            start2, end2 = data.get(f"start2_{day}"), data.get(f"end2_{day}")
+            if (start2 is None) != (end2 is None):
+                self.add_error(
+                    f"start2_{day}", "Enter both times of the second period, or neither."
+                )
+            elif start2 is not None:
+                if start2 >= end2:
+                    self.add_error(f"end2_{day}", "The end must be after the start.")
+                elif end is not None and start2 < end:
+                    self.add_error(
+                        f"start2_{day}", "The second period must start after the first ends."
+                    )
+        return data
+
+    def periods(self) -> list[tuple]:
+        data, periods = self.cleaned_data, []
+        for day in Weekday.values:
+            if not data.get(f"on_{day}"):
+                continue
+            where = self.locations.get(data.get(f"where_{day}") or "")
+            periods.append((day, data[f"start_{day}"], data[f"end_{day}"], where))
+            if data.get(f"start2_{day}") is not None:
+                periods.append((day, data[f"start2_{day}"], data[f"end2_{day}"], where))
+        return periods
+
+
+class SpecialDayForm(forms.Form):
+    """One date: off all day, or working only certain hours."""
+
+    OFF, HOURS = "off", "hours"
+
+    day = forms.DateField(label="Date", widget=forms.DateInput(attrs={"type": "date"}))
+    kind = forms.ChoiceField(
+        label="That day",
+        choices=((OFF, "Not working"), (HOURS, "Working only these hours")),
+        widget=forms.RadioSelect,
+        initial=OFF,
+    )
+    start = forms.TimeField(
+        label="From",
+        required=False,
+        widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+    )
+    end = forms.TimeField(
+        label="To",
+        required=False,
+        widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+    )
+    reason = forms.CharField(label="Reason", required=False, max_length=255)
+
+    def clean(self):
+        data = super().clean()
+        if data.get("kind") == self.HOURS:
+            start, end = data.get("start"), data.get("end")
+            if start is None or end is None:
+                self.add_error("start", "Enter the hours they work that day.")
+            elif start >= end:
+                self.add_error("end", "The end must be after the start.")
+        return data
+
+    def service_fields(self) -> dict:
+        data = self.cleaned_data
+        return {
+            "day": data["day"],
+            "off_all_day": data["kind"] == self.OFF,
+            "start": data.get("start"),
+            "end": data.get("end"),
+            "reason": data.get("reason", ""),
+        }
