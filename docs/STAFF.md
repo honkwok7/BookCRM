@@ -68,6 +68,9 @@ removed in M11.3.
   is its own URL and htmx swaps only the tab. Managers edit the profile, locations and services
   in dialogs. The services editor has a box per service and location (ticking every location
   stores "all their locations") and optional duration and price.
+- **Calendar colour:** on the profile (Edit profile → Calendar), one of 12 swatches or
+  Automatic (`staff/colors.py`). Automatic colours follow the order staff were added and skip
+  chosen ones, so a provider has the same colour in every calendar view.
 - **Availability tab:** the weekly hours and upcoming special days. Managers edit the weekly
   hours in a dialog: per weekday "working", where (one of their locations or any), the hours
   and an optional second period (e.g. after a lunch break), with "Copy Monday to Tue–Fri".

@@ -207,6 +207,23 @@
   .cal-color-5 { @apply border-teal-500 bg-teal-50 text-teal-900 hover:bg-teal-100; }
   .cal-color-6 { @apply border-indigo-500 bg-indigo-50 text-indigo-900 hover:bg-indigo-100; }
   .cal-color-7 { @apply border-orange-500 bg-orange-50 text-orange-900 hover:bg-orange-100; }
+  .cal-color-8 { @apply border-lime-600 bg-lime-50 text-lime-900 hover:bg-lime-100; }
+  .cal-color-9 { @apply border-fuchsia-500 bg-fuchsia-50 text-fuchsia-900 hover:bg-fuchsia-100; }
+  .cal-color-10 { @apply border-cyan-500 bg-cyan-50 text-cyan-900 hover:bg-cyan-100; }
+  .cal-color-11 { @apply border-stone-500 bg-stone-100 text-stone-900 hover:bg-stone-200; }
+  /* The same colours as swatches (staff colour picker, calendar legend; staff/colors.py) */
+  .cal-swatch-0 { @apply bg-sky-500; }
+  .cal-swatch-1 { @apply bg-emerald-500; }
+  .cal-swatch-2 { @apply bg-violet-500; }
+  .cal-swatch-3 { @apply bg-amber-500; }
+  .cal-swatch-4 { @apply bg-rose-500; }
+  .cal-swatch-5 { @apply bg-teal-500; }
+  .cal-swatch-6 { @apply bg-indigo-500; }
+  .cal-swatch-7 { @apply bg-orange-500; }
+  .cal-swatch-8 { @apply bg-lime-600; }
+  .cal-swatch-9 { @apply bg-fuchsia-500; }
+  .cal-swatch-10 { @apply bg-cyan-500; }
+  .cal-swatch-11 { @apply bg-stone-500; }
   /* Providers' working hours behind the appointments (bookings/calendar.py open_spans) */
   .cal-open { @apply bg-emerald-50; }
   /* Drag and drop (static/js/app.js "calendar") */

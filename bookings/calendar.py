@@ -19,12 +19,12 @@ from django.db.models import QuerySet
 
 from bookings.models import Booking
 from organizations.permissions import Capability
+from staff.colors import COLOR_COUNT
 
 SLOT_MINUTES = 15
 DEFAULT_FIRST_HOUR = 8
 DEFAULT_LAST_HOUR = 20  # exclusive: the grid ends at 20:00
 MAX_RANGE_DAYS = 62
-COLOR_COUNT = 8  # .cal-color-0 ... .cal-color-7 in static/src/app.css
 MAX_LANES = 24  # grid-cols-* and col-start-* up to 24 in static/src/app.css
 HIDDEN_BY_DEFAULT = (Booking.Status.CANCELLED, Booking.Status.REJECTED)
 
@@ -117,7 +117,8 @@ class TimeGrid:
 
 
 def color_for(staff_id, palette: dict) -> int:
-    """A stable colour per provider within one page."""
+    """The provider's colour: from ``palette`` (staff/colors.py provider_colors), else the next
+    one on this page."""
     if staff_id not in palette:
         palette[staff_id] = len(palette) % COLOR_COUNT
     return palette[staff_id]
@@ -211,7 +212,9 @@ def local_bounds(zone: ZoneInfo, first_day: date, days: int) -> tuple[datetime, 
     return start, end
 
 
-def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date, open_hours=None) -> TimeGrid:
+def week_grid(
+    bookings, zone: ZoneInfo, first_day: date, today: date, open_hours=None, colors=None
+) -> TimeGrid:
     """``open_hours``: ``{day: [(start, end), ...]}`` (UTC) to shade as working hours."""
     open_hours = open_hours or {}
     days = [first_day + timedelta(days=offset) for offset in range(7)]
@@ -220,7 +223,7 @@ def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date, open_hours
         [(b.start_datetime.astimezone(zone), b.end_datetime.astimezone(zone)) for b in bookings]
         + [pair for hours in open_hours.values() for pair in local_pairs(hours, zone)]
     )
-    palette: dict = {}
+    palette = dict(colors or {})
     columns = []
     for day in days:
         column = Column(key=day, label=f"{day:%a}", sublabel=f"{day:%b} {day.day}")
@@ -236,7 +239,9 @@ def week_grid(bookings, zone: ZoneInfo, first_day: date, today: date, open_hours
     return TimeGrid(columns, first, last)
 
 
-def day_grid(bookings, zone: ZoneInfo, day: date, providers, open_hours=None) -> TimeGrid:
+def day_grid(
+    bookings, zone: ZoneInfo, day: date, providers, open_hours=None, colors=None
+) -> TimeGrid:
     """One column per provider (the "resource" view). ``open_hours``: ``{staff_pk: [(start,
     end), ...]}`` (UTC) to shade as each provider's working hours."""
     open_hours = open_hours or {}
@@ -245,7 +250,7 @@ def day_grid(bookings, zone: ZoneInfo, day: date, providers, open_hours=None) ->
         [(b.start_datetime.astimezone(zone), b.end_datetime.astimezone(zone)) for b in bookings]
         + [pair for hours in open_hours.values() for pair in local_pairs(hours, zone)]
     )
-    palette: dict = {}
+    palette = dict(colors or {})
     columns = {
         provider.pk: Column(key=provider, label=provider.public_name) for provider in providers
     }
@@ -285,12 +290,14 @@ def month_weeks(year: int, month: int) -> list[list[date]]:
     return calendar_module.Calendar(firstweekday=0).monthdatescalendar(year, month)
 
 
-def month_grid(bookings, zone: ZoneInfo, year: int, month: int, today: date) -> list[list]:
+def month_grid(
+    bookings, zone: ZoneInfo, year: int, month: int, today: date, colors=None
+) -> list[list]:
     weeks = month_weeks(year, month)
     by_day: dict[date, MonthDay] = {
         day: MonthDay(day, day.month == month, day == today) for week in weeks for day in week
     }
-    palette: dict = {}
+    palette = dict(colors or {})
     for booking in bookings:
         start = booking.start_datetime.astimezone(zone)
         cell = by_day.get(start.date())
