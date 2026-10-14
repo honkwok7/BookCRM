@@ -37,6 +37,7 @@ from scheduling.hours import (
 from scheduling.models import AvailabilityException, TimeOff
 from scheduling.selectors import weekly_hours
 from scheduling.services import appointments_during, decide_time_off
+from staff.colors import APPOINTMENT_COLORS, COLOR_INDEX
 from staff.forms import (
     SpecialDayForm,
     StaffCreateForm,
@@ -214,6 +215,11 @@ class StaffDetailView(StaffPageMixin, TemplateView):
         if builder is not None:
             context |= builder(staff)
         return context
+
+    def context_profile(self, staff):
+        index = COLOR_INDEX.get(staff.appointment_color)
+        label = APPOINTMENT_COLORS[index][1] if index is not None else "Automatic"
+        return {"color_index": index, "color_label": label}
 
     def context_services(self, staff):
         grouped = offerings_by_service(staff)

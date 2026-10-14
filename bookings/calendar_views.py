@@ -56,6 +56,7 @@ from organizations.permissions import Capability
 from scheduling.availability import merge, zone_of
 from scheduling.working_hours import working_hours
 from services.selectors import services_for
+from staff.colors import provider_colors
 from staff.selectors import is_provider_here, own_profile, staff_for
 
 VIEWS = ("day", "week", "month")
@@ -174,6 +175,8 @@ class CalendarView(CalendarAccessMixin, View):
             ),
         }
         filters = dict(location=location, staff=staff, service=service, statuses=statuses)
+        colors = provider_colors(self.tenant.organization)
+        shown_staff = {}
 
         if view == "day":
             start, end = local_bounds(zone, anchor, 1)
@@ -184,11 +187,12 @@ class CalendarView(CalendarAccessMixin, View):
                 providers = providers.filter(pk=staff.pk)
             bookings = calendar_bookings(self.tenant, start, end, **filters)
             providers = list(providers)
+            shown_staff = {provider.pk: provider for provider in providers}
             hours = working_hours(
                 self.tenant.organization, providers, anchor, anchor, location=location
             )
             open_hours = {staff_id: windows for (staff_id, _), windows in hours.items()}
-            context["grid"] = day_grid(bookings, zone, anchor, providers, open_hours)
+            context["grid"] = day_grid(bookings, zone, anchor, providers, open_hours, colors)
             step = timedelta(days=1)
             context["title"] = f"{anchor:%A, %B} {anchor.day}, {anchor.year}"
             previous, following = anchor - step, anchor + step
@@ -208,7 +212,7 @@ class CalendarView(CalendarAccessMixin, View):
             for (_, day), windows in hours.items():
                 by_day.setdefault(day, []).extend(windows)
             open_hours = {day: merge(windows) for day, windows in by_day.items()}
-            context["grid"] = week_grid(bookings, zone, first_day, today, open_hours)
+            context["grid"] = week_grid(bookings, zone, first_day, today, open_hours, colors)
             context["title"] = (
                 f"{first_day:%b} {first_day.day} – {last_day:%b} {last_day.day}, {last_day.year}"
             )
@@ -217,11 +221,17 @@ class CalendarView(CalendarAccessMixin, View):
             first_day, after = month_range(anchor.year, anchor.month)
             start, end = local_bounds(zone, first_day, (after - first_day).days)
             bookings = calendar_bookings(self.tenant, start, end, **filters)
-            context["weeks"] = month_grid(bookings, zone, anchor.year, anchor.month, today)
+            context["weeks"] = month_grid(bookings, zone, anchor.year, anchor.month, today, colors)
             context["title"] = f"{anchor:%B %Y}"
             previous = (anchor.replace(day=1) - timedelta(days=1)).replace(day=1)
             following = (anchor.replace(day=28) + timedelta(days=4)).replace(day=1)
 
+        # The legend: each provider shown, with their colour.
+        shown_staff |= {booking.staff_id: booking.staff for booking in bookings}
+        context["legend"] = sorted(
+            ((member.public_name, colors.get(pk, 0)) for pk, member in shown_staff.items()),
+            key=lambda item: item[0].lower(),
+        )
         context["urls"] = {
             "previous": self.url(view=view, date=previous),
             "next": self.url(view=view, date=following),

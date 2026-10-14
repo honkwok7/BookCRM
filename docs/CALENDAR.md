@@ -56,6 +56,12 @@ touch screen dragging scrolls the calendar, and the dialog's **Reschedule** butt
 appointment instead. Without JavaScript the move
 confirmation is an ordinary page.
 
+## Provider colours
+
+Each provider's appointments use their **Calendar colour** from the staff profile, or an
+automatic one that stays the same on every page (`staff/colors.py` `provider_colors`). A legend
+under the calendar lists the providers shown with their colours.
+
 ## Booking from an empty spot
 
 With `appointments.manage`, clicking an empty spot in the day or week view opens **New

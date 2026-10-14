@@ -7,6 +7,7 @@ from core.api import (
 )
 from locations.models import Location
 from organizations.selectors import get_request_organization
+from staff.colors import COLOR_INDEX
 from staff.models import StaffProfile, StaffServiceOffering
 from staff.services import (
     add_offering,
@@ -50,6 +51,13 @@ class StaffProfileSerializer(TenantScopedModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "organization", "profile_image", "created_at", "updated_at")
+
+    def validate_appointment_color(self, value):
+        if value and value not in COLOR_INDEX:
+            raise serializers.ValidationError(
+                f"Choose one of: {', '.join(COLOR_INDEX)}, or leave it empty for automatic."
+            )
+        return value
 
     def validate_user(self, user):
         if self.instance is not None and user != self.instance.user:

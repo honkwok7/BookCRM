@@ -13,6 +13,7 @@ from locations.models import Location, Weekday
 from organizations.models import OrganizationMembership, OrganizationRole
 from scheduling.models import WeeklyAvailability
 from services.models import Service
+from staff.colors import COLOR_CHOICES
 from staff.models import StaffProfile
 from staff.services import OfferingChoice
 
@@ -120,6 +121,13 @@ class StaffProfileForm(ServiceErrorsMixin, ProfileFieldsMixin):
         required=False,
         help_text="Off: only your team can book appointments with them.",
     )
+    appointment_color = forms.ChoiceField(
+        label="Calendar colour",
+        choices=COLOR_CHOICES,
+        required=False,
+        widget=forms.RadioSelect,
+        help_text="Their appointments on the calendar. Automatic picks one nobody has chosen.",
+    )
 
     FIELDS = (
         "display_name",
@@ -131,6 +139,7 @@ class StaffProfileForm(ServiceErrorsMixin, ProfileFieldsMixin):
         "is_active",
         "is_accepting_bookings",
         "online_booking_visible",
+        "appointment_color",
     )
 
     @classmethod
@@ -156,6 +165,7 @@ class StaffProfileForm(ServiceErrorsMixin, ProfileFieldsMixin):
                     )
                 ],
             ),
+            ("Calendar", [self["appointment_color"]]),
         ]
 
 

@@ -1,0 +1,15 @@
+{% comment %}The calendar colour picker (staff/forms.py appointment_color): a swatch per colour in staff/colors.py; the first choice is "Automatic".{% endcomment %}
+<div class="form-field" role="radiogroup" aria-labelledby="{{ field.auto_id }}_label"{% if field.help_text %} aria-describedby="{{ field.auto_id }}_helptext"{% endif %}>
+  <span class="form-label" id="{{ field.auto_id }}_label">{{ field.label }}</span>
+  <div class="flex flex-wrap gap-2">
+    {% for choice in field %}
+      <label class="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5 text-sm has-[:checked]:border-brand-600 has-[:checked]:ring-1 has-[:checked]:ring-brand-600">
+        {{ choice.tag }}
+        {% if forloop.first %}<span class="size-4 rounded-full border border-dashed border-slate-400" aria-hidden="true"></span>{% else %}<span class="cal-swatch-{{ forloop.counter|add:'-2' }} size-4 rounded-full" aria-hidden="true"></span>{% endif %}
+        {{ choice.choice_label }}
+      </label>
+    {% endfor %}
+  </div>
+  {% if field.help_text %}<div class="form-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</div>{% endif %}
+  {% if field.errors %}<div id="{{ field.auto_id }}_error">{% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+</div>
