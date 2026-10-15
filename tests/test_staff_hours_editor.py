@@ -149,6 +149,14 @@ class HoursEditorPageTests(Fixtures, TestCase):
         self.assertContains(response, 'name="start_0" value="09:00"')
         self.assertContains(response, 'name="on_6" id="id_on_6" checked')
 
+    def test_every_day_offers_the_location_even_with_one_location(self):
+        # Daniel works only at Main and his rows are for "any location".
+        self.assertEqual(list(self.daniel.locations.all()), [self.main])
+        response = self.client.get(self.url, **HTMX)
+        for day in range(7):
+            self.assertContains(response, f'<select name="where_{day}"')
+        self.assertContains(response, f'<option value="{self.main.pk}">Main</option>', count=7)
+
     def test_save(self):
         response = self.client.post(self.url, week_data(start="10:00", end="18:00"), **HTMX)
         self.assertEqual(response.status_code, 204)
