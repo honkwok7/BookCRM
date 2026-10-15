@@ -142,7 +142,7 @@ class CalendarShadingTests(Fixtures, TestCase):
         response = self.calendar(view="week")
         # Maya 9-17 and Sam 12-20 merge to 9:00-20:00: 44 rows.
         self.assertContains(response, "cal-open col-span-full row-start-5 row-span-44", count=5)
-        self.assertContains(response, "when anyone shown is working")
+        self.assertContains(response, "when anyone ticked is working")
 
     def test_day_view_shades_each_providers_column(self):
         response = self.calendar(view="day")

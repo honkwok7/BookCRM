@@ -1,72 +1,104 @@
 {% extends "layouts/app.html" %}
 {% load tz %}
 {% comment %}
-The calendar (bookings/calendar_views.py). #calendar swaps on filter changes and navigation
-(htmx) and refreshes itself after a change (the calendar-refresh event). Double-clicking an
-appointment opens it in the page dialog; appointments that can be moved are dragged to a new
-time (day and week views) or another day (month view) (static/js/app.js "calendar"). Without JavaScript every link
-is a page and the filters have a button.
+The calendar (bookings/calendar_views.py). The side panel (#cal-panel) holds the filters and
+the team: tick the providers to show (each with their photo or initial in their calendar
+colour), search the list, or tick "All team". The panel always sends "picked", so ticking
+nobody shows nobody. #calendar swaps on filter changes and navigation (htmx) and refreshes
+itself after a change (the calendar-refresh event). Double-clicking an appointment opens it in
+the page dialog; appointments that can be moved are dragged to a new time (day and week views)
+or another day (month view) (static/js/app.js "calendar"). The panel button hides or shows the
+panel (closed by default on small screens). Without JavaScript every link is a page and the
+panel has an Apply button.
 {% endcomment %}
 {% block title %}{{ page_heading }} · {{ organization.name }}{% endblock %}
 {% block page_title %}{{ page_heading }}{% endblock %}
 {% block content %}
 {% timezone zone %}
-<div id="calendar" class="min-w-0" hx-disinherit="*" hx-get="{{ request.get_full_path }}" hx-trigger="calendar-refresh from:body" hx-select="#calendar" hx-swap="outerHTML">
-  <form method="get" action="{{ calendar_url }}" class="mb-3 flex flex-wrap items-end gap-3" hx-get="{{ calendar_url }}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
-    <input type="hidden" name="view" value="{{ view }}">
-    <input type="hidden" name="date" value="{{ anchor|date:'Y-m-d' }}">
-    {% if locations|length > 1 %}
-      <div class="form-field"><label class="form-label" for="cal-location">Location</label>
-        <select id="cal-location" name="location" class="input">
-          <option value="">All locations</option>
-          {% for item in locations %}<option value="{{ item.pk }}"{% if location.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+<div id="calendar" class="flex min-w-0 flex-col gap-4 lg:flex-row" hx-disinherit="*" hx-get="{{ request.get_full_path }}" hx-trigger="calendar-refresh from:body" hx-select="#calendar" hx-swap="outerHTML">
+  <aside id="cal-panel" class="cal-panel w-full shrink-0 lg:w-64" aria-label="Calendar filters and team">
+    <form method="get" action="{{ calendar_url }}" class="card grid gap-4 p-4" hx-get="{{ calendar_url }}" hx-trigger="change" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML" hx-push-url="true">
+      <input type="hidden" name="view" value="{{ view }}">
+      <input type="hidden" name="date" value="{{ anchor|date:'Y-m-d' }}">
+      {% if locations|length > 1 %}
+        <div class="form-field"><label class="form-label" for="cal-location">Location</label>
+          <select id="cal-location" name="location" class="input">
+            <option value="">All locations</option>
+            {% for item in locations %}<option value="{{ item.pk }}"{% if location.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+          </select></div>
+      {% endif %}
+      <div class="form-field"><label class="form-label" for="cal-service">Service</label>
+        <select id="cal-service" name="service" class="input">
+          <option value="">All services</option>
+          {% for item in service_options %}<option value="{{ item.pk }}"{% if service.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
         </select></div>
-    {% endif %}
-    {% if sees_everyone %}
-      <div class="form-field"><label class="form-label" for="cal-staff">Provider</label>
-        <select id="cal-staff" name="staff" class="input">
-          <option value="">Everyone</option>
-          {% for item in staff_options %}<option value="{{ item.pk }}"{% if staff.pk == item.pk %} selected{% endif %}>{{ item.public_name }}</option>{% endfor %}
+      <div class="form-field"><label class="form-label" for="cal-status">Status</label>
+        <select id="cal-status" name="status" class="input">
+          <option value="">Active and past (not cancelled)</option>
+          {% for value, label in status_options %}<option value="{{ value }}"{% if value in statuses %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select></div>
-    {% endif %}
-    <div class="form-field"><label class="form-label" for="cal-service">Service</label>
-      <select id="cal-service" name="service" class="input">
-        <option value="">All services</option>
-        {% for item in service_options %}<option value="{{ item.pk }}"{% if service.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
-      </select></div>
-    <div class="form-field"><label class="form-label" for="cal-status">Status</label>
-      <select id="cal-status" name="status" class="input">
-        <option value="">Active and past (not cancelled)</option>
-        {% for value, label in status_options %}<option value="{{ value }}"{% if value in statuses %} selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select></div>
-    <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
-  </form>
 
-  <div class="mb-3 flex flex-wrap items-center justify-between gap-3" hx-boost="true" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML">
-    <div class="flex items-center gap-2">
-      <a href="{{ urls.previous }}" class="btn btn-secondary btn-sm" aria-label="Previous {{ view }}">{% include "components/icon.html" with name="chevron-left" class="size-4" %}</a>
-      <a href="{{ urls.today }}" class="btn btn-secondary btn-sm">Today</a>
-      <a href="{{ urls.next }}" class="btn btn-secondary btn-sm" aria-label="Next {{ view }}">{% include "components/icon.html" with name="chevron-right" class="size-4" %}</a>
-      <h2 class="ml-2 text-lg font-semibold text-slate-900" aria-live="polite">{{ title }}</h2>
+      {% if sees_everyone and team_options %}
+        <fieldset class="grid gap-2" data-cal-team>
+          <input type="hidden" name="picked" value="1">
+          <legend class="mb-2 text-sm font-semibold text-slate-900">Team</legend>
+          {% if team_options|length > 6 %}
+            <label class="sr-only" for="cal-team-search">Search the team</label>
+            <input type="search" id="cal-team-search" class="input" placeholder="Search" autocomplete="off" data-cal-search hx-preserve>
+          {% endif %}
+          <ul class="grid gap-0.5 lg:max-h-[60vh] lg:overflow-y-auto">
+            <li>
+              <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                <input type="checkbox" data-cal-all{% if all_ticked %} checked{% endif %}>
+                <span class="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-hidden="true">{% include "components/icon.html" with name="users" class="size-4" %}</span>
+                <span class="font-medium">All team ({{ team_options|length }})</span>
+              </label>
+            </li>
+            {% for option in team_options %}
+              <li data-cal-member-row data-name="{{ option.member.public_name|lower }}">
+                <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                  <input type="checkbox" name="staff" value="{{ option.member.pk }}" data-cal-member{% if option.ticked %} checked{% endif %}>
+                  {% include "calendar/_avatar.html" with member=option.member color=option.color %}
+                  <span class="min-w-0 truncate">{{ option.member.public_name }}</span>
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+          <p class="hidden px-2 text-xs text-slate-600" data-cal-no-match>Nobody matches.</p>
+        </fieldset>
+      {% endif %}
+      <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+    </form>
+  </aside>
+
+  <div class="min-w-0 flex-1">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3" hx-boost="true" hx-target="#calendar" hx-select="#calendar" hx-swap="outerHTML">
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" class="btn btn-ghost btn-sm" data-cal-panel-toggle aria-controls="cal-panel" aria-label="Show or hide the team and filters">{% include "components/icon.html" with name="menu" class="size-4" %}<span class="hidden sm:inline">Team</span></button>
+        <a href="{{ urls.previous }}" class="btn btn-ghost btn-sm" aria-label="Previous {{ view }}">{% include "components/icon.html" with name="chevron-left" class="size-4" %}</a>
+        <a href="{{ urls.next }}" class="btn btn-ghost btn-sm" aria-label="Next {{ view }}">{% include "components/icon.html" with name="chevron-right" class="size-4" %}</a>
+        <a href="{{ urls.today }}" class="btn btn-secondary btn-sm">Today</a>
+        <h2 class="ml-1 text-lg font-semibold text-slate-900" aria-live="polite">{{ title }}</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <nav aria-label="Calendar view" class="inline-flex rounded-md shadow-sm">
+          <a href="{{ urls.day }}" class="btn btn-sm rounded-r-none {% if view == 'day' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "day" %} aria-current="page"{% endif %}>Day</a>
+          <a href="{{ urls.week }}" class="btn btn-sm rounded-none {% if view == 'week' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "week" %} aria-current="page"{% endif %}>Week</a>
+          <a href="{{ urls.month }}" class="btn btn-sm rounded-l-none {% if view == 'month' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "month" %} aria-current="page"{% endif %}>Month</a>
+        </nav>
+        {% if new_url %}<a href="{{ new_url }}" class="btn btn-primary btn-sm" hx-boost="false" hx-get="{{ new_url }}?date={{ anchor|date:'Y-m-d' }}{% if staff %}&amp;staff={{ staff.pk }}{% endif %}{% if location %}&amp;location={{ location.pk }}{% endif %}" hx-target="#modal-body" hx-select="unset" hx-swap="innerHTML">{% include "components/icon.html" with name="plus" class="size-4" %}<span class="hidden sm:inline">New</span><span class="sr-only sm:hidden">New appointment</span></a>{% endif %}
+      </div>
     </div>
-    <nav aria-label="Calendar view" class="inline-flex rounded-md shadow-sm">
-      <a href="{{ urls.day }}" class="btn btn-sm rounded-r-none {% if view == 'day' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "day" %} aria-current="page"{% endif %}>Day</a>
-      <a href="{{ urls.week }}" class="btn btn-sm rounded-none {% if view == 'week' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "week" %} aria-current="page"{% endif %}>Week</a>
-      <a href="{{ urls.month }}" class="btn btn-sm rounded-l-none {% if view == 'month' %}btn-primary{% else %}btn-secondary{% endif %}"{% if view == "month" %} aria-current="page"{% endif %}>Month</a>
-    </nav>
-  </div>
 
-  {% if view == "month" %}
-    {% include "calendar/_month.html" %}
-  {% else %}
-    {% include "calendar/_time_grid.html" %}
-  {% endif %}
-  {% if legend %}
-    <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-700" aria-label="Provider colours">
-      {% for name, color in legend %}<li class="flex items-center gap-1.5"><span class="cal-swatch-{{ color }} size-3 rounded-full" aria-hidden="true"></span>{{ name }}</li>{% endfor %}
-    </ul>
-  {% endif %}
-  <p class="mt-2 text-xs text-slate-600">{% if view != "month" %}<span class="cal-open mr-1 inline-block size-3 rounded-sm align-[-2px] ring-1 ring-emerald-200" aria-hidden="true"></span>Shaded: {% if view == "day" %}each provider's working hours{% elif staff %}{{ staff.public_name }}'s working hours{% else %}when anyone shown is working (pick a provider to see theirs){% endif %}. {% endif %}Times in {{ zone }}. {% if new_url %}Click an empty {% if view == "month" %}day{% else %}time{% endif %} to book there. {% endif %}Double-click an appointment to see its details{% if movable_statuses %}, or drag it to a new {% if view == "month" %}day{% else %}time{% endif %}{% endif %}.</p>
+    {% if team is not None and not team %}
+      <div class="card p-6 text-sm text-slate-700">Nobody is ticked. Tick providers in the team list to see their calendars.</div>
+    {% elif view == "month" %}
+      {% include "calendar/_month.html" %}
+    {% else %}
+      {% include "calendar/_time_grid.html" %}
+    {% endif %}
+    <p class="mt-2 text-xs text-slate-600">{% if view != "month" %}<span class="cal-open mr-1 inline-block size-3 rounded-sm align-[-2px] ring-1 ring-slate-300" aria-hidden="true"></span>White: {% if view == "day" %}each provider's working hours{% elif staff %}{{ staff.public_name }}'s working hours{% else %}when anyone ticked is working{% endif %}; grey: not working. {% endif %}Times in {{ zone }}. {% if new_url %}Click an empty {% if view == "month" %}day{% else %}time{% endif %} to book there. {% endif %}Double-click an appointment to see its details{% if movable_statuses %}, or drag it to a new {% if view == "month" %}day{% else %}time{% endif %}{% endif %}.</p>
+  </div>
 </div>
 {% endtimezone %}
 {% endblock %}

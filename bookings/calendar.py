@@ -60,7 +60,9 @@ def calendar_bookings(
         bookings = bookings.filter(staff__user=tenant.user)
     if location is not None:
         bookings = bookings.filter(location=location)
-    if staff is not None:
+    if isinstance(staff, list | tuple | set):
+        bookings = bookings.filter(staff__in=staff)
+    elif staff is not None:
         bookings = bookings.filter(staff=staff)
     if service is not None:
         bookings = bookings.filter(service=service)
@@ -94,6 +96,8 @@ class Column:
     lanes: int = 1
     is_today: bool = False
     open: list[tuple[int, int]] = field(default_factory=list)  # working hours: (row, span)
+    away: list[tuple[int, int, str]] = field(default_factory=list)  # time off: (row, span, label)
+    color: int = 0  # the provider's colour (day view)
 
 
 @dataclass
@@ -240,11 +244,13 @@ def week_grid(
 
 
 def day_grid(
-    bookings, zone: ZoneInfo, day: date, providers, open_hours=None, colors=None
+    bookings, zone: ZoneInfo, day: date, providers, open_hours=None, colors=None, away=None
 ) -> TimeGrid:
     """One column per provider (the "resource" view). ``open_hours``: ``{staff_pk: [(start,
-    end), ...]}`` (UTC) to shade as each provider's working hours."""
+    end), ...]}`` (UTC) to shade as each provider's working hours; ``away``: ``{staff_pk:
+    [(start, end, label), ...]}`` (UTC), time off to label."""
     open_hours = open_hours or {}
+    away = away or {}
     bookings = list(bookings)
     first, last = hour_bounds(
         [(b.start_datetime.astimezone(zone), b.end_datetime.astimezone(zone)) for b in bookings]
@@ -267,6 +273,11 @@ def day_grid(
     for staff_id, column in columns.items():
         column.lanes = assign_lanes(column.events)
         column.open = open_spans(open_hours.get(staff_id, []), zone, day, first, last)
+        column.color = color_for(staff_id, palette)
+        for start, end, label in away.get(staff_id, []):
+            spot = grid_span(start, end, zone, day, first, last)
+            if spot is not None:
+                column.away.append((*spot, label))
     return TimeGrid(list(columns.values()), first, last)
 
 

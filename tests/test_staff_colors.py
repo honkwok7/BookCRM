@@ -80,7 +80,7 @@ class ColorPickerTests(TestCase):
                     "/app/calendar/", {"view": view, "date": day.isoformat()}
                 )
                 self.assertContains(response, f"cal-color-{COLOR_INDEX['violet']} ")
-                self.assertContains(response, 'aria-label="Provider colours"')
+                self.assertContains(response, f"cal-swatch-{COLOR_INDEX['violet']} ")  # team panel
         profile = self.client.get(f"/app/staff/{self.maya.pk}/")
         self.assertContains(profile, "Violet")
 

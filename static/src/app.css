@@ -225,7 +225,12 @@
   .cal-swatch-10 { @apply bg-cyan-500; }
   .cal-swatch-11 { @apply bg-stone-500; }
   /* Providers' working hours behind the appointments (bookings/calendar.py open_spans) */
-  .cal-open { @apply bg-emerald-50; }
+  .cal-closed { @apply bg-slate-100; }
+  .cal-open { @apply bg-white; }
+  .cal-away { @apply flex items-start overflow-hidden border-l-2 border-slate-400 bg-slate-200/80 px-1.5 pt-0.5 text-xs font-medium text-slate-700; }
+  /* The team panel: hidden with the panel button; closed by default on small screens */
+  [data-cal-panel="closed"] .cal-panel { @apply hidden; }
+  @media (width < 64rem) { body:not([data-cal-panel="open"]) .cal-panel { @apply hidden; } }
   /* Drag and drop (static/js/app.js "calendar") */
   .cal-movable { @apply cursor-grab select-none; }
   .cal-dragging { @apply pointer-events-none z-30 opacity-90 shadow-lg ring-2 ring-brand-600; }

@@ -142,3 +142,31 @@ def working_hours(
                 result[(staff_id, day)] = windows
         day += timedelta(days=1)
     return result
+
+
+def away_times(organization, providers, first_day: date, last_day: date, zone) -> dict:
+    """``{staff_pk: [(start, end, label), ...]}`` (UTC): approved time off and days off (special
+    days "not working") from ``first_day`` to ``last_day``, labelled for the calendar."""
+    staff_ids = [provider.pk for provider in providers]
+    if not staff_ids or last_day < first_day:
+        return {}
+    away = defaultdict(list)
+    for row in TimeOff.objects.filter(
+        organization=organization,
+        staff_id__in=staff_ids,
+        approval_status=TimeOff.ApprovalStatus.APPROVED,
+        start_datetime__lt=_at(last_day + timedelta(days=1), time.min, zone),
+        end_datetime__gt=_at(first_day, time.min, zone),
+    ):
+        away[row.staff_id].append((row.start_datetime, row.end_datetime, row.reason or "Time off"))
+    for row in AvailabilityException.objects.filter(
+        organization=organization,
+        staff_id__in=staff_ids,
+        date__gte=first_day,
+        date__lte=last_day,
+        unavailable_all_day=True,
+    ):
+        start = _at(row.date, time.min, zone)
+        end = _at(row.date + timedelta(days=1), time.min, zone)
+        away[row.staff_id].append((start, end, row.reason or "Day off"))
+    return dict(away)

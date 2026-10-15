@@ -15,6 +15,7 @@ Without JavaScript every link and form is an ordinary page.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, date, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -54,7 +55,7 @@ from locations.selectors import locations_for
 from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from scheduling.availability import merge, zone_of
-from scheduling.working_hours import working_hours
+from scheduling.working_hours import away_times, working_hours
 from services.selectors import services_for
 from staff.colors import provider_colors
 from staff.selectors import is_provider_here, own_profile, staff_for
@@ -101,8 +102,11 @@ class CalendarAccessMixin(TenantPageMixin):
         return can_use_calendar(tenant)
 
     def filters(self):
-        """The chosen location, provider and service (ids from another organization are
-        ignored), and the statuses to show."""
+        """The chosen location, providers and service (ids from another organization are
+        ignored), and the statuses to show.
+
+        Providers (``staff``, repeated) are None for everyone, else the list ticked in the team
+        panel. The panel always sends ``picked``, so ticking nobody shows nobody."""
         params, organization = self.request.GET, self.tenant.organization
 
         def pick(queryset, key):
@@ -113,9 +117,18 @@ class CalendarAccessMixin(TenantPageMixin):
                 return None
 
         location = pick(locations_for(organization), "location")
-        staff = pick(self.visible_staff(), "staff")
+        ids = []
+        for value in params.getlist("staff"):
+            try:
+                ids.append(str(uuid.UUID(value)))
+            except ValueError:  # not a UUID
+                continue
+        staff = None
+        if ids or "picked" in params:
+            staff = list(self.visible_staff().filter(pk__in=ids))
         if self.own_only:
-            staff = own_profile(self.tenant)
+            profile = own_profile(self.tenant)
+            staff = [profile] if profile else []
         service = pick(services_for(organization), "service")
         statuses = [value for value in params.getlist("status") if value in Booking.Status.values]
         return location, staff, service, statuses
@@ -149,11 +162,12 @@ class CalendarView(CalendarAccessMixin, View):
             "today": today,
             "zone": str(zone),
             "location": location,
-            "staff": staff,
+            "team": staff,
+            # One provider ticked: new appointments are for them, the shading is theirs.
+            "staff": staff[0] if staff and len(staff) == 1 else None,
             "service": service,
             "statuses": statuses,
             "locations": locations_for(self.tenant.organization, active_only=True),
-            "staff_options": self.visible_staff(),
             "service_options": services_for(self.tenant.organization).filter(is_archived=False),
             "status_options": Booking.Status.choices,
             "sees_everyone": not self.own_only
@@ -176,7 +190,8 @@ class CalendarView(CalendarAccessMixin, View):
         }
         filters = dict(location=location, staff=staff, service=service, statuses=statuses)
         colors = provider_colors(self.tenant.organization)
-        shown_staff = {}
+        context["team_options"] = self.team_options(location, staff, colors)
+        context["all_ticked"] = all(option["ticked"] for option in context["team_options"])
 
         if view == "day":
             start, end = local_bounds(zone, anchor, 1)
@@ -184,15 +199,15 @@ class CalendarView(CalendarAccessMixin, View):
             if location is not None:
                 providers = providers.filter(locations=location)
             if staff is not None:
-                providers = providers.filter(pk=staff.pk)
+                providers = providers.filter(pk__in=[member.pk for member in staff])
             bookings = calendar_bookings(self.tenant, start, end, **filters)
-            providers = list(providers)
-            shown_staff = {provider.pk: provider for provider in providers}
+            providers = list(providers.select_related("user"))
             hours = working_hours(
                 self.tenant.organization, providers, anchor, anchor, location=location
             )
             open_hours = {staff_id: windows for (staff_id, _), windows in hours.items()}
-            context["grid"] = day_grid(bookings, zone, anchor, providers, open_hours, colors)
+            away = away_times(self.tenant.organization, providers, anchor, anchor, zone)
+            context["grid"] = day_grid(bookings, zone, anchor, providers, open_hours, colors, away)
             step = timedelta(days=1)
             context["title"] = f"{anchor:%A, %B} {anchor.day}, {anchor.year}"
             previous, following = anchor - step, anchor + step
@@ -201,8 +216,8 @@ class CalendarView(CalendarAccessMixin, View):
             start, end = local_bounds(zone, first_day, 7)
             bookings = calendar_bookings(self.tenant, start, end, **filters)
             last_day = first_day + timedelta(days=6)
-            # One provider's hours, or (everyone) the hours when anyone shown is working.
-            providers = [staff] if staff is not None else self.visible_staff()
+            # The ticked providers' hours: when any of them is working.
+            providers = staff if staff is not None else self.visible_staff()
             if staff is None and location is not None:
                 providers = providers.filter(locations=location)
             hours = working_hours(
@@ -226,12 +241,6 @@ class CalendarView(CalendarAccessMixin, View):
             previous = (anchor.replace(day=1) - timedelta(days=1)).replace(day=1)
             following = (anchor.replace(day=28) + timedelta(days=4)).replace(day=1)
 
-        # The legend: each provider shown, with their colour.
-        shown_staff |= {booking.staff_id: booking.staff for booking in bookings}
-        context["legend"] = sorted(
-            ((member.public_name, colors.get(pk, 0)) for pk, member in shown_staff.items()),
-            key=lambda item: item[0].lower(),
-        )
         context["urls"] = {
             "previous": self.url(view=view, date=previous),
             "next": self.url(view=view, date=following),
@@ -242,6 +251,25 @@ class CalendarView(CalendarAccessMixin, View):
         }
         context["day_url"] = self.url(view="day", date=None)
         return render(request, self.template_name, context)
+
+    def team_options(self, location, staff, colors) -> list[dict]:
+        """The team panel: everyone this member may see (at the chosen location), ticked when
+        shown."""
+        if self.own_only:
+            return []
+        members = self.visible_staff().select_related("user")
+        if location is not None:
+            members = members.filter(locations=location)
+        ticked = None if staff is None else {member.pk for member in staff}
+        options = [
+            {
+                "member": member,
+                "color": colors.get(member.pk, 0),
+                "ticked": ticked is None or member.pk in ticked,
+            }
+            for member in members
+        ]
+        return sorted(options, key=lambda option: option["member"].public_name.lower())
 
     def url(self, **overrides) -> str:
         params = self.request.GET.copy()
