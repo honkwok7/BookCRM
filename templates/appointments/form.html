@@ -54,7 +54,13 @@ does the same without JavaScript.
       {% if form.start.field.choices %}
         {% include "components/field.html" with field=form.start %}
       {% elif form.service.value %}
-        <p class="text-sm text-slate-700">No free times on this day. Try another day or provider.</p>
+        <div class="grid gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700" role="status">
+          <p>{% if form.is_today %}No free times left today.{% else %}No free times on {{ form.day|date:"D, M j" }}.{% endif %}{% if not form.next_free_day %} Try another day or provider.{% endif %}</p>
+          {% if form.next_free_day %}
+            <div><button type="button" class="btn btn-secondary btn-sm" hx-post="{{ action }}" hx-include="closest form" hx-vals='{"refresh": "1", "date": "{{ form.next_free_day|date:'Y-m-d' }}"}' hx-target="closest form" hx-swap="outerHTML">Next free day: {{ form.next_free_day|date:"D, M j" }}</button></div>
+          {% endif %}
+        </div>
+        {% for error in form.start.errors %}<p class="form-error">Choose a time: {{ error|lower }}</p>{% endfor %}
       {% endif %}
     {% else %}
       <p class="text-sm text-slate-700">The appointment starts now and the customer is checked in.</p>
@@ -69,7 +75,7 @@ does the same without JavaScript.
     {% else %}
       <a href="{% url 'app-appointment-list' %}" class="btn btn-secondary">Cancel</a>
     {% endif %}
-    <button type="submit" class="btn btn-primary">{% if walk_in %}Check in walk-in{% else %}Book appointment{% endif %}</button>
+    <button type="submit" class="btn btn-primary"{% if form.start and not form.start.field.choices %} disabled title="Choose a service, provider and day with a free time first"{% endif %}>{% if walk_in %}Check in walk-in{% else %}Book appointment{% endif %}</button>
   </div>
 </form>
 {% endpartialdef %}
