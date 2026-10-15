@@ -36,7 +36,7 @@ the form comes back with a warning and "Save anyway". Opened in the page dialog 
             {{ day.on }}
             <label for="{{ day.on.id_for_label }}" class="text-sm font-semibold text-slate-900">{{ day.label }}</label>
           </div>
-          {% if form.locations|length > 1 or day.where.value %}
+          {% if form.locations %}
             <div class="flex items-center gap-2 text-sm">
               <label for="{{ day.where.id_for_label }}" class="text-slate-600">At</label>
               <select name="{{ day.where.html_name }}" id="{{ day.where.id_for_label }}" class="input w-auto py-1">
