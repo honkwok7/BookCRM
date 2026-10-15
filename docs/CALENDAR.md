@@ -15,10 +15,9 @@ appointments are hidden, and choosing a status shows only that status. Times are
 chosen location's time zone, or the organization's. The grid shows 8:00 to 20:00 and widens
 to include any appointment outside those hours.
 
-**Working hours** are shaded light green behind the appointments in the day and week views,
-so free time in working hours stands out. The day view shades each provider's column with
-their own hours. The week view shades the chosen provider's hours, or, with "Everyone", the
-hours when anyone shown is working. The hours are the weekly hours (for the chosen location,
+**Working hours** are white and the rest of the day grey in the day and week views, so free
+time in working hours stands out. The day view uses each provider's own hours in their column.
+The week view uses the ticked providers' hours: when any of them is working. The hours are the weekly hours (for the chosen location,
 or every location), limited by day exceptions and the location's opening hours, minus
 closures, holidays and approved time off (`scheduling/working_hours.py`, a fixed number of
 queries). The grid widens to show hours outside 8:00–20:00. The month view isn't shaded.
@@ -56,11 +55,26 @@ touch screen dragging scrolls the calendar, and the dialog's **Reschedule** butt
 appointment instead. Without JavaScript the move
 confirmation is an ordinary page.
 
-## Provider colours
+## Team panel
+
+The side panel holds the filters (location, service, status) and the team: everyone the member
+may see at the chosen location, each with their photo or their initial on their calendar
+colour. Tick providers to show them (repeated `staff` parameters); "All team" ticks or unticks
+everyone, and a search box filters a long list. The panel always sends `picked=1`, so ticking
+nobody shows nobody; without `picked` (an old link) everyone, or the one `staff` given, shows.
+The panel button hides or shows it (remembered in the browser); on small screens it starts
+closed. Providers without `appointments.view_all` see only their own calendar and no team list.
+
+In the day view each column's header shows the provider's photo or initial. Columns are grey
+outside working hours and white inside them. Approved time off (labelled with its reason) and
+days off (special days "not working") are labelled blocks (`scheduling/working_hours.py`
+`away_times`).
+
+
 
 Each provider's appointments use their **Calendar colour** from the staff profile, or an
-automatic one that stays the same on every page (`staff/colors.py` `provider_colors`). A legend
-under the calendar lists the providers shown with their colours.
+automatic one that stays the same on every page (`staff/colors.py` `provider_colors`). The team panel
+shows each provider's colour.
 
 ## Booking from an empty spot
 

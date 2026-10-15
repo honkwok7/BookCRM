@@ -3,7 +3,9 @@ Day (one column per provider) or week (one column per day). Rows are 15 minutes 
 event's row, span and lane come from bookings/calendar.py and are grid classes safelisted in
 static/src/app.css (no inline styles: CSP). The data-* attributes drive drag and drop
 (static/js/app.js "calendar"): the grid's zone and first hour, each column's date, and on a
-movable appointment the URL that confirms a move. In the day view an appointment keeps its
+movable appointment the URL that confirms a move. Columns are grey (.cal-closed) except the
+working hours (.cal-open); time off is a labelled block (.cal-away). In the day view each
+column's header shows the provider's photo or initial. In the day view an appointment keeps its
 provider, so it moves only within its own column. With appointments.manage, a click on an
 empty spot from today on opens a new appointment there (data-new-url; the column's date and,
 in the day view, its provider; the grid's location and chosen provider).
@@ -23,12 +25,13 @@ in the day view, its provider; the grid's location and chosen provider).
           {% if view == "week" %}
             <a href="{{ day_url }}&amp;date={{ column.key|date:'Y-m-d' }}" class="text-inherit no-underline hover:underline"{% if column.is_today %} aria-current="date"{% endif %}><span class="block text-xs">{{ column.label }}</span>{{ column.sublabel }}</a>
           {% else %}
-            <span class="truncate font-medium">{{ column.label }}</span>
+            <span class="flex min-w-0 items-center gap-2">{% include "calendar/_avatar.html" with member=column.key color=column.color size="size-6" %}<span class="truncate font-medium">{{ column.label }}</span></span>
           {% endif %}
         </div>
-        <div class="grid auto-rows-[1rem] grid-cols-{{ column.lanes }} gap-x-0.5 px-0.5 pt-2" data-cal-column data-date="{% if view == 'week' %}{{ column.key|date:'Y-m-d' }}{% else %}{{ anchor|date:'Y-m-d' }}{% endif %}"{% if view == 'day' %} data-staff="{{ column.key.pk }}"{% endif %}{% if view == 'week' and column.key < today or view == 'day' and anchor < today %} data-past{% endif %}>
+        <div class="cal-closed grid auto-rows-[1rem] grid-cols-{{ column.lanes }} gap-x-0.5 px-0.5 pt-2" data-cal-column data-date="{% if view == 'week' %}{{ column.key|date:'Y-m-d' }}{% else %}{{ anchor|date:'Y-m-d' }}{% endif %}"{% if view == 'day' %} data-staff="{{ column.key.pk }}"{% endif %}{% if view == 'week' and column.key < today or view == 'day' and anchor < today %} data-past{% endif %}>
           {% for spot in column.open %}<div class="cal-open col-span-full row-start-{{ spot.0 }} row-span-{{ spot.1 }}" aria-hidden="true"></div>{% endfor %}
-          {% for hour in grid.hours %}<div class="col-span-full row-start-{{ hour.row }} row-span-4 border-t border-slate-100" aria-hidden="true"></div>{% endfor %}
+          {% for hour in grid.hours %}<div class="col-span-full row-start-{{ hour.row }} row-span-4 border-t border-slate-200/70" aria-hidden="true"></div>{% endfor %}
+          {% for row, span, label in column.away %}<div class="cal-away col-span-full row-start-{{ row }} row-span-{{ span }}"><span class="truncate">{{ label }}</span></div>{% endfor %}
           <div class="row-start-{{ grid.rows }}" aria-hidden="true"></div>
           {% for event in column.events %}
             {% with booking=event.booking %}

@@ -196,6 +196,101 @@
       return Math.max(1, Math.min(row, state.rows - state.span + 1));
     }
 
+    // -- Team panel ---------------------------------------------------------------------------
+    // The panel button hides or shows #cal-panel (remembered in this browser); "All team" ticks
+    // or unticks everyone before the form's change event sends the filters; the search box
+    // only hides names in the list (its change event must not send the form).
+
+    var PANEL_KEY = "bookcrm.calendarPanel";
+
+    function readPanel() {
+      try {
+        return window.localStorage.getItem(PANEL_KEY);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function setPanel(state) {
+      document.body.dataset.calPanel = state;
+      try {
+        window.localStorage.setItem(PANEL_KEY, state);
+      } catch (error) {
+        // private window: the choice lasts for this page only
+      }
+    }
+
+    var savedPanel = readPanel();
+    if (savedPanel === "open" || savedPanel === "closed") document.body.dataset.calPanel = savedPanel;
+
+    function syncTeam(root) {
+      var team = (root || document).querySelector("[data-cal-team]");
+      if (!team) return;
+      var all = team.querySelector("[data-cal-all]");
+      var members = team.querySelectorAll("[data-cal-member]");
+      var ticked = team.querySelectorAll("[data-cal-member]:checked").length;
+      if (all) {
+        all.checked = ticked === members.length;
+        all.indeterminate = ticked > 0 && ticked < members.length;
+      }
+      filterTeam(team);
+    }
+
+    function filterTeam(team) {
+      var search = team.querySelector("[data-cal-search]");
+      var query = search ? search.value.trim().toLowerCase() : "";
+      var shown = 0;
+      team.querySelectorAll("[data-cal-member-row]").forEach(function (row) {
+        var match = !query || row.dataset.name.indexOf(query) !== -1;
+        row.hidden = !match;
+        if (match) shown += 1;
+      });
+      var none = team.querySelector("[data-cal-no-match]");
+      if (none) none.classList.toggle("hidden", shown > 0);
+    }
+
+    document.addEventListener("click", function (event) {
+      var toggle = event.target.closest && event.target.closest("[data-cal-panel-toggle]");
+      if (toggle) {
+        var panel = document.getElementById("cal-panel");
+        setPanel(panel && panel.offsetParent !== null ? "closed" : "open");
+        return;
+      }
+      var all = event.target.closest && event.target.closest("[data-cal-all]");
+      if (!all) return;
+      // The click has already toggled the box; tick the members to match before "change".
+      var team = all.closest("[data-cal-team]");
+      team.querySelectorAll("[data-cal-member]").forEach(function (box) {
+        box.checked = all.checked;
+      });
+    });
+
+    document.addEventListener(
+      "change",
+      function (event) {
+        if (event.target.matches && event.target.matches("[data-cal-search]")) {
+          event.stopPropagation();
+        }
+      },
+      true,
+    );
+
+    document.addEventListener("input", function (event) {
+      if (!event.target.matches || !event.target.matches("[data-cal-search]")) return;
+      filterTeam(event.target.closest("[data-cal-team]"));
+    });
+
+    document.addEventListener("htmx:afterSettle", function () {
+      syncTeam();
+    });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        syncTeam();
+      });
+    } else {
+      syncTeam();
+    }
+
     // -- New appointment from an empty spot --------------------------------------------------
 
     var ghost = null;

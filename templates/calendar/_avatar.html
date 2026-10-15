@@ -1,0 +1,3 @@
+{% comment %}A provider's photo, or their initial on their calendar colour (staff/colors.py).
+  {% include "calendar/_avatar.html" with member=member color=3 size="size-7" %}{% endcomment %}
+{% if member.profile_image %}<img src="{{ member.profile_image.url }}" alt="" class="{{ size|default:'size-7' }} shrink-0 rounded-full object-cover ring-2 ring-white">{% else %}<span class="cal-swatch-{{ color }} {{ size|default:'size-7' }} inline-flex shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ring-2 ring-white" aria-hidden="true">{{ member.public_name|first|upper }}</span>{% endif %}
