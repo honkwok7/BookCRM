@@ -25,6 +25,7 @@ from services.selectors import services_bookable_at
 from staff.selectors import list_providers_for
 
 ANYONE = "any"
+NEXT_FREE_DAYS = 60  # how far "the next free day" looks
 
 
 class SlotChoicesMixin:
@@ -86,6 +87,7 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         organization = tenant.organization
         data = self.data if self.is_bound else self.initial
         self.slots = {}
+        self.next_free_day = None
 
         # Customer: search the customers this member may read.
         self.can_search = customers is not None
@@ -153,6 +155,7 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         day = data.get("date")
         day = day if isinstance(day, date) else parse_date(str(day or "")) or today
         self.day = max(day, today)
+        self.is_today = self.day == today
         self.fields["date"].initial = self.day
         self.fields["date"].widget.attrs["min"] = today.isoformat()
         self.fields["start"].choices = []
@@ -162,6 +165,13 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
             self.fields["start"].choices = self.slot_choices(engine, self.day, staff)
             if str(data.get("start") or "") not in self.slots:
                 self._prefill("start", self.time_at(data.get("at")))
+            if not self.slots:
+                # Nothing free that day (or nothing left today): offer the next day that has.
+                later = engine.get_available_slots(
+                    self.day + timedelta(days=1), self.day + timedelta(days=NEXT_FREE_DAYS), staff
+                )
+                if later:
+                    self.next_free_day = later[0].start.astimezone(zone).date()
 
     def _prefill(self, name, value):
         """Choose ``value`` for a field the member hasn't set (yet)."""

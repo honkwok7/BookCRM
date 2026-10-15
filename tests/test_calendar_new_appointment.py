@@ -94,3 +94,29 @@ class CalendarClickTargetTests(Fixtures, TestCase):
         response = self.calendar(viewer)
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "data-new-url")
+
+
+class NoFreeTimesTests(Fixtures, TestCase):
+    def setUp(self):
+        self.make_fixtures()
+        self.client.force_login(self.receptionist)
+        f.AvailabilityExceptionFactory(organization=self.org, staff=self.maya, date=self.day)
+
+    def refresh(self, **data):
+        base = {"date": self.day.isoformat(), "service": str(self.service.pk), "refresh": "1"}
+        return self.client.post(URL, base | {"staff": str(self.maya.pk)} | data, **HTMX)
+
+    def test_offers_the_next_free_day_and_cannot_book(self):
+        response = self.refresh()
+        self.assertContains(response, f"No free times on {self.day:%a, %b} {self.day.day}.")
+        following = self.day + timedelta(days=1)
+        self.assertContains(response, f'"date": "{following.isoformat()}"')
+        self.assertContains(response, f"Next free day: {following:%a, %b} {following.day}")
+        self.assertContains(response, "disabled title=")
+
+    def test_the_next_free_day_shows_its_times(self):
+        following = self.day + timedelta(days=1)
+        response = self.refresh(date=following.isoformat())
+        self.assertContains(response, 'name="start"')
+        self.assertNotContains(response, "Next free day")
+        self.assertNotContains(response, "disabled title=")
