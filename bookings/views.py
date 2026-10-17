@@ -1,6 +1,7 @@
 import django_filters
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from bookings.models import Booking, WaitlistEntry
@@ -23,6 +24,7 @@ from core.audit import AuditAction
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from organizations.models import OrganizationRole
+from organizations.permissions import Capability
 from organizations.selectors import scope_queryset_by_organization
 from organizations.tenancy import resolve_tenant
 from services.models import Service
@@ -79,10 +81,21 @@ class BookingViewSet(
         serializer.is_valid(raise_exception=True)
         return self._respond(serializer.save(), status.HTTP_201_CREATED)
 
+    def _check_team_may_change(self, booking):
+        """The team changes appointments with ``appointments.manage``; customers change their
+        own through the portal rules (deadline, online-booking rules)."""
+        if not is_team_request(self.request, booking.organization):
+            return
+        tenant = resolve_tenant(self.request)
+        if not tenant.has(Capability.APPOINTMENTS_MANAGE):
+            raise PermissionDenied("You don't have permission to change appointments.")
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
+        booking = self.get_object()
+        self._check_team_may_change(booking)
         serializer = BookingCancelSerializer(
-            data=request.data, context={"booking": self.get_object(), "request": request}
+            data=request.data, context={"booking": booking, "request": request}
         )
         serializer.is_valid(raise_exception=True)
         return self._respond(serializer.save())
@@ -90,6 +103,7 @@ class BookingViewSet(
     @action(detail=True, methods=["post"])
     def reschedule(self, request, pk=None):
         booking = self.get_object()  # 404 before input validation
+        self._check_team_may_change(booking)
         serializer = BookingRescheduleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_booking = reschedule_booking(

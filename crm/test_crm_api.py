@@ -192,13 +192,17 @@ class ProviderAccessTests(Base):
         )
         client = self.as_user(self.provider)
 
+        # Internal notes need customers.notes.private, which providers don't have.
+        internal = {
+            "customer": str(self.assigned.pk),
+            "content": "Tight shoulders",
+            "visibility": "internal",
+        }
+        refused = client.post("/api/v1/customer-notes/", internal, format="json")
+        self.assertIn(refused.status_code, (400, 403))
         response = client.post(
             "/api/v1/customer-notes/",
-            {
-                "customer": str(self.assigned.pk),
-                "content": "Tight shoulders",
-                "visibility": "internal",
-            },
+            internal | {"visibility": "customer_visible"},
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)
@@ -222,7 +226,7 @@ class ProviderAccessTests(Base):
         )
         self.assertEqual(response.status_code, 403)  # not the author
 
-        # The manager (customers.notes.private) sees the provider's internal note.
+        # The manager sees the provider's note.
         rows = self.as_user(self.manager).get("/api/v1/customer-notes/").json()["results"]
         self.assertIn(own, {r["id"] for r in rows})
 
@@ -235,9 +239,19 @@ class MergeAndAnonymizeApiTests(Base):
         self.target = self.customer(email="ada@example.test")
         self.duplicate = self.customer(email="ada.l@example.test")
 
-    def test_receptionist_can_merge(self):
+    def test_merging_needs_customers_erase(self):
+        # Merging deletes the duplicate record, so it needs the same capability as deleting.
+        refused = self.as_user(self.receptionist).post(
+            f"/api/v1/customers/{self.target.pk}/merge/",
+            {"duplicate": str(self.duplicate.pk)},
+            format="json",
+        )
+        self.assertEqual(refused.status_code, 403)
+        self.assertTrue(Customer.objects.filter(pk=self.duplicate.pk).exists())
+
+    def test_manager_can_merge(self):
         f.BookingFactory(organization=self.organization, customer=self.duplicate)
-        response = self.as_user(self.receptionist).post(
+        response = self.as_user(self.manager).post(
             f"/api/v1/customers/{self.target.pk}/merge/",
             {"duplicate": str(self.duplicate.pk)},
             format="json",
@@ -247,7 +261,7 @@ class MergeAndAnonymizeApiTests(Base):
         self.assertFalse(Customer.objects.filter(pk=self.duplicate.pk).exists())
 
     def test_merge_into_itself_is_400(self):
-        response = self.as_user(self.receptionist).post(
+        response = self.as_user(self.manager).post(
             f"/api/v1/customers/{self.target.pk}/merge/",
             {"duplicate": str(self.target.pk)},
             format="json",

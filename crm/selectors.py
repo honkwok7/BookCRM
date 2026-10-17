@@ -10,7 +10,6 @@ from django.utils import timezone
 from bookings.models import Booking, Customer
 from bookings.services import ACTIVE_BOOKING_STATUSES
 from crm.models import CustomerActivity, CustomerNote, Tag
-from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from organizations.tenancy import resolve_tenant
 
@@ -89,8 +88,8 @@ def customers_visible_to(request) -> QuerySet[Customer]:
     """Customers the requesting team member may read.
 
     - ``customers.view``: every customer of the organization.
-    - Providers (staff role) without it: customers assigned to them, or with whom they have
-      (had) an appointment. Read-only; writes still need ``customers.manage``.
+    - ``customers.view_own`` (providers) without it: customers assigned to them, or with
+      whom they have (had) an appointment. Read-only; writes still need ``customers.manage``.
     - Everyone else: none.
     """
     tenant = resolve_tenant(request)
@@ -99,7 +98,7 @@ def customers_visible_to(request) -> QuerySet[Customer]:
     customers = Customer.objects.filter(organization=tenant.organization)
     if tenant.has(Capability.CUSTOMERS_VIEW):
         return customers
-    if tenant.role == OrganizationRole.STAFF:
+    if tenant.has(Capability.CUSTOMERS_VIEW_OWN):
         return customers_of_provider(tenant.organization, user=request.user)
     return Customer.objects.none()
 
@@ -121,12 +120,11 @@ def notes_visible_to(request) -> QuerySet[CustomerNote]:
     notes = CustomerNote.objects.filter(organization=tenant.organization).select_related(
         "author", "customer"
     )
+    notes = notes.filter(customer__in=customers_visible_to(request))
     if can_read_internal_notes(request):
         return notes
-    return notes.filter(
-        Q(visibility=CustomerNote.Visibility.CUSTOMER_VISIBLE) | Q(author=request.user),
-        customer__in=customers_visible_to(request),
-    )
+    # Internal notes need the capability, even for their author.
+    return notes.filter(visibility=CustomerNote.Visibility.CUSTOMER_VISIBLE)
 
 
 def customer_stats(customer: Customer) -> dict:

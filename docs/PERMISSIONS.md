@@ -40,6 +40,7 @@ Rules that sit outside the matrix:
 | `appointments.view_all` | ✅ | ✅ | ✅ | – | – | View every appointment (otherwise only one's own) |
 | `appointments.manage` | ✅ | ✅ | ✅ | ✅ | – | Book, reschedule, cancel and change appointment status |
 | `customers.view` | ✅ | ✅ | ✅ | – | – | View customer records |
+| `customers.view_own` | – | – | – | ✅ | – | View the customers one is assigned to or has appointments with, and write their notes |
 | `customers.manage` | ✅ | ✅ | ✅ | – | – | Create and edit customer records |
 | `customers.notes.private` | ✅ | ✅ | – | – | – | Read and write internal customer notes |
 | `customers.erase` | ✅ | ✅ | – | – | – | Delete or anonymize customer records (irreversible) |
