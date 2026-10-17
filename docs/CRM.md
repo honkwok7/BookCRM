@@ -69,6 +69,26 @@ API:
 - On `/api/v1/customers/`, `tags` lists the customer's tags. Sending `tag_ids` replaces them,
   and `?tag=<id>` filters the list.
 
+## Providers to avoid
+
+A customer can ask not to be booked with certain providers (say, a therapist they didn't get on
+with). `Customer.avoided_staff` holds them and `avoid_reason` says why, set with
+`crm.services.set_avoided_providers` (audited with the providers' ids; the reason is recorded
+only as "changed").
+
+- **Who sees it:** members with `customers.manage` (owners, managers, the front desk), on the
+  customer's Overview ("Providers to avoid", with Edit). Never the providers: they may be the
+  ones avoided. Not in the customer portal or the API.
+- **Booking:** `create_booking` refuses a new appointment with an avoided provider
+  (`ConflictError`, code `provider_avoided`), for every path: the team's form, the API and
+  online booking (with a neutral message there). A reschedule keeps its provider, so it is
+  allowed. The New appointment form leaves avoided providers out of the Provider list and out
+  of "First available" times once the customer is chosen, and says so to the front desk.
+  Online booking hides them from a signed-in customer; "anyone" skips them.
+- **Existing appointments** stay as they are; the appointment dialog warns the front desk when
+  one is with an avoided provider.
+- Merging keeps both records' lists; anonymizing clears the list and the reason.
+
 ## Notes
 
 `crm.CustomerNote` stores the author, a type (general, call, follow-up, alert), a

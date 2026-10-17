@@ -312,6 +312,13 @@ class AppointmentMixin(CalendarAccessMixin):
             "can_reschedule": can_manage and booking.status in RESCHEDULABLE_STATUSES,
             "show_internal_notes": tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE),
             "customer_link": booking.customer_id and can_browse_customers(tenant),
+            # The customer asked not to be booked with this provider (since it was booked).
+            # The front desk and managers only, never the provider.
+            "avoided_provider": bool(
+                booking.customer_id
+                and tenant.has(Capability.CUSTOMERS_MANAGE)
+                and booking.customer.avoided_staff.filter(pk=booking.staff_id).exists()
+            ),
             "history": booking.status_history.select_related("changed_by").order_by("created_at"),
             "status_level": STATUS_LEVEL.get(booking.status, "neutral"),
             "error": error,

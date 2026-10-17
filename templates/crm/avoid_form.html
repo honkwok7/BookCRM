@@ -1,0 +1,39 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+Providers to avoid (crm/web_views.py CustomerAvoidView): the providers a customer asked not
+to be booked with, and why. Opened in the page dialog by htmx (the "form" partial), or as a
+page without JavaScript. New appointments with them are refused (bookings.services).
+{% endcomment %}
+{% block title %}Providers to avoid · {{ customer.display_name }} · {{ organization.name }}{% endblock %}
+{% block page_title %}Providers to avoid{% endblock %}
+{% block content %}
+<div class="card card-body max-w-xl">
+{% partialdef form inline %}
+<form method="post" action="{{ action }}" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML" class="grid gap-5" novalidate>
+  {% if in_modal %}<h2 id="modal-title" class="text-lg font-semibold">Providers to avoid</h2>{% endif %}
+  {% csrf_token %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="text-sm text-slate-700">Tick the providers {{ customer.display_name }} asked not to be booked with. They won't be offered for new appointments, online booking skips them, and booking them is refused. Existing appointments stay as they are.</p>
+  <fieldset class="grid gap-2">
+    <legend class="mb-1 text-sm font-semibold text-slate-900">{{ form.staff.label }}</legend>
+    {% if form.staff.field.queryset %}
+      <div class="grid gap-2 sm:grid-cols-2">
+        {% for choice in form.staff %}<label class="flex items-center gap-2 text-sm">{{ choice.tag }}{{ choice.choice_label }}</label>{% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-600">No providers yet.</p>
+    {% endif %}
+  </fieldset>
+  {% include "components/field.html" with field=form.reason %}
+  <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+    {% if in_modal %}
+      <button type="button" class="btn btn-secondary" x-data @click="$dispatch('modal:close')">Close</button>
+    {% else %}
+      <a href="{% url 'crm-customer-detail' customer.pk %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </div>
+</form>
+{% endpartialdef %}
+</div>
+{% endblock %}

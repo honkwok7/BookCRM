@@ -290,6 +290,18 @@ def create_booking(
             source=CUSTOMER_SOURCE.get(source, Customer.Source.OTHER),
             actor=actor,
         )
+    # The customer asked not to be booked with this provider. A reschedule keeps its provider.
+    if rescheduled_from is None and customer.avoided_staff.filter(pk=staff_profile.pk).exists():
+        if public:
+            raise ConflictError(
+                "This provider isn't available for you. Please choose another provider.",
+                code="provider_avoided",
+            )
+        raise ConflictError(
+            f"{staff_profile.public_name} isn't available for this customer (see the customer's "
+            "record). Choose another provider.",
+            code="provider_avoided",
+        )
 
     offering = offering_for(staff_profile, service, location)
     price = service.price

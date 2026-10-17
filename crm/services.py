@@ -292,6 +292,9 @@ def merge_customers(*, target: Customer, duplicate: Customer, actor=None) -> Cus
     target.user_id = target.user_id or duplicate.user_id
     target_tags = set(target.customer_tags.values_list("tag_id", flat=True))
     duplicate.customer_tags.exclude(tag_id__in=target_tags).update(customer=target)
+    # Providers either record asked to avoid stay avoided.
+    target.avoided_staff.add(*duplicate.avoided_staff.all())
+    target.avoid_reason = target.avoid_reason or duplicate.avoid_reason
 
     moved = Booking.objects.filter(customer=duplicate).update(customer=target)
     duplicate_id = str(duplicate.pk)
@@ -361,6 +364,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     customer.first_name = ANONYMIZED_NAME
     customer.user = None
     customer.assigned_staff = customer.preferred_staff = None
+    customer.avoid_reason = ""
     customer.preferred_language = customer.preferred_contact_method = ""
     for field in CONSENT_FIELDS:
         setattr(customer, field, False)
@@ -368,6 +372,7 @@ def anonymize_customer(*, customer: Customer, actor=None) -> Customer:
     customer.anonymized_at = customer.consent_updated_at = timezone.now()
     customer.save()
     customer.customer_tags.all().delete()  # labels can be sensitive ("diabetic", ...)
+    customer.avoided_staff.clear()
     customer.customer_notes.all().delete()  # free text about the person
 
     bookings = Booking.objects.filter(customer=customer)
@@ -566,6 +571,39 @@ def set_customer_tags(*, customer: Customer, tags, actor=None) -> None:
         add_customer_tag(customer=customer, tag=wanted[tag_id], actor=actor)
     for tag_id in current.keys() - wanted.keys():
         remove_customer_tag(customer=customer, tag=current[tag_id], actor=actor)
+
+
+# -- Providers to avoid ---------------------------------------------------------------------
+
+
+@transaction.atomic
+def set_avoided_providers(*, customer: Customer, staff, reason: str = "", actor=None) -> None:
+    """The providers ``customer`` asked not to be booked with (exactly ``staff``), and why.
+
+    The booking service then refuses new appointments with them (bookings.services
+    create_booking, ``provider_avoided``). Audited with the providers' ids, not the reason."""
+    customer = Customer.objects.select_for_update().get(pk=customer.pk)
+    if customer.status == Customer.Status.ANONYMIZED:
+        raise ConflictError("An anonymized customer cannot be changed", code="anonymized")
+    staff = list(staff)
+    if any(member.organization_id != customer.organization_id for member in staff):
+        raise DomainError("Staff member not found", code="invalid_staff")
+    reason = (reason or "").strip()[: Customer._meta.get_field("avoid_reason").max_length]
+    before = sorted(str(pk) for pk in customer.avoided_staff.values_list("pk", flat=True))
+    after = sorted(str(member.pk) for member in staff)
+    reason_changed = reason != customer.avoid_reason
+    customer.avoided_staff.set(staff)
+    customer.avoid_reason = reason if staff else ""
+    customer.save(update_fields=["avoid_reason", "updated_at"])
+    if before != after or reason_changed:
+        record_audit(
+            AuditAction.CUSTOMER_UPDATED,
+            organization=customer.organization,
+            actor=actor,
+            target=customer,
+            changes={"avoided_staff": [before, after]} if before != after else {},
+            metadata={"avoid_reason": "changed"} if reason_changed else None,
+        )
 
 
 # -- Notes ---------------------------------------------------------------------------------

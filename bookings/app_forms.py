@@ -11,6 +11,7 @@ booking service checks everything again when booking.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 
 from django import forms
@@ -20,6 +21,7 @@ from django.utils.dateparse import parse_date
 from bookings.models import Customer
 from crm.selectors import search_filter
 from locations.models import Location
+from organizations.permissions import Capability
 from scheduling.availability import AvailabilityService, zone_of
 from services.selectors import services_bookable_at
 from staff.selectors import list_providers_for
@@ -31,13 +33,16 @@ NEXT_FREE_DAYS = 60  # how far "the next free day" looks
 class SlotChoicesMixin:
     """Free times as ``(iso start, label)`` choices, with who is free at each."""
 
-    def slot_choices(self, engine, day: date, staff=None, ignore_booking=None):
-        self.slots = {
-            slot.start.isoformat(): slot
-            for slot in engine.get_available_slots(
-                day, day, staff=staff, ignore_booking=ignore_booking
-            )
-        }
+    def slot_choices(self, engine, day: date, staff=None, ignore_booking=None, exclude=()):
+        """``exclude``: provider ids left out of "anyone" times (a customer avoids them)."""
+        slots = engine.get_available_slots(day, day, staff=staff, ignore_booking=ignore_booking)
+        if exclude:
+            slots = [
+                replace(slot, candidates=kept)
+                for slot in slots
+                if (kept := tuple(c for c in slot.candidates if c.staff.pk not in exclude))
+            ]
+        self.slots = {slot.start.isoformat(): slot for slot in slots}
         choices = []
         for key, slot in self.slots.items():
             label = f"{slot.start.astimezone(engine.zone):%I:%M %p}".lstrip("0")
@@ -102,6 +107,15 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         else:
             del self.fields["q"]
             del self.fields["customer"]
+        # Providers the chosen customer asked not to be booked with are not offered.
+        self.avoided = []
+        if self.can_search and is_uuid(data.get("customer")):
+            chosen_customer = customers.filter(pk=data.get("customer")).first()
+            if chosen_customer is not None:
+                self.avoided = list(chosen_customer.avoided_staff.all())
+        avoided_ids = {member.pk for member in self.avoided}
+        # Who may see the list (never the providers themselves): the front desk and managers.
+        self.show_avoided = bool(self.avoided) and tenant.has(Capability.CUSTOMERS_MANAGE)
 
         # Location, service, provider.
         locations = Location.objects.filter(organization=organization, is_active=True).order_by(
@@ -128,7 +142,7 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
             providers = list_providers_for(self.service, location)
             if own_staff is not None:
                 providers = providers.filter(pk=own_staff.pk)
-            providers = list(providers)
+            providers = [provider for provider in providers if provider.pk not in avoided_ids]
         self.providers = {str(provider.pk): provider for provider in providers}
         choices = [(str(provider.pk), provider.public_name) for provider in providers]
         if own_staff is None and len(providers) > 1:
@@ -162,14 +176,22 @@ class AppointmentForm(SlotChoicesMixin, forms.Form):
         if self.service is not None and chosen_staff:
             engine = AvailabilityService(organization, self.service, location=location)
             staff = None if chosen_staff == ANYONE else self.providers.get(chosen_staff)
-            self.fields["start"].choices = self.slot_choices(engine, self.day, staff)
+            self.fields["start"].choices = self.slot_choices(
+                engine, self.day, staff, exclude=avoided_ids
+            )
             if str(data.get("start") or "") not in self.slots:
                 self._prefill("start", self.time_at(data.get("at")))
             if not self.slots:
                 # Nothing free that day (or nothing left today): offer the next day that has.
-                later = engine.get_available_slots(
-                    self.day + timedelta(days=1), self.day + timedelta(days=NEXT_FREE_DAYS), staff
-                )
+                later = [
+                    slot
+                    for slot in engine.get_available_slots(
+                        self.day + timedelta(days=1),
+                        self.day + timedelta(days=NEXT_FREE_DAYS),
+                        staff,
+                    )
+                    if any(member.pk not in avoided_ids for member in slot.staff)
+                ]
                 if later:
                     self.next_free_day = later[0].start.astimezone(zone).date()
 

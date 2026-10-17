@@ -32,7 +32,7 @@ from core.web import (
     is_htmx,
     toast,
 )
-from crm.forms import CustomerForm, CustomerTagsForm, NoteForm
+from crm.forms import AvoidedProvidersForm, CustomerForm, CustomerTagsForm, NoteForm
 from crm.models import CustomerActivity, CustomerNote
 from crm.permissions import (
     can_browse_customers,
@@ -58,6 +58,7 @@ from crm.services import (
     create_note,
     delete_note,
     get_or_create_tag,
+    set_avoided_providers,
     set_customer_tags,
     update_customer,
     update_note,
@@ -262,6 +263,42 @@ class CustomerEditView(CustomerFormMixin, View):
         return self.render_form(form, status=422, customer=customer)
 
 
+class CustomerAvoidView(CustomerFormMixin, View):
+    """The providers the customer asked not to be booked with (``customers.manage``)."""
+
+    template_name = "crm/avoid_form.html"
+
+    def form(self, data=None, customer=None):
+        initial = None
+        if customer is not None and data is None:
+            initial = {
+                "staff": list(customer.avoided_staff.all()),
+                "reason": customer.avoid_reason,
+            }
+        return AvoidedProvidersForm(data, organization=self.tenant.organization, initial=initial)
+
+    def get(self, request, pk):
+        customer = self.get_customer(pk)
+        return self.render_form(self.form(customer=customer), customer=customer)
+
+    def post(self, request, pk):
+        customer = self.get_customer(pk)
+        form = self.form(request.POST)
+        if form.is_valid():
+            try:
+                set_avoided_providers(
+                    customer=customer,
+                    staff=form.cleaned_data["staff"],
+                    reason=form.cleaned_data["reason"],
+                    actor=request.user,
+                )
+            except DomainError as error:
+                form.add_error(None, error.message)
+            else:
+                return self.success(customer, "Providers to avoid saved.")
+        return self.render_form(form, status=422, customer=customer)
+
+
 # -- Profile --------------------------------------------------------------------------------
 
 
@@ -307,6 +344,9 @@ class CustomerDetailView(CustomerPageMixin, TemplateView):
         return {
             "stats": stats,
             "show_spend": self.tenant.has(Capability.CUSTOMERS_VIEW),
+            # Never shown to providers: they may be the ones the customer avoids.
+            "can_see_avoided": can_manage_customers(self.tenant),
+            "avoided": list(customer.avoided_staff.select_related("user")),
             **tags_context(self.request, self.tenant, customer),
         }
 
