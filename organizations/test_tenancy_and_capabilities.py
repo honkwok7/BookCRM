@@ -170,7 +170,11 @@ class CapabilityRegistryTests(TestCase):
         self.assertEqual(set(ROLE_CAPABILITIES), set(OrganizationRole.values))
 
     def test_owner_has_everything(self):
-        self.assertEqual(ROLE_CAPABILITIES[OrganizationRole.OWNER], frozenset(Capability))
+        # Except customers.view_own, which customers.view covers (providers' scoped access).
+        self.assertEqual(
+            ROLE_CAPABILITIES[OrganizationRole.OWNER],
+            frozenset(Capability) - {Capability.CUSTOMERS_VIEW_OWN},
+        )
 
     def test_key_defaults_match_the_agreed_matrix(self):
         expectations = {

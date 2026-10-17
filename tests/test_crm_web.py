@@ -370,7 +370,7 @@ class NotesTests(CrmWebTestCase):
     def test_provider_writes_notes_on_own_customers_only(self):
         f.BookingFactory(organization=self.org, customer=self.ada, staff=self.provider_profile)
         self.client.force_login(self.provider)
-        response = self.add(self.ada, visibility="internal", content="Treatment plan")
+        response = self.add(self.ada, visibility="customer_visible", content="Treatment plan")
         self.assertContains(response, "Treatment plan")
         self.assertEqual(self.add(self.grace).status_code, 404)
 

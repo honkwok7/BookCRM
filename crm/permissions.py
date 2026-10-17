@@ -10,18 +10,19 @@ below and the web pages (crm/web_views.py), so both apply the same rules.
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from crm.models import CustomerNote
-from organizations.models import OrganizationRole
 from organizations.permissions import Capability
 from organizations.tenancy import resolve_tenant
 
 
-def _is_provider(tenant) -> bool:
-    return tenant.role == OrganizationRole.STAFF
+def _sees_own_customers(tenant) -> bool:
+    return tenant.has(Capability.CUSTOMERS_VIEW_OWN)
 
 
 def can_browse_customers(tenant) -> bool:
-    """``customers.view``, or a provider (who then sees only their own customers)."""
-    return tenant is not None and (tenant.has(Capability.CUSTOMERS_VIEW) or _is_provider(tenant))
+    """``customers.view``, or ``customers.view_own`` (providers: only their own customers)."""
+    return tenant is not None and (
+        tenant.has(Capability.CUSTOMERS_VIEW) or _sees_own_customers(tenant)
+    )
 
 
 def can_manage_customers(tenant) -> bool:
@@ -29,30 +30,26 @@ def can_manage_customers(tenant) -> bool:
 
 
 def can_write_notes(tenant) -> bool:
-    """``customers.manage``, or a provider (on customers they can see)."""
-    return tenant is not None and (tenant.has(Capability.CUSTOMERS_MANAGE) or _is_provider(tenant))
-
-
-def can_write_internal_notes(tenant) -> bool:
-    """Capability holders, and providers for their own notes (which only they and capability
-    holders can then read; see crm.selectors.notes_visible_to)."""
+    """``customers.manage``, or ``customers.view_own`` (on the customers they can see)."""
     return tenant is not None and (
-        tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE) or _is_provider(tenant)
+        tenant.has(Capability.CUSTOMERS_MANAGE) or _sees_own_customers(tenant)
     )
 
 
+def can_write_internal_notes(tenant) -> bool:
+    """Internal notes need ``customers.notes.private``, to write as well as to read."""
+    return tenant is not None and tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE)
+
+
 def can_change_note(tenant, user, note) -> bool:
-    """Edit, pin or delete a note: ``customers.notes.private``, or its author. An author may
-    change their own *internal* note only while still allowed to write internal notes: a
-    provider who became a receptionist, or lost the capability, keeps read access to what they
-    wrote but can no longer change it."""
+    """Edit, pin or delete a note: ``customers.notes.private``, or the author of a note that
+    isn't internal. Without the capability nobody reads or changes internal notes, not even
+    the ones they wrote (crm.selectors.notes_visible_to)."""
     if tenant is None:
         return False
     if tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE):
         return True
-    if note.author_id != user.pk:
-        return False
-    return note.visibility != CustomerNote.Visibility.INTERNAL or can_write_internal_notes(tenant)
+    return note.author_id == user.pk and note.visibility != CustomerNote.Visibility.INTERNAL
 
 
 class CustomerAccess(BasePermission):

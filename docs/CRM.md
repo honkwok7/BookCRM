@@ -96,18 +96,19 @@ only as "changed").
 
 | Visibility | Who can read it | Who can write it |
 |---|---|---|
-| `internal` (the default) | Team members with `customers.notes.private` (owner and manager by default; it can be granted to others), and the note's author | The same, plus providers (their own notes) |
-| `customer_visible` | Anyone who can see the customer, and the customer themselves (portal, M5) | Anyone with `customers.manage`, plus providers on their own customers |
+| `internal` (the default) | Team members with `customers.notes.private` (owner and manager by default; it can be granted to others), on the customers they can see. Not the author without it | The same |
+| `customer_visible` | Anyone who can see the customer, and the customer themselves (portal, M5) | Anyone with `customers.manage`, plus `customers.view_own` (providers) on their own customers |
 
 - **Enforcement:** visibility is enforced in the selectors (`notes_visible_to`,
   `notes_for_customer`). A note the caller may not read answers 404, as if it didn't exist.
-- **Providers** (staff role) read and write notes only on their own customers (see "Who
-  sees which customers"). They read customer-visible notes and the notes they wrote
-  themselves.
-- **Editing and deleting:** allowed for the author, or anyone holding
-  `customers.notes.private`. An author may change their own *internal* note only while still
-  allowed to write internal notes (a provider who becomes a receptionist can still read it but
-  no longer change it). Changing a note's visibility moves its timeline entry with it. Changing the text sets `edited_at`. The audit log records that
+- **Providers** (`customers.view_own`) read and write notes only on their own customers (see
+  "Who sees which customers"): customer-visible ones. Internal notes need
+  `customers.notes.private`; granting it to a provider shows them the internal notes of their
+  own customers only.
+- **Editing and deleting:** allowed for anyone holding `customers.notes.private`, and for the
+  author of a note that isn't internal. Without the capability nobody reads or changes an
+  internal note, not even its author (one who loses the capability, or changes role, loses
+  access to the internal notes they wrote). Changing a note's visibility moves its timeline entry with it. Changing the text sets `edited_at`. The audit log records that
   the content changed, never the text itself.
 - **Anonymized and merged customers:** anonymization deletes a customer's notes, and merging
   moves the duplicate's notes to the kept record.
@@ -160,7 +161,7 @@ API: `GET /api/v1/customers/{id}/timeline/` returns entries newest first, pagina
 | Caller | Customers | Can change them |
 |---|---|---|
 | `customers.view` (owner, manager, receptionist) | All of the organization | With `customers.manage` |
-| Provider (staff role) | Assigned to them, or with whom they have or had an appointment | No (read-only) |
+| `customers.view_own` (providers) | Assigned to them, or with whom they have or had an appointment | No (read-only) |
 | Anyone else | None | No |
 
 Deleting and anonymizing need `customers.erase` (owner and manager). Both are irreversible.
@@ -190,10 +191,10 @@ and write through the same services as the API, with the same rules from
 
 | Action | Who |
 |---|---|
-| See the list and profiles | `customers.view` (all customers), providers (their own) |
+| See the list and profiles | `customers.view` (all customers), `customers.view_own` (providers: their own) |
 | Create, edit, tag | `customers.manage` |
-| Add notes | `customers.manage`, providers on their own customers; internal notes need `customers.notes.private` (providers may write their own) |
-| Edit, pin, delete a note | `customers.notes.private`, or its author (for internal notes, only while still allowed to write them); without JavaScript, deleting asks on a confirmation page |
+| Add notes | `customers.manage`, providers on their own customers; internal notes need `customers.notes.private` |
+| Edit, pin, delete a note | `customers.notes.private`, or the author of a note that isn't internal; without JavaScript, deleting asks on a confirmation page |
 | See spend to date | `customers.view` |
 
 A customer, note or tag of another organization, or one the user may not see, is a 404.
@@ -219,7 +220,7 @@ tag with the same slug exists (`get_or_create_tag`, safe when two people add the
 | `GET /customers/{id}/timeline/` | History, newest first (paginated) |
 | `GET /customers/{id}/notes/` | Notes the caller may read, pinned first |
 | `GET /customers/{id}/appointments/` | Appointments the caller may see, newest first |
-| `POST /customers/{id}/merge/` `{"duplicate": id}` | Fold a duplicate into this customer |
+| `POST /customers/{id}/merge/` `{"duplicate": id}` | Fold a duplicate into this customer; needs `customers.erase` (it deletes the duplicate) |
 | `POST /customers/{id}/anonymize/` `{"confirm": true}` | Irreversible; needs `customers.erase` |
 
 `GET /api/v1/search/?q=&limit=5` (maximum 20 per section) searches the whole organization:

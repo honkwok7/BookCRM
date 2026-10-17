@@ -87,7 +87,7 @@ class CustomerViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     ordering = ("last_name", "first_name", "created_at")
 
     def get_permissions(self):
-        if self.action in ("destroy", "anonymize"):
+        if self.action in ("destroy", "anonymize", "merge"):  # merge deletes the duplicate
             return [permissions.IsAuthenticated(), HasCapability(write="customers.erase")()]
         return super().get_permissions()
 

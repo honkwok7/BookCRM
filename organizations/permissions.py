@@ -28,6 +28,7 @@ class Capability(StrEnum):
     APPOINTMENTS_VIEW_ALL = "appointments.view_all"
     APPOINTMENTS_MANAGE = "appointments.manage"
     CUSTOMERS_VIEW = "customers.view"
+    CUSTOMERS_VIEW_OWN = "customers.view_own"
     CUSTOMERS_MANAGE = "customers.manage"
     CUSTOMERS_NOTES_PRIVATE = "customers.notes.private"
     CUSTOMERS_ERASE = "customers.erase"
@@ -55,6 +56,9 @@ CAPABILITY_DESCRIPTIONS: dict[Capability, str] = {
     Capability.APPOINTMENTS_VIEW_ALL: "View every appointment (otherwise only one's own)",
     Capability.APPOINTMENTS_MANAGE: "Book, reschedule, cancel and change appointment status",
     Capability.CUSTOMERS_VIEW: "View customer records",
+    Capability.CUSTOMERS_VIEW_OWN: (
+        "View the customers one is assigned to or has appointments with, and write their" " notes"
+    ),
     Capability.CUSTOMERS_MANAGE: "Create and edit customer records",
     Capability.CUSTOMERS_NOTES_PRIVATE: "Read and write internal customer notes",
     Capability.CUSTOMERS_ERASE: "Delete or anonymize customer records (irreversible)",
@@ -66,7 +70,9 @@ CAPABILITY_DESCRIPTIONS: dict[Capability, str] = {
     Capability.AUDIT_VIEW: "View the organization audit log",
 }
 
-_ALL = frozenset(Capability)
+# Everything, except customers.view_own: it only matters without customers.view (providers),
+# and holding it would keep a customer list open after customers.view is revoked.
+_ALL = frozenset(Capability) - {Capability.CUSTOMERS_VIEW_OWN}
 
 ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
     OrganizationRole.OWNER: _ALL,
@@ -100,6 +106,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
             Capability.SERVICES_VIEW,
             Capability.LOCATIONS_VIEW,
             Capability.APPOINTMENTS_MANAGE,
+            Capability.CUSTOMERS_VIEW_OWN,
         }
     ),
     OrganizationRole.CUSTOMER: frozenset({Capability.ORGANIZATION_VIEW}),

@@ -236,7 +236,7 @@ class BookingApiTests(TwoTenants):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_customer_does_not_see_internal_notes(self):
+    def test_only_private_notes_holders_see_internal_notes(self):
         Booking.objects.filter(pk=self.booking.pk).update(internal_notes="Difficult client")
         customer = User.objects.create_user(
             email="customer@example.test", password="Password12345!", email_verified=True
@@ -244,7 +244,11 @@ class BookingApiTests(TwoTenants):
         self.client.force_authenticate(customer)
         body = self.client.get(f"/api/v1/bookings/{self.booking.id}/").json()
         self.assertNotIn("internal_notes", body)
-        self.client.force_authenticate(self.receptionist_a)
+        for member in (self.receptionist_a, self.provider_user):
+            self.client.force_authenticate(member)
+            body = self.client.get(f"/api/v1/bookings/{self.booking.id}/").json()
+            self.assertNotIn("internal_notes", body)
+        self.client.force_authenticate(self.manager_a)
         body = self.client.get(f"/api/v1/bookings/{self.booking.id}/").json()
         self.assertEqual(body["internal_notes"], "Difficult client")
 

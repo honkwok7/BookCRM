@@ -61,7 +61,8 @@ class F1NoteVisibilityTimelineTests(TestCase):
 
 
 class F2InternalNoteAuthorTests(TestCase):
-    """An author who may no longer write internal notes can no longer change their own."""
+    """Internal notes need customers.notes.private, even for their author: without it they
+    can neither read nor change the internal notes they wrote (refused or not found)."""
 
     def setUp(self):
         self.org = f.OrganizationFactory()
@@ -74,11 +75,13 @@ class F2InternalNoteAuthorTests(TestCase):
         self.note = create_note(customer=self.customer, author=self.author, content="Private plan")
         self.client.force_login(self.author)
 
-    def test_provider_may_change_own_internal_note(self):
+    def test_provider_cannot_read_or_change_own_internal_note(self):
         response = self.client.post(
             reverse("crm-note-pin", args=[self.customer.pk, self.note.pk]), headers=HTMX
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertIn(response.status_code, (403, 404))
+        tab = self.client.get(reverse("crm-customer-tab", args=[self.customer.pk, "notes"]))
+        self.assertNotContains(tab, "Private plan")
 
     def test_after_becoming_a_receptionist_the_author_cannot_change_it(self):
         OrganizationMembership.objects.filter(pk=self.membership.pk).update(
@@ -88,13 +91,13 @@ class F2InternalNoteAuthorTests(TestCase):
         for name, method in (("crm-note-edit", "get"), ("crm-note-pin", "post")):
             with self.subTest(action=name):
                 response = getattr(self.client, method)(reverse(name, args=args), headers=HTMX)
-                self.assertEqual(response.status_code, 403)
+                self.assertIn(response.status_code, (403, 404))
         response = self.client.post(reverse("crm-note-delete", args=args), headers=HTMX)
-        self.assertEqual(response.status_code, 403)
+        self.assertIn(response.status_code, (403, 404))
         api = APIClient()
         api.force_authenticate(self.author)
         response = api.patch(f"/api/v1/customer-notes/{self.note.pk}/", {"pinned": True})
-        self.assertEqual(response.status_code, 403)
+        self.assertIn(response.status_code, (403, 404))
         self.assertTrue(CustomerNote.objects.filter(pk=self.note.pk, pinned=False).exists())
 
     def test_manager_who_lost_the_capability_cannot_change_own_internal_note(self):
@@ -108,7 +111,8 @@ class F2InternalNoteAuthorTests(TestCase):
         )
         self.client.force_login(manager_membership.user)
         url = reverse("crm-note-delete", args=[self.customer.pk, note.pk])
-        self.assertEqual(self.client.post(url, headers=HTMX).status_code, 403)
+        self.assertIn(self.client.post(url, headers=HTMX).status_code, (403, 404))
+        self.assertTrue(CustomerNote.objects.filter(pk=note.pk).exists())
 
 
 class F3PasswordResetTokenTests(TestCase):

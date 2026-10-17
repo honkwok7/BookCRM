@@ -213,6 +213,14 @@ class BookingSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        tenant = resolve_tenant(request) if request is not None else None
+        if tenant is None or not tenant.has(Capability.CUSTOMERS_NOTES_PRIVATE):
+            data.pop("internal_notes", None)
+        return data
+
 
 class BookingStatusHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -298,6 +306,15 @@ class BookingCreateSerializer(serializers.Serializer):
             .filter(id=validated_data["staff"])
             .first()
         )
+        if (
+            is_team
+            and staff_profile is not None
+            and not tenant.has(Capability.APPOINTMENTS_VIEW_ALL)
+            and staff_profile.user_id != request.user.pk
+        ):
+            raise serializers.ValidationError(
+                {"staff": "You can only book appointments for yourself."}
+            )
         if service is None or staff_profile is None:
             raise serializers.ValidationError({"detail": "Service or staff not found."})
         location = None

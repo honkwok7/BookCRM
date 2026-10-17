@@ -54,9 +54,10 @@ def bookings_visible_to(request) -> QuerySet[Booking]:
         queryset = queryset.filter(organization=tenant.organization)
         if tenant.has(Capability.APPOINTMENTS_VIEW_ALL):
             return queryset
-        if tenant.role == OrganizationRole.STAFF:
-            return queryset.filter(staff__user=user)
-        return queryset.filter(_own_customer_filter(user))
+        if tenant.role == OrganizationRole.CUSTOMER:
+            return queryset.filter(_own_customer_filter(user))
+        # Team members without view_all: the appointments they provide.
+        return queryset.filter(staff__user=user)
 
     # No membership in the requested (or any) organization: the user's own customer bookings,
     # optionally narrowed to one public organization.
