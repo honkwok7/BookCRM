@@ -19,7 +19,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.views import View
 
 from bookings.forms import BookingDetailsForm, WaitlistJoinForm
-from bookings.models import Booking
+from bookings.models import Booking, Customer
 from bookings.services import create_booking
 from bookings.waitlist import join_waitlist
 from bookings.wizard import ANY_PROVIDER, STEPS, Wizard
@@ -168,16 +168,30 @@ class ProviderStepView(WizardStepView):
     def get(self, request, slug):
         return self.render_step(request)
 
+    def offered(self) -> list:
+        """The providers on offer, without any the signed-in customer asked to avoid (their
+        records at this organization). Booking them is refused anyway (create_booking)."""
+        providers = self.wizard.providers()
+        user = self.request.user
+        if not user.is_authenticated:
+            return providers
+        avoided = set(
+            Customer.objects.filter(organization=self.organization, user=user)
+            .exclude(avoided_staff=None)
+            .values_list("avoided_staff", flat=True)
+        )
+        return [provider for provider in providers if provider.pk not in avoided]
+
     def post(self, request, slug):
         chosen = request.POST.get("staff", "")
-        valid = {str(item.pk) for item in self.wizard.providers()} | {ANY_PROVIDER}
+        valid = {str(item.pk) for item in self.offered()} | {ANY_PROVIDER}
         if chosen not in valid:
             return self.invalid_choice(request, "Choose who you'd like to see.")
         self.wizard.choose("provider", chosen)
         return redirect(self.next_url())
 
     def render_step(self, request, context=None, status=200):
-        context = {"providers": self.wizard.providers(), **(context or {})}
+        context = {"providers": self.offered(), **(context or {})}
         return super().render_step(request, context, status)
 
 
@@ -297,7 +311,9 @@ class ReviewStepView(WizardStepView):
             return self.confirmed(existing.get())
         try:
             booking = self.book(request, key)
-        except ConflictError:
+        except ConflictError as error:
+            if error.code == "provider_avoided":  # they chose a provider they can't have
+                return self.render_step(request, {"error": error.message}, status=422)
             booking = None
         except DomainError as error:
             return self.render_step(request, {"error": error.message}, status=422)
@@ -366,6 +382,8 @@ class ReviewStepView(WizardStepView):
                 )
             except ConflictError as error:
                 if error.code == "idempotency_key_reused":
+                    raise
+                if error.code == "provider_avoided" and wizard.staff is not None:
                     raise
                 continue
         return None

@@ -246,7 +246,10 @@ class NewAppointmentView(BookingFormMixin, View):
                 )
             except ConflictError as error:
                 # With "first available", someone else may still be free at that time.
-                if form.staff_choice != ANYONE or error.code != "slot_unavailable":
+                if form.staff_choice != ANYONE or error.code not in (
+                    "slot_unavailable",
+                    "provider_avoided",
+                ):
                     raise
         return None
 

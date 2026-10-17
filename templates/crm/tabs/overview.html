@@ -53,6 +53,24 @@
       </dl>
     </section>
 
+    {% if can_see_avoided %}
+    <section class="card" aria-labelledby="avoid-heading">
+      <div class="card-header flex items-center justify-between gap-2">
+        <h2 id="avoid-heading" class="card-title">Providers to avoid</h2>
+        {% if customer.status != "anonymized" %}<a href="{% url 'crm-customer-avoid' customer.pk %}" class="btn btn-ghost btn-sm" hx-get="{% url 'crm-customer-avoid' customer.pk %}" hx-target="#modal-body">{% include "components/icon.html" with name="pencil" class="size-4" %}Edit<span class="sr-only"> providers to avoid</span></a>{% endif %}
+      </div>
+      <div class="grid gap-2 p-4 text-sm sm:p-6">
+        {% if avoided %}
+          <ul class="flex flex-wrap gap-2">{% for member in avoided %}<li>{% include "components/badge.html" with label=member.public_name level="warning" %}</li>{% endfor %}</ul>
+          {% if customer.avoid_reason %}<p class="text-slate-700">{{ customer.avoid_reason }}</p>{% endif %}
+          <p class="text-xs text-slate-600">Not offered when booking. Only the team can see this, not the providers or the customer.</p>
+        {% else %}
+          <p class="text-slate-600">None. Use this when the customer asks not to be booked with someone.</p>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     <section class="card" aria-labelledby="consent-heading">
       <div class="card-header"><h2 id="consent-heading" class="card-title">Consent</h2></div>
       <ul class="grid gap-2 p-4 text-sm sm:p-6">

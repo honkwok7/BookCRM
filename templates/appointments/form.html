@@ -47,7 +47,10 @@ does the same without JavaScript.
     <div class="grid gap-3 sm:grid-cols-2" hx-post="{{ action }}" hx-vals='{"refresh": "1"}' hx-include="closest form" hx-target="closest form" hx-swap="outerHTML" hx-trigger="change">
       {% include "components/field.html" with field=form.location %}
       {% include "components/field.html" with field=form.service %}
-      {% include "components/field.html" with field=form.staff %}
+      <div>
+        {% include "components/field.html" with field=form.staff %}
+        {% if form.show_avoided %}<p class="mt-1 text-xs text-amber-800">Not offered: this customer asked not to be booked with {% for member in form.avoided %}{{ member.public_name }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+      </div>
       {% if form.date %}{% include "components/field.html" with field=form.date %}{% endif %}
     </div>
     {% if form.start %}

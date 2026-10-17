@@ -3,6 +3,11 @@ from django.urls import path
 from crm import web_views
 
 urlpatterns = [
+    path(
+        "app/customers/<uuid:pk>/avoid/",
+        web_views.CustomerAvoidView.as_view(),
+        name="crm-customer-avoid",
+    ),
     path("app/search/", web_views.SearchView.as_view(), name="app-search"),
     path("app/customers/", web_views.CustomerListView.as_view(), name="crm-customer-list"),
     path("app/customers/new/", web_views.CustomerCreateView.as_view(), name="crm-customer-new"),

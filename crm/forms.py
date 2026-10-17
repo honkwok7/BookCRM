@@ -178,6 +178,32 @@ class CustomerTagsForm(forms.Form):
         self.fields["tags"].queryset = list_tags(organization).order_by("name")
 
 
+class AvoidedProvidersForm(forms.Form):
+    """Providers the customer asked not to be booked with (crm.services.set_avoided_providers)."""
+
+    staff = forms.ModelMultipleChoiceField(
+        label="Don't book with",
+        queryset=None,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    reason = forms.CharField(
+        label="Reason",
+        max_length=255,
+        required=False,
+        help_text="For the team only. Never shown to the providers or the customer.",
+    )
+
+    def __init__(self, *args, organization, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["staff"].queryset = (
+            StaffProfile.objects.filter(organization=organization, is_active=True)
+            .select_related("user")
+            .order_by("display_name", "user__first_name", "user__last_name")
+        )
+        self.fields["staff"].label_from_instance = lambda member: member.public_name
+
+
 class NoteForm(forms.Form):
     content = forms.CharField(
         label="Note",

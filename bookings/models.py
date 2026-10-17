@@ -94,6 +94,13 @@ class Customer(BaseUUIDModel):
         blank=True,
         related_name="preferring_customers",
     )
+    # Providers the customer asked not to be booked with (crm.services.set_avoided_providers).
+    # Shown only to members with customers.manage, never to the providers themselves; the
+    # booking service refuses new appointments with them.
+    avoided_staff = models.ManyToManyField(
+        "staff.StaffProfile", blank=True, related_name="avoided_by_customers"
+    )
+    avoid_reason = models.CharField(max_length=255, blank=True)
 
     # Consent (changes are stamped and audited by crm.services)
     marketing_consent = models.BooleanField(default=False)
