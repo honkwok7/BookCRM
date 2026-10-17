@@ -1,6 +1,10 @@
+from rest_framework.exceptions import PermissionDenied
+
 from core.api import TenantPrimaryKeyRelatedField, TenantScopedModelSerializer
 from locations.models import Location
+from organizations.permissions import Capability
 from organizations.selectors import get_request_organization
+from organizations.tenancy import resolve_tenant
 from services.models import Service, ServiceCategory
 from services.services import create_category, create_service, update_category, update_service
 from staff.services import set_service_providers
@@ -92,6 +96,15 @@ class ServiceSerializer(TenantScopedModelSerializer):
         if providers is not None:
             set_service_providers(service=service, staff_members=providers, actor=request.user)
         return service
+
+    def validate(self, attrs):
+        """Who offers the service changes staff offerings: ``staff.manage`` as well."""
+        attrs = super().validate(attrs)
+        if "assigned_staff_members" in attrs:
+            tenant = resolve_tenant(self.context["request"])
+            if tenant is None or not tenant.has(Capability.STAFF_MANAGE):
+                raise PermissionDenied("You don't have permission to change who offers services.")
+        return attrs
 
     def update(self, instance, validated_data):
         actor = self.context["request"].user

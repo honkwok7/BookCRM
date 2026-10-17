@@ -248,7 +248,7 @@ class NewAppointmentView(BookingFormMixin, View):
                 # With "first available", someone else may still be free at that time.
                 if form.staff_choice != ANYONE or error.code not in (
                     "slot_unavailable",
-                    "provider_avoided",
+                    "provider_unavailable",
                 ):
                     raise
         return None

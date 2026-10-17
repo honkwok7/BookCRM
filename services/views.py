@@ -3,14 +3,16 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from core.api import AuditedModelViewSetMixin
 from core.filters import TenantModelChoiceFilter
 from core.permissions import HasCapability
 from locations.models import Location
+from organizations.permissions import Capability
 from organizations.selectors import scope_queryset_by_organization
+from organizations.tenancy import resolve_tenant
 from services.models import Service, ServiceCategory
 from services.selectors import offered_at_filter
 from services.serializers import ServiceCategorySerializer, ServiceSerializer
@@ -84,7 +86,11 @@ class ServiceViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
     )
     @action(detail=True, methods=["get"])
     def providers(self, request, pk=None):
-        """Staff who can be booked for this service, optionally at ``?location=<id>``."""
+        """Staff who can be booked for this service, optionally at ``?location=<id>``. Staff
+        profiles: ``staff.view`` as well."""
+        tenant = resolve_tenant(request)
+        if tenant is None or not tenant.has(Capability.STAFF_VIEW):
+            raise PermissionDenied("You don't have permission to view staff.")
         service = self.get_object()
         location = None
         location_id = request.query_params.get("location")

@@ -171,10 +171,13 @@ class ProviderCustomerListView(CustomerListView):
     heading = "My customers"
 
     def has_page_access(self, tenant):
-        return is_provider_here(tenant)
+        return is_provider_here(tenant) and can_browse_customers(tenant)
 
     def visible_customers(self):
-        return customers_of_provider(self.tenant.organization, user=self.tenant.user)
+        # Their own customers, and only those their capabilities let them read.
+        return customers_of_provider(self.tenant.organization, user=self.tenant.user).filter(
+            pk__in=customers_visible_to(self.request).values("pk")
+        )
 
     def can_add(self) -> bool:
         return False

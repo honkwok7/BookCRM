@@ -312,7 +312,7 @@ class ReviewStepView(WizardStepView):
         try:
             booking = self.book(request, key)
         except ConflictError as error:
-            if error.code == "provider_avoided":  # they chose a provider they can't have
+            if error.code == "provider_unavailable":  # they chose a provider they can't have
                 return self.render_step(request, {"error": error.message}, status=422)
             booking = None
         except DomainError as error:
@@ -383,7 +383,7 @@ class ReviewStepView(WizardStepView):
             except ConflictError as error:
                 if error.code == "idempotency_key_reused":
                     raise
-                if error.code == "provider_avoided" and wizard.staff is not None:
+                if error.code == "provider_unavailable" and wizard.staff is not None:
                     raise
                 continue
         return None

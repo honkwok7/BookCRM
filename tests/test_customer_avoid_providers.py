@@ -49,8 +49,12 @@ class AvoidServiceTests(Fixtures, TestCase):
         set_avoided_providers(customer=self.customer, staff=[self.maya])
         with self.assertRaises(ConflictError) as caught:
             self.book(self.maya)
-        self.assertEqual(caught.exception.code, "provider_avoided")
-        self.assertIn("isn't available for this customer", caught.exception.message)
+        # Neutral: nothing about the customer's request reaches the caller.
+        self.assertEqual(caught.exception.code, "provider_unavailable")
+        self.assertEqual(
+            caught.exception.message,
+            "This provider isn't available for this booking. Please choose another provider.",
+        )
         self.assertEqual(self.book(self.sam).staff, self.sam)
 
     def test_online_booking_gets_a_neutral_message(self):
@@ -59,7 +63,7 @@ class AvoidServiceTests(Fixtures, TestCase):
             self.book(self.maya, public=True, source=Booking.Source.PUBLIC_BOOKING)
         self.assertEqual(
             caught.exception.message,
-            "This provider isn't available for you. Please choose another provider.",
+            "This provider isn't available for this booking. Please choose another provider.",
         )
 
     def test_existing_appointments_can_still_be_rescheduled(self):

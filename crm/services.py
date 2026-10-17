@@ -581,7 +581,7 @@ def set_avoided_providers(*, customer: Customer, staff, reason: str = "", actor=
     """The providers ``customer`` asked not to be booked with (exactly ``staff``), and why.
 
     The booking service then refuses new appointments with them (bookings.services
-    create_booking, ``provider_avoided``). Audited with the providers' ids, not the reason."""
+    create_booking, ``provider_unavailable``). Audited with the providers' ids, not the reason."""
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
     if customer.status == Customer.Status.ANONYMIZED:
         raise ConflictError("An anonymized customer cannot be changed", code="anonymized")
