@@ -98,7 +98,9 @@ members, who land on an empty "My day".
 rejected or cancelled; only approved time off blocks the calendar):
 
 - **Block time:** part of one day, up to 12 hours, approved at once. Refused if the provider
-  has an appointment then. It locks the provider's calendar row like booking does, so a block
+  has an appointment then. Blocks within 12 hours of each other count together (at most 12
+  hours in all), so short blocks can't be chained into a long absence; longer time off is a
+  request (`TimeOff.self_blocked` marks blocks). It locks the provider's calendar row like booking does, so a block
   and a booking for the same time can't both succeed.
 - **Request time off:** whole days, up to 90, pending until someone with `staff.manage`
   approves or rejects it on the staff member's Time off tab. The tab says how many appointments

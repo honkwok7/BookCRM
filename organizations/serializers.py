@@ -1,10 +1,15 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from organizations.models import Organization, OrganizationInvitation, OrganizationMembership
-from organizations.permissions import can_grant_role
+from organizations.permissions import Capability, can_grant_role
+from organizations.tenancy import resolve_tenant
 
 User = get_user_model()
+
+
+REMINDER_FIELDS = frozenset({"reminder_hours_before", "second_reminder_hours_before"})
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -45,6 +50,16 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def validate(self, attrs):
+        """Reminder timing needs ``communications.manage`` (the endpoint itself needs
+        ``organization.manage``)."""
+        if REMINDER_FIELDS & attrs.keys():
+            request = self.context.get("request")
+            tenant = resolve_tenant(request) if request is not None else None
+            if tenant is None or not tenant.has(Capability.COMMUNICATIONS_MANAGE):
+                raise PermissionDenied("You don't have permission to change reminders.")
+        return attrs
 
 
 class OrganizationMembershipSerializer(serializers.ModelSerializer):

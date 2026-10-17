@@ -111,6 +111,24 @@ def block_time(
                 f"You have {clashes} appointment{'s' if clashes != 1 else ''} then. "
                 "Move or cancel them first, or request time off instead."
             )
+        # Blocks within MAX_BLOCK of this one count together, so short blocks can't be
+        # chained into a long absence that nobody approved.
+        nearby = TimeOff.objects.filter(
+            staff=staff,
+            self_blocked=True,
+            approval_status=Status.APPROVED,
+            start_datetime__lt=end + MAX_BLOCK,
+            end_datetime__gt=start - MAX_BLOCK,
+        )
+        blocked = sum(
+            ((entry.end_datetime - entry.start_datetime) for entry in nearby), end - start
+        )
+        if blocked > MAX_BLOCK:
+            hours = int(MAX_BLOCK.total_seconds() // 3600)
+            raise ValidationError(
+                f"With your other blocks nearby that's more than {hours} hours. "
+                "Request time off instead, so it can be approved."
+            )
         entry = TimeOff.objects.create(
             organization=staff.organization,
             staff=staff,
@@ -118,6 +136,7 @@ def block_time(
             end_datetime=end,
             reason=(reason or "Blocked")[:REASON_LENGTH],
             approval_status=Status.APPROVED,
+            self_blocked=True,
         )
         _audit(AuditAction.TIME_BLOCKED, entry, actor)
     return entry

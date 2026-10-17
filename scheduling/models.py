@@ -92,6 +92,9 @@ class TimeOff(BaseUUIDModel):
     approval_status = models.CharField(
         max_length=30, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED
     )
+    # Blocked by the provider themselves (approved at once, scheduling.services.block_time),
+    # rather than requested and approved by a manager.
+    self_blocked = models.BooleanField(default=False)
 
     def clean(self):
         if self.start_datetime >= self.end_datetime:

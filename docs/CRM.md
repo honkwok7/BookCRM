@@ -80,8 +80,9 @@ only as "changed").
   customer's Overview ("Providers to avoid", with Edit). Never the providers: they may be the
   ones avoided. Not in the customer portal or the API.
 - **Booking:** `create_booking` refuses a new appointment with an avoided provider
-  (`ConflictError`, code `provider_avoided`), for every path: the team's form, the API and
-  online booking (with a neutral message there). A reschedule keeps its provider, so it is
+  (`ConflictError`, code `provider_unavailable`), for every path: the team's form, the API and
+  online booking. The message and code are neutral ("This provider isn't available for this
+  booking"), so a provider or the public can't tell the customer asked. A reschedule keeps its provider, so it is
   allowed. The New appointment form leaves avoided providers out of the Provider list and out
   of "First available" times once the customer is chosen, and says so to the front desk.
   Online booking hides them from a signed-in customer; "anyone" skips them.
