@@ -28,6 +28,8 @@ from scheduling.serializers import (
 from services.selectors import service_offered_at
 
 SCHEDULE_PERMISSION = HasCapability(read="staff.view", write="staff.manage")
+# Organization-wide closures, like location closures: locations.manage.
+HOLIDAY_PERMISSION = HasCapability(read="locations.view", write="locations.manage")
 
 
 class WeeklyAvailabilityViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet):
@@ -79,7 +81,7 @@ class OrganizationHolidayViewSet(AuditedModelViewSetMixin, viewsets.ModelViewSet
         "delete": AuditAction.HOLIDAY_DELETED,
     }
     serializer_class = OrganizationHolidaySerializer
-    permission_classes = [permissions.IsAuthenticated, SCHEDULE_PERMISSION]
+    permission_classes = [permissions.IsAuthenticated, HOLIDAY_PERMISSION]
 
     def get_queryset(self):
         queryset = OrganizationHoliday.objects.select_related("organization")

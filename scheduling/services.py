@@ -14,7 +14,8 @@ same time cannot both succeed.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -28,6 +29,7 @@ from staff.models import StaffProfile
 
 Status = TimeOff.ApprovalStatus
 MAX_BLOCK = timedelta(hours=12)
+MAX_BLOCKED_PER_WEEK = timedelta(hours=12)  # all blocks in a week (Monday to Sunday)
 MAX_REQUEST = timedelta(days=90)
 REASON_LENGTH = TimeOff._meta.get_field("reason").max_length
 
@@ -98,6 +100,51 @@ def request_time_off(
     return entry
 
 
+def _weeks(start: datetime, end: datetime, zone) -> list[tuple[datetime, datetime]]:
+    """The weeks (Monday 00:00 to Monday 00:00, wall clock in ``zone``) ``[start, end)``
+    touches, in UTC."""
+    weeks = []
+    day = start.astimezone(zone).date()
+    monday = day - timedelta(days=day.weekday())
+    while True:
+        week_start = datetime.combine(monday, time.min, tzinfo=zone).astimezone(UTC)
+        week_end = datetime.combine(monday + timedelta(days=7), time.min, tzinfo=zone)
+        week_end = week_end.astimezone(UTC)
+        weeks.append((week_start, week_end))
+        if end <= week_end:
+            return weeks
+        monday += timedelta(days=7)
+
+
+def _check_weekly_blocks(staff: StaffProfile, start: datetime, end: datetime) -> None:
+    """Blocks add up to at most ``MAX_BLOCKED_PER_WEEK`` in any week, so short blocks can't be
+    chained into an absence nobody approved. More is a time-off request."""
+    try:
+        zone = ZoneInfo(staff.organization.timezone)
+    except ZoneInfoNotFoundError, ValueError:
+        zone = UTC
+    for week_start, week_end in _weeks(start, end, zone):
+        blocks = TimeOff.objects.filter(
+            staff=staff,
+            self_blocked=True,
+            approval_status=Status.APPROVED,
+            start_datetime__lt=week_end,
+            end_datetime__gt=week_start,
+        )
+        periods = [(entry.start_datetime, entry.end_datetime) for entry in blocks]
+        periods.append((start, end))
+        blocked = sum(
+            (min(e, week_end) - max(s, week_start) for s, e in periods if s < week_end),
+            timedelta(),
+        )
+        if blocked > MAX_BLOCKED_PER_WEEK:
+            hours = int(MAX_BLOCKED_PER_WEEK.total_seconds() // 3600)
+            raise ValidationError(
+                f"Blocks can add up to {hours} hours a week, and this would go over. "
+                "Request time off instead, so it can be approved."
+            )
+
+
 def block_time(
     *, staff: StaffProfile, start: datetime, end: datetime, reason: str = "", actor=None
 ) -> TimeOff:
@@ -111,24 +158,7 @@ def block_time(
                 f"You have {clashes} appointment{'s' if clashes != 1 else ''} then. "
                 "Move or cancel them first, or request time off instead."
             )
-        # Blocks within MAX_BLOCK of this one count together, so short blocks can't be
-        # chained into a long absence that nobody approved.
-        nearby = TimeOff.objects.filter(
-            staff=staff,
-            self_blocked=True,
-            approval_status=Status.APPROVED,
-            start_datetime__lt=end + MAX_BLOCK,
-            end_datetime__gt=start - MAX_BLOCK,
-        )
-        blocked = sum(
-            ((entry.end_datetime - entry.start_datetime) for entry in nearby), end - start
-        )
-        if blocked > MAX_BLOCK:
-            hours = int(MAX_BLOCK.total_seconds() // 3600)
-            raise ValidationError(
-                f"With your other blocks nearby that's more than {hours} hours. "
-                "Request time off instead, so it can be approved."
-            )
+        _check_weekly_blocks(staff, start, end)
         entry = TimeOff.objects.create(
             organization=staff.organization,
             staff=staff,

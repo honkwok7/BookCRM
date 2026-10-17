@@ -1,9 +1,10 @@
 """Fixes from the second role/permission review (Codex)."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from organizations.models import OrganizationMembership, OrganizationRole
@@ -55,39 +56,79 @@ class SecondReviewTests(Fixtures, TestCase):
         )
 
 
-class BlockChainTests(Fixtures, TestCase):
-    def setUp(self):
-        self.make_fixtures()
-        self.start = f.future(3, hour=8)
+class WeeklyBlockLimitTests(Fixtures, TestCase):
+    """Self-approved blocks add up to at most 12 hours a week (Monday to Sunday)."""
 
-    def test_short_blocks_cannot_be_chained_into_a_long_absence(self):
-        block_time(staff=self.maya, start=self.start, end=self.start + timedelta(hours=8))
-        with self.assertRaisesMessage(ValidationError, "Request time off instead"):
-            block_time(
-                staff=self.maya,
-                start=self.start + timedelta(hours=8),
-                end=self.start + timedelta(hours=13),
-            )
-        # Up to the limit in total is fine.
-        block_time(
-            staff=self.maya,
-            start=self.start + timedelta(hours=9),
-            end=self.start + timedelta(hours=12),
-        )
+    def setUp(self):
+        self.make_fixtures()  # organization in UTC
+        today = timezone.now().date()
+        monday = today + timedelta(days=7 - today.weekday())  # next Monday
+        self.monday = datetime.combine(monday, time(8), tzinfo=UTC)
+
+    def block(self, day, hours):
+        start = self.monday + timedelta(days=day)
+        return block_time(staff=self.maya, start=start, end=start + timedelta(hours=hours))
+
+    def test_blocks_on_different_days_add_up(self):
+        self.block(0, 8)  # Monday
+        self.block(2, 4)  # Wednesday: 12 hours in all
+        with self.assertRaisesMessage(ValidationError, "12 hours a week"):
+            self.block(4, 1)  # Friday
         self.assertEqual(TimeOff.objects.filter(staff=self.maya, self_blocked=True).count(), 2)
+
+    def test_daily_blocks_cannot_cover_a_week(self):
+        with self.assertRaises(ValidationError):
+            for day in range(5):
+                self.block(day, 11)  # 11 hours a day, more than 12 hours apart
+        self.assertEqual(TimeOff.objects.filter(staff=self.maya).count(), 1)
+
+    def test_each_week_has_its_own_allowance(self):
+        self.block(0, 12)
+        self.block(7, 12)  # the next Monday
 
     def test_approved_requests_do_not_count_as_blocks(self):
         entry = request_time_off(
             staff=self.maya,
-            start=self.start - timedelta(days=1),
-            end=self.start,
+            start=self.monday,
+            end=self.monday + timedelta(days=1),
             reason="Holiday",
         )
         decide_time_off(entry=entry, approve=True, actor=self.receptionist)
-        block_time(staff=self.maya, start=self.start, end=self.start + timedelta(hours=12))
+        self.block(2, 12)
         self.assertFalse(TimeOff.objects.get(pk=entry.pk).self_blocked)
 
-    def test_blocks_far_apart_are_separate(self):
-        block_time(staff=self.maya, start=self.start, end=self.start + timedelta(hours=12))
-        later = self.start + timedelta(days=2)
-        block_time(staff=self.maya, start=later, end=later + timedelta(hours=12))
+
+class ThirdReviewTests(Fixtures, TestCase):
+    def setUp(self):
+        self.make_fixtures()
+        self.api = APIClient()
+        self.manager = f.MembershipFactory(organization=self.org, role=OrganizationRole.MANAGER)
+        self.api.force_authenticate(self.manager.user)
+
+    def revoke(self, *codes):
+        OrganizationMembership.objects.filter(pk=self.manager.pk).update(
+            revoked_permissions=list(codes)
+        )
+
+    def test_choosing_who_offers_a_service_needs_staff_manage(self):
+        url = f"/api/v1/services/{self.service.pk}/"
+        body = {"assigned_staff_members": [str(self.maya.pk)]}
+        self.assertEqual(self.api.patch(url, body, format="json").status_code, 200)
+        self.revoke("staff.manage")
+        cleared = self.api.patch(url, {"assigned_staff_members": []}, format="json")
+        self.assertEqual(cleared.status_code, 403)
+        self.assertTrue(self.maya.offerings.filter(service=self.service, is_active=True).exists())
+        # The rest of the service is still theirs to edit.
+        renamed = self.api.patch(url, {"name": "Deep tissue"}, format="json")
+        self.assertEqual(renamed.status_code, 200)
+
+    def test_organization_closures_need_locations_manage(self):
+        url = "/api/v1/availability/holidays/"
+        body = {"date": f.future(30).date().isoformat(), "name": "Staff day"}
+        self.assertEqual(self.api.post(url, body, format="json").status_code, 201)
+        self.revoke("locations.manage")
+        body["date"] = f.future(31).date().isoformat()
+        self.assertEqual(self.api.post(url, body, format="json").status_code, 403)
+        self.api.force_authenticate(self.receptionist)  # locations.view only
+        self.assertEqual(self.api.get(url).status_code, 200)
+        self.assertEqual(self.api.post(url, body, format="json").status_code, 403)
